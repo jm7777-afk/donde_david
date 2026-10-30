@@ -7,7 +7,7 @@
   <link rel="manifest" href="/static/manifest.json">
   <meta name="theme-color" content="#FFBC0D">
   <link rel="stylesheet" href="/static/css/global.css?v=2.0">
-  <link rel="stylesheet" href="/static/css/toon-theme.css?v=2.0">
+  <link rel="stylesheet" href="/static/css/toon-theme.css?v=2.4">
   <link rel="stylesheet" href="/static/css/index.css?v=2.0">
   
   <!-- Leaflet Maps CSS & JS para Ubicación Exacta de Delivery -->
@@ -21,8 +21,18 @@
   <style>
     .screen {
       display: none;
-      padding-bottom: 155px;
+      padding-bottom: calc(190px + env(safe-area-inset-bottom));
       animation: fadeIn 0.25s ease;
+    }
+    .app-container > .screen {
+      box-sizing: border-box;
+      padding-bottom: calc(190px + env(safe-area-inset-bottom)) !important;
+    }
+    .bottom-bar {
+      padding-bottom: calc(.6rem + env(safe-area-inset-bottom));
+    }
+    .floating-cart-widget {
+      bottom: calc(88px + env(safe-area-inset-bottom));
     }
     .screen.active {
       display: block;
@@ -39,6 +49,7 @@
       background-image: radial-gradient(circle at 70% 30%, rgba(8, 121, 232, 0.25), transparent 70%);
       position: relative;
       overflow-x: hidden;
+      padding-bottom: calc(82px + env(safe-area-inset-bottom));
     }
     .brand-header-banner {
       display: flex;
@@ -176,16 +187,21 @@
         </div>
       </div>
 
+      <div id="table-service-actions" style="display:none;gap:.6rem;flex-wrap:wrap;margin:.75rem 0 1rem" aria-label="Solicitudes de atención de mesa">
+        <button class="btn-gold" type="button" onclick="sendTableServiceRequest('LLAMAR_MESERO')">🙋 Llamar al mesero</button>
+        <button class="btn btn-outline" type="button" onclick="sendTableServiceRequest('SOLICITAR_CUENTA')">🧾 Solicitar la cuenta</button>
+      </div>
+
       <!-- ALGORITMO: ⚡ REPETIR PEDIDO ANTERIOR CON 1-CLIC (USUARIOS AUTENTICADOS) -->
       <div id="reorder-algorithm-container" style="display: none; background: linear-gradient(135deg, rgba(0,245,212,0.12), rgba(255,183,3,0.15)); border: 1.5px solid var(--cyan-accent); border-radius: 16px; padding: 1.1rem; margin-bottom: 1.25rem; box-shadow: 0 8px 25px rgba(0,245,212,0.2);">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
           <span style="font-size: 0.78rem; color: var(--cyan-accent); font-weight: 900; letter-spacing: 0.5px;">⚡ REPETIR TU PEDIDO FAVORITO ANTERIOR</span>
           <span style="font-size: 0.75rem; background: var(--cyan-accent); color: #000; padding: 0.15rem 0.55rem; border-radius: 20px; font-weight: 900;">1-CLIC</span>
         </div>
-        <div style="font-size: 0.95rem; font-weight: 900; color: #fff; margin-bottom: 0.2rem;" id="reorder-items-summary">Hamburguesa Doble Toon + Papas con Queso</div>
-        <small style="color: var(--text-muted); display: block; margin-bottom: 0.75rem;">Repite tu pedido sin volver a buscar los platillos.</small>
+        <div style="font-size: 0.95rem; font-weight: 900; color: #fff; margin-bottom: 0.2rem;" id="reorder-items-summary"></div>
+        <small style="color: var(--text-muted); display: block; margin-bottom: 0.75rem;">Verificaremos existencias y precios actuales antes de agregarlo al carrito.</small>
         <button class="btn-gold" style="width: 100%; padding: 0.75rem; font-weight: 900; font-size: 0.95rem; background: linear-gradient(135deg, #00f5d4, #00b4d8); color: #000;" onclick="repeatLastOrderOneClick()">
-          ⚡ REPETIR ESTE PEDIDO AHORA ($<span id="reorder-price-val">0.00</span>)
+          ⚡ REPETIR PEDIDO #<span id="reorder-price-val"></span>
         </button>
       </div>
 
@@ -213,7 +229,7 @@
       <div style="background: rgba(255,255,255,0.04); border: 1px solid var(--toon-border); margin-bottom: 1.25rem; padding: 0.75rem 1.1rem; border-radius: 14px; display: flex; justify-content: space-between; align-items: center;">
         <div>
           <span style="font-size: 0.72rem; color: var(--text-muted); font-weight: 700; text-transform: uppercase;">Tasa Oficial del Día BCV</span>
-          <div style="font-size: 1.1rem; font-weight: 900; color: var(--gold-accent);">Bs. 36.50 / USD</div>
+          <div id="home-bcv-rate" style="font-size: 1.1rem; font-weight: 900; color: var(--gold-accent);">Consultando tasa...</div>
         </div>
         <span style="font-size: 1.8rem;">📈</span>
       </div>
@@ -291,10 +307,10 @@
         <label style="font-size: 0.85rem; font-weight: 700; color: var(--gold-accent);">MODALIDAD DE COBRO EN MESA:</label>
         <div style="display: flex; gap: 0.75rem; margin-top: 0.5rem;">
           <label style="flex: 1; background: rgba(0,0,0,0.4); padding: 0.75rem; border-radius: 8px; border: 1px solid var(--gold-accent); cursor: pointer; font-size: 0.85rem;">
-            <input type="radio" name="modo_pago" value="PAGAR_ANTES" checked> Pagar Antes (Anticipado)
+            <input type="radio" name="modo_pago" value="PAGAR_ANTES" checked onchange="updateCheckoutPaymentFields()"> Pagar Antes (Anticipado)
           </label>
           <label style="flex: 1; background: rgba(0,0,0,0.4); padding: 0.75rem; border-radius: 8px; border: 1px solid var(--gold-accent); cursor: pointer; font-size: 0.85rem;">
-            <input type="radio" name="modo_pago" value="PAGAR_DESPUES"> Cuenta Abierta (Pagar al Salir)
+            <input type="radio" name="modo_pago" value="PAGAR_DESPUES" onchange="updateCheckoutPaymentFields()"> Cuenta Abierta (Pagar al Salir)
           </label>
         </div>
       </div>
@@ -316,6 +332,7 @@
           <label style="color: var(--text-primary); font-size: 0.82rem;">Dirección o Referencia de Entrega</label>
           <textarea id="deliv-direccion" class="form-control" rows="2" placeholder="Ej. Av. Principal, Res. Las Palmeras, Apto 3B (o presiona el botón abajo)"></textarea>
         </div>
+        <button class="btn btn-outline" type="button" style="width:100%;margin-bottom:.65rem" onclick="openDeliveryMapModal()">🗺️ Elegir punto en el mapa</button>
 
         <!-- BOTÓN ULTRA SENCILLO DE UBICACIÓN EN 1-CLIC -->
         <button class="btn-gold" style="width: 100%; padding: 0.85rem; font-size: 0.95rem; background: linear-gradient(135deg, #00f5d4, #00b4d8); color: #000; font-weight: 900; display: flex; align-items: center; justify-content: center; gap: 0.5rem;" onclick="getDeviceGPSLocation()">
@@ -326,13 +343,26 @@
 
       <div class="form-group">
         <label>FORMA DE PAGO SELECCIONADA</label>
-        <select id="checkout-payment" class="form-control">
-          <option value="Efectivo">💵 Efectivo ($ / Bs.)</option>
-          <option value="Tarjeta">💳 Tarjeta de Crédito / Débito</option>
-          <option value="Pago Móvil">📱 Pago Móvil / Transferencia</option>
-          <option value="Puntos">🏆 Puntos de Fidelidad</option>
+        <select id="checkout-payment" class="form-control" onchange="updateCheckoutPaymentFields()">
+          <option value="Pago Móvil">📱 Pago Móvil (validación por caja)</option>
+          <option value="Efectivo">💵 Efectivo (USD o Bs.)</option>
+          <option value="Punto de Venta">💳 Punto de venta físico en caja</option>
         </select>
       </div>
+      <small id="checkout-rate-info" style="display: block; color: var(--text-muted); margin: -.5rem 0 .75rem;"></small>
+      <div id="checkout-currency-group" class="form-group">
+        <label>MONEDA DE PAGO</label>
+        <select id="checkout-currency" class="form-control" onchange="updateCheckoutAmountHint()">
+          <option value="VES">Bolívares (Bs.)</option>
+          <option value="USD">Dólares (USD)</option>
+        </select>
+      </div>
+      <div id="checkout-payment-reference-group" class="form-group">
+        <label>REFERENCIA DE PAGO MÓVIL</label>
+        <input id="checkout-payment-reference" class="form-control" maxlength="100" autocomplete="off" placeholder="Referencia indicada por el banco">
+      </div>
+      <div id="checkout-payment-bank-details" style="display: none; background: rgba(0,245,212,.08); border: 1px solid var(--cyan-accent); border-radius: 10px; padding: .75rem; margin-bottom: .75rem; font-size: .85rem;"></div>
+      <div id="checkout-payment-hint" role="status" style="background: rgba(255,188,13,.08); border: 1px solid var(--gold-accent); border-radius: 10px; padding: .75rem; margin: .75rem 0; font-size: .85rem;"></div>
 
       <button class="btn-gold" style="width: 100%; font-size: 1.15rem; margin-top: 1.5rem;" onclick="submitFinalOrder()">🚀 PROCESAR Y ENVIAR PEDIDO</button>
     </div>
@@ -369,9 +399,15 @@
       <!-- Tarjeta de Puntos Acumulados -->
       <div style="background: linear-gradient(135deg, rgba(255,183,3,0.18), rgba(0,245,212,0.12)); border: 1.5px solid var(--gold-accent); border-radius: 16px; padding: 1.1rem; margin-bottom: 1.25rem; text-align: center; box-shadow: 0 8px 20px rgba(0,0,0,0.3);">
         <span style="font-size: 0.78rem; color: var(--gold-accent); font-weight: 800; text-transform: uppercase;">MIS PUNTOS DE FIDELIDAD:</span>
-        <div style="font-size: 2.2rem; font-weight: 900; color: #fff; margin-top: 0.15rem;" id="profile-points-display">50 Puntos 🏆</div>
+        <div style="font-size: 2.2rem; font-weight: 900; color: #fff; margin-top: 0.15rem;" id="profile-points-display">0 Puntos 🏆</div>
         <small style="color: var(--cyan-accent); font-size: 0.75rem; font-weight: 700;">Gana +1 punto por cada $1 gastado en Donde David</small>
       </div>
+      <section id="profile-loyalty-panel" style="background:var(--toon-card);border:1px solid var(--toon-border);border-radius:16px;padding:1rem;margin-bottom:1.25rem" aria-labelledby="loyalty-title">
+        <h3 id="loyalty-title" style="margin:0 0 .5rem;color:var(--gold-accent)">🎁 Recompensas y movimientos</h3>
+        <p id="loyalty-progress" style="color:var(--text-muted);font-size:.85rem;margin:.5rem 0">Inicia sesión para consultar tus puntos.</p>
+        <div id="loyalty-rewards" style="display:grid;gap:.5rem"></div>
+        <div id="loyalty-history" style="display:grid;gap:.4rem;margin-top:.75rem" aria-live="polite"></div>
+      </section>
 
       <!-- ALGORITMO: ⚡ REPETIR PEDIDO ANTERIOR CON 1-CLIC EN PERFIL -->
       <div id="profile-reorder-container" style="display: none; background: linear-gradient(135deg, rgba(0,245,212,0.12), rgba(255,183,3,0.15)); border: 1.5px solid var(--cyan-accent); border-radius: 16px; padding: 1.1rem; margin-bottom: 1.25rem; box-shadow: 0 8px 25px rgba(0,245,212,0.2);">
@@ -379,10 +415,10 @@
           <span style="font-size: 0.78rem; color: var(--cyan-accent); font-weight: 900; letter-spacing: 0.5px;">⚡ REPETIR TU PEDIDO FAVORITO ANTERIOR</span>
           <span style="font-size: 0.75rem; background: var(--cyan-accent); color: #000; padding: 0.15rem 0.55rem; border-radius: 20px; font-weight: 900;">1-CLIC</span>
         </div>
-        <div style="font-size: 0.95rem; font-weight: 900; color: #fff; margin-bottom: 0.2rem;" id="profile-reorder-summary">Hamburguesa Doble Toon + Papas con Queso</div>
-        <small style="color: var(--text-muted); display: block; margin-bottom: 0.75rem;">Repite tu pedido favorito sin volver a buscar los platillos.</small>
+        <div style="font-size: 0.95rem; font-weight: 900; color: #fff; margin-bottom: 0.2rem;" id="profile-reorder-summary"></div>
+        <small style="color: var(--text-muted); display: block; margin-bottom: 0.75rem;">Verificaremos existencias y precios actuales antes de agregarlo al carrito.</small>
         <button class="btn-gold" style="width: 100%; padding: 0.75rem; font-weight: 900; font-size: 0.95rem; background: linear-gradient(135deg, #00f5d4, #00b4d8); color: #000;" onclick="repeatLastOrderOneClick()">
-          ⚡ REPETIR ESTE PEDIDO AHORA ($<span id="profile-reorder-price-val">0.00</span>)
+          ⚡ REPETIR PEDIDO #<span id="profile-reorder-price-val"></span>
         </button>
       </div>
 
@@ -437,7 +473,7 @@
         </div>
         <div class="form-group" style="margin-bottom: 1.25rem;">
           <label style="color: var(--text-primary); font-size: 0.8rem;">Contraseña</label>
-          <input type="password" id="reg-pass" class="form-control" placeholder="••••••••">
+          <input type="password" id="reg-pass" class="form-control" placeholder="Mínimo 12 caracteres" minlength="12" maxlength="72">
         </div>
 
         <button class="btn-gold" style="width: 100%; font-size: 1.1rem; padding: 0.85rem;" onclick="submitClientUserRegistration()">
@@ -605,99 +641,6 @@
     </div>
   </div>
 
-  <!-- MODAL PASARELA DE PAGO DIGITAL CLIENTE (ESTILO CASHEA / STRIPE / PAGOS MÓVILES) -->
-  <div class="product-modal-backdrop" id="client-payment-gateway-modal">
-    <div class="product-modal-card" style="max-width: 490px; padding: 1.5rem; overflow-y: auto; max-height: 90vh;">
-      <button class="modal-close-btn" onclick="closeModal('client-payment-gateway-modal')">&times;</button>
-      
-      <!-- Security & Trust Badge Header -->
-      <div style="display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--toon-border); padding-bottom: 0.75rem; margin-bottom: 1rem;">
-        <div style="display: flex; align-items: center; gap: 0.5rem;">
-          <span style="font-size: 1.4rem;">🔒</span>
-          <div>
-            <strong style="font-size: 0.95rem; color: var(--text-primary); display: block; line-height: 1;">PASARELA DIGITAL SEGURO</strong>
-            <small style="color: var(--cyan-accent); font-size: 0.7rem; font-weight: 800;">ENCRIPTACIÓN SSL 256-BIT • DONDE DAVID</small>
-          </div>
-        </div>
-        <div style="font-size: 0.7rem; background: rgba(0,245,212,0.1); border: 1px solid var(--cyan-accent); color: var(--cyan-accent); padding: 0.2rem 0.6rem; border-radius: 20px; font-weight: 800;">PRODUCCIÓN</div>
-      </div>
-
-      <!-- Resumen Dual USD / Bs. -->
-      <div style="background: linear-gradient(135deg, rgba(255,183,3,0.15), rgba(0,245,212,0.1)); border: 1.5px solid var(--gold-accent); border-radius: 14px; padding: 1rem; text-align: center; margin-bottom: 1.25rem;">
-        <small style="color: var(--text-muted); font-weight: 800; text-transform: uppercase; letter-spacing: 1px;">TOTAL A COBRAR EN TRANSACCIÓN:</small>
-        <div style="font-size: 2rem; font-weight: 900; color: var(--gold-accent); margin-top: 0.2rem;" id="gateway-total-display">$0.00</div>
-      </div>
-
-      <!-- Selector de Método de Pago por Pestañas Estilo Cashea -->
-      <div style="display: flex; gap: 0.4rem; margin-bottom: 1.25rem;">
-        <button class="payment-method-tab active" id="tab-pay-card" onclick="switchGatewayTab('card')">💳 Tarjeta</button>
-        <button class="payment-method-tab" id="tab-pay-pm" onclick="switchGatewayTab('pm')">📱 Pago Móvil</button>
-        <button class="payment-method-tab" id="tab-pay-zelle" onclick="switchGatewayTab('zelle')">🇺🇸 Zelle</button>
-        <button class="payment-method-tab" id="tab-pay-cash" onclick="switchGatewayTab('cash')">💵 Efectivo</button>
-      </div>
-
-      <!-- OP 1: TARJETA DE CRÉDITO / DÉBITO (PUNTO DE VENTA EN CAJA) -->
-      <div id="gateway-sec-card">
-        <div style="background: rgba(8,121,232,0.1); border: 1.5px solid var(--cyan-accent); border-radius: 14px; padding: 1.1rem; text-align: center; margin-bottom: 1.25rem;">
-          <span style="font-size: 2.2rem; display: block; margin-bottom: 0.4rem;">💳</span>
-          <strong style="color: #fff; font-size: 0.98rem; display: block;">COBRO POR PUNTO DE VENTA EN CAJA</strong>
-          <p style="color: var(--text-muted); font-size: 0.82rem; margin-top: 0.3rem;">El cobro por tarjeta de débito o crédito se procesa directamente en la Caja POS por la cajera del restaurante.</p>
-        </div>
-      </div>
-
-      <!-- OP 2: PAGO MÓVIL (ÚLTIMOS 4 DÍGITOS DE OPERACIÓN PARA VALIDACIÓN CAJERA) -->
-      <div id="gateway-sec-pm" style="display: none;">
-        <div style="background: rgba(0,245,212,0.06); border: 1px solid var(--cyan-accent); border-radius: 12px; padding: 0.85rem; margin-bottom: 1rem; font-size: 0.82rem;">
-          <div style="color: var(--cyan-accent); font-weight: 900; margin-bottom: 0.5rem; display: flex; justify-content: space-between;">
-            <span>DATOS PAGO MÓVIL BANESCO</span>
-            <button style="background: none; border: none; color: var(--cyan-accent); cursor: pointer; text-decoration: underline;" onclick="copyBankData()">📋 Copiar Datos</button>
-          </div>
-          <p style="margin: 0.2rem 0; color: var(--text-primary);">• <strong>Banco:</strong> Banesco (0134)</p>
-          <p style="margin: 0.2rem 0; color: var(--text-primary);">• <strong>RIF:</strong> J-50123984-0 (Donde David C.A.)</p>
-          <p style="margin: 0.2rem 0; color: var(--text-primary);">• <strong>Teléfono:</strong> 0414-555-4321</p>
-          <p style="margin: 0.2rem 0; color: var(--gold-accent);">• <strong>Tasa BCV del Día:</strong> <span id="pm-bcv-rate">36.50</span> Bs/$</p>
-        </div>
-
-        <div class="form-group" style="margin-bottom: 1rem;">
-          <label style="color: var(--gold-accent); font-size: 0.85rem; font-weight: 800;">ÚLTIMOS 4 DÍGITOS DEL NÚMERO DE OPERACIÓN DE PAGO MÓVIL:</label>
-          <input type="text" id="pm-ref-input" class="form-control" placeholder="Ej. 4567" maxlength="4" style="font-size: 1.4rem; font-weight: 900; letter-spacing: 4px; text-align: center; color: var(--gold-accent);">
-          <small style="color: var(--text-muted); font-size: 0.75rem; display: block; margin-top: 0.3rem;">La cajera verificará estos 4 dígitos en la cuenta bancaria para aprobar tu comanda.</small>
-        </div>
-      </div>
-
-      <!-- OP 3: ZELLE -->
-      <div id="gateway-sec-zelle" style="display: none;">
-        <div style="background: rgba(168,85,247,0.1); border: 1px solid #a855f7; border-radius: 12px; padding: 0.85rem; margin-bottom: 1rem; font-size: 0.82rem;">
-          <div style="color: #a855f7; font-weight: 900; margin-bottom: 0.5rem;">🇺🇸 DATOS OFICIALES DE ZELLE</div>
-          <p style="margin: 0.2rem 0; color: var(--text-primary);">• <strong>Correo Zelle:</strong> pagos@dondedavid.com</p>
-          <p style="margin: 0.2rem 0; color: var(--text-primary);">• <strong>Titular:</strong> Donde David Gourmet LLC</p>
-        </div>
-
-        <div class="form-group" style="margin-bottom: 0.75rem;">
-          <label style="color: var(--text-primary); font-size: 0.8rem;">Código / Referencia de Confirmación Zelle</label>
-          <input type="text" id="zelle-ref-input" class="form-control" placeholder="Ej. ZEL-889102">
-        </div>
-      </div>
-
-      <!-- OP 4: EFECTIVO EN CAJA -->
-      <div id="gateway-sec-cash" style="display: none;">
-        <div style="background: rgba(255,183,3,0.08); border: 1px solid var(--gold-accent); border-radius: 12px; padding: 0.85rem; margin-bottom: 1rem; font-size: 0.82rem;">
-          <strong style="color: var(--gold-accent); display: block; margin-bottom: 0.3rem;">💵 PAGO EN EFECTIVO ($ / Bs.)</strong>
-          <p style="color: var(--text-primary); margin: 0;">El pago en efectivo lo recibe directamente la cajera en el mostrador o el repartidor.</p>
-        </div>
-        <div class="form-group" style="margin-bottom: 1rem;">
-          <label style="color: var(--text-primary); font-size: 0.8rem;">Denominación de Billete con el que cancelará ($10, $20, $50, $100)</label>
-          <input type="text" id="cash-bill-input" class="form-control" placeholder="Ej. Billete de $20 (para preparar vuelto)">
-        </div>
-      </div>
-
-      <!-- Botón de Procesamiento con Animación -->
-      <button class="btn-gold" id="btn-submit-payment-gateway" style="width: 100%; font-size: 1.1rem; padding: 0.95rem; display: flex; align-items: center; justify-content: center; gap: 0.5rem;" onclick="submitClientGatewayPayment()">
-        <span>🔒 CONFIRMAR Y ENVIAR A CAJA</span>
-      </button>
-    </div>
-  </div>
-
   <!-- MODAL SELECCIÓN DE UBICACIÓN MAPA DELIVERY (LEAFLET GPS PICKER) -->
   <div class="product-modal-backdrop" id="delivery-map-modal">
     <div class="product-modal-card" style="max-width: 480px; padding: 1.5rem;">
@@ -755,6 +698,8 @@
           <span id="modal-product-price" style="font-size: 1.4rem; font-weight: 900; color: var(--gold-accent);">$0.00</span>
         </div>
         <p id="modal-product-desc" style="color: var(--text-muted); font-size: 0.88rem; line-height: 1.4; margin-bottom: 1.25rem;">Descripción detallada.</p>
+        <div id="modal-product-media" hidden aria-label="Galería multimedia del plato"></div>
+        <div id="modal-product-allergens" role="note" style="display:none; margin-bottom:1rem; padding:.7rem; border:1px solid var(--gold-accent); border-radius:8px; color:var(--gold-accent); font-size:.82rem;"></div>
 
         <!-- 1. Sección Ingredientes del Producto (Toca para remover) -->
         <div class="option-group-title">🛠️ INGREDIENTES INCLUIDOS EN ESTE PLATO (REMOVER):</div>
@@ -819,11 +764,11 @@
   <!-- Driver.js Library script para Tour Interactivo de Clientes -->
   <script src="https://cdn.jsdelivr.net/npm/driver.js@1.3.1/dist/driver.js.iife.js"></script>
 
-  <script src="/static/js/theme-toggle.js?v=2.0"></script>
+  <script src="/static/js/theme-toggle.js?v=2.1"></script>
   <script src="/static/js/auth.js?v=2.0"></script>
   <script src="/static/js/websocket.js?v=2.0"></script>
-  <script src="/static/js/cliente-toon.js?v=2.0"></script>
-  <script src="/static/js/appShell.js?v=2.0"></script>
+  <script src="/static/js/cliente-toon.js?v=2.1"></script>
+  <script src="/static/js/appShell.js?v=2.3"></script>
 
   <!-- Script para Cámara QR Scanner & Modal (Requerimientos #1, #2, #3) -->
   <script>
@@ -913,21 +858,25 @@
 
     async function confirmQrScannerSelection() {
       const newMesa = document.getElementById("client-scanner-table-select").value;
-      currentDetectedMesa = newMesa;
-
-      document.getElementById("current-table-indicator").innerText = `📷 QR MESA #${newMesa}`;
-      document.getElementById("checkout-mesa-name").innerText = `Mesa #${newMesa}`;
 
       if (currentPendingOrderId) {
         try {
-          await fetch(`/api/v1/cliente/pedidos/${currentPendingOrderId}/cambiar-mesa`, {
+          const res = await fetch(`/api/v1/cliente/pedidos/${currentPendingOrderId}/cambiar-mesa`, {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers: Auth.getHeaders(),
             body: JSON.stringify({ nueva_mesa: parseInt(newMesa) })
           });
-        } catch(e){}
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.detail || "No se pudo cambiar la mesa.");
+        } catch (error) {
+          showToast(error.message || "No se pudo cambiar la mesa.", "danger");
+          return;
+        }
       }
 
+      currentDetectedMesa = newMesa;
+      document.getElementById("current-table-indicator").innerText = `📷 QR MESA #${newMesa}`;
+      document.getElementById("checkout-mesa-name").innerText = `Mesa #${newMesa}`;
       showToast(`Mesa actualizada con éxito a Mesa #${newMesa}`, "success");
       closeQrScannerModal();
     }

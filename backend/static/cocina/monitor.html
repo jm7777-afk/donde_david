@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Donde David - Monitor KDS de Cocina</title>
   <link rel="stylesheet" href="/static/css/global.css?v=2.0">
-  <link rel="stylesheet" href="/static/css/toon-theme.css?v=2.0">
+  <link rel="stylesheet" href="/static/css/toon-theme.css?v=2.4">
   <link rel="stylesheet" href="/static/css/index.css?v=2.0">
   <link rel="stylesheet" href="/static/css/app-modules.css?v=2.0">
 </head>
@@ -20,6 +20,13 @@
         <span>👨‍🍳</span> MONITOR KDS DE COCINA
       </h1>
       <div style="display: flex; align-items: center; gap: 0.75rem;">
+        <input aria-label="Buscar comanda" class="form-control" style="width: min(220px, 35vw);" placeholder="Buscar mesa, producto o #" oninput="setKDSSearch(this.value)">
+        <select aria-label="Filtrar modalidad" class="form-control" style="width: auto;" onchange="setKDSModeFilter(this.value)">
+          <option value="todos">Todas las modalidades</option>
+          <option value="mesa">Mesa</option>
+          <option value="llevar">Para llevar</option>
+          <option value="delivery">Delivery</option>
+        </select>
         <!-- Selector de Tamaño Ajustable de Tarjetas KDS (Estilo Cashea) -->
         <span style="font-size: 0.8rem; font-weight: 800; color: var(--gold-accent);">ESCALA KDS:</span>
         <div style="display: flex; gap: 0.35rem;">
@@ -52,9 +59,9 @@
     </div>
   </div>
 
-  <script src="/static/js/theme-toggle.js?v=2.0"></script>
+  <script src="/static/js/theme-toggle.js?v=2.1"></script>
   <script src="/static/js/auth.js?v=2.0"></script>
-  <script src="/static/js/appShell.js?v=2.0"></script>
+  <script src="/static/js/appShell.js?v=2.3"></script>
   <script src="/static/js/websocket.js?v=2.0"></script>
   <script src="/static/js/cocina.js?v=2.0"></script>
 </body>

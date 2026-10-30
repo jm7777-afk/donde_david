@@ -8,8 +8,52 @@ let adminPromos = [];
 let adminResenas = [];
 let adminPublicaciones = [];
 let selectedInsumoForIngreso = null;
-let tasaCambioBs = 36.50;
+let tasaCambioBs = null;
 let currentWizardStep = 1;
+
+function escapeAdminHtml(value) {
+  return String(value ?? "").replace(/[&<>"']/g, char => ({
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
+  })[char]);
+}
+
+function parseProductEditorList(rawValue, kind) {
+  const rows = rawValue.split(/\r?\n/).map(line => line.trim()).filter(Boolean);
+  if (rows.length > 30) throw new Error("Se permiten hasta 30 elementos por producto.");
+  return rows.map((row, index) => {
+    const [first, second, ...rest] = row.split("|").map(value => value.trim());
+    if (rest.length || !first || !second) {
+      throw new Error(`Revisa la línea ${index + 1}; utiliza el formato indicado.`);
+    }
+    if (kind === "extras") {
+      const price = Number(second);
+      if (!Number.isFinite(price) || price < 0 || price > 100000) {
+        throw new Error(`El precio del extra en la línea ${index + 1} debe ser válido.`);
+      }
+      return { nombre: first, precio: price };
+    }
+    if (!["imagen", "video"].includes(first.toLowerCase())) {
+      throw new Error(`El tipo de contenido en la línea ${index + 1} debe ser imagen o video.`);
+    }
+    if (!(second.startsWith("https://") || second.startsWith("/static/uploads/"))) {
+      throw new Error(`La URL multimedia en la línea ${index + 1} debe ser HTTPS o /static/uploads/.`);
+    }
+    return { tipo: first.toLowerCase(), url: second };
+  });
+}
+
+function productEditorListValue(jsonValue, kind) {
+  try {
+    const values = JSON.parse(jsonValue || "[]");
+    if (!Array.isArray(values)) return "";
+    return values.map(item => kind === "extras"
+      ? `${item.nombre} | ${item.precio}`
+      : `${item.tipo} | ${item.url}`).join("\n");
+  } catch (error) {
+    console.error(`No se pudo leer la configuración ${kind} del producto.`, error);
+    return "";
+  }
+}
 
 document.addEventListener("DOMContentLoaded", () => {
   loadDashboardStats();
@@ -23,6 +67,10 @@ document.addEventListener("DOMContentLoaded", () => {
   loadResenasAdmin();
   loadPublicacionesAdmin();
   loadPortalConfigsAdmin();
+  const requestedTab = window.location.hash.replace(/^#tab-/, "");
+  if (["dashboard", "productos", "inventario", "promociones", "publicaciones", "portal", "mesas", "categorias", "usuarios"].includes(requestedTab)) {
+    switchTab(requestedTab);
+  }
 
   new WSClient((event, data) => {
     if (event === "NUEVO_PEDIDO" || event === "PAGO_CONFIRMADO") {
@@ -34,8 +82,10 @@ document.addEventListener("DOMContentLoaded", () => {
 });
 
 function formatPriceDual(usdAmount) {
-  const bsAmount = (usdAmount * tasaCambioBs).toFixed(2);
-  return `$${usdAmount.toFixed(2)} <br><small style="color:var(--gold-accent)">(Bs. ${bsAmount})</small>`;
+  const usd = Number(usdAmount) || 0;
+  if (!Number.isFinite(tasaCambioBs) || tasaCambioBs <= 0) return `$${usd.toFixed(2)}`;
+  const bsAmount = (usd * tasaCambioBs).toFixed(2);
+  return `$${usd.toFixed(2)} <br><small style="color:var(--gold-accent)">(Bs. ${bsAmount})</small>`;
 }
 
 async function uploadLocalFile(event, targetInputId) {
@@ -50,6 +100,7 @@ async function uploadLocalFile(event, targetInputId) {
   try {
     const res = await fetch("/api/v1/admin/upload", {
       method: "POST",
+      headers: Auth.getToken() ? { Authorization: `Bearer ${Auth.getToken()}` } : {},
       body: formData
     });
     if (!res.ok) throw new Error("Error al subir archivo");
@@ -63,25 +114,41 @@ async function uploadLocalFile(event, targetInputId) {
 
 function toggleAdminDrawer() {
   const drawer = document.getElementById("admin-sidebar-drawer");
+  if (!drawer) return;
+
   let overlay = document.getElementById("admin-drawer-overlay");
-  
   if (!overlay) {
     overlay = document.createElement("div");
     overlay.id = "admin-drawer-overlay";
-    overlay.style.cssText = "position: fixed; inset: 0; background: rgba(0,0,0,0.6); backdrop-filter: blur(4px); z-index: 1045; display: none;";
-    overlay.onclick = () => toggleAdminDrawer();
+    overlay.className = "admin-drawer-overlay";
+    overlay.setAttribute("aria-hidden", "true");
+    overlay.onclick = closeAdminDrawer;
     document.body.appendChild(overlay);
   }
 
-  if (drawer) {
-    drawer.classList.toggle("open");
-    if (drawer.classList.contains("open")) {
-      overlay.style.display = "block";
-    } else {
-      overlay.style.display = "none";
-    }
-  }
+  drawer.classList.toggle("open");
+  const isOpen = drawer.classList.contains("open");
+  overlay.classList.toggle("open", isOpen);
+  overlay.setAttribute("aria-hidden", String(!isOpen));
+  drawer.setAttribute("aria-hidden", String(!isOpen));
+  document.querySelector(".admin-menu-toggle")?.setAttribute("aria-expanded", String(isOpen));
 }
+
+function closeAdminDrawer() {
+  const drawer = document.getElementById("admin-sidebar-drawer");
+  const overlay = document.getElementById("admin-drawer-overlay");
+  if (drawer) drawer.classList.remove("open");
+  if (drawer) drawer.setAttribute("aria-hidden", "true");
+  if (overlay) {
+    overlay.classList.remove("open");
+    overlay.setAttribute("aria-hidden", "true");
+  }
+  document.querySelector(".admin-menu-toggle")?.setAttribute("aria-expanded", "false");
+}
+
+document.addEventListener("keydown", event => {
+  if (event.key === "Escape") closeAdminDrawer();
+});
 
 function switchTab(tabId) {
   document.querySelectorAll(".tab-btn, .admin-sidebar-btn").forEach(b => b.classList.remove("active"));
@@ -92,11 +159,7 @@ function switchTab(tabId) {
   const content = document.getElementById(`tab-${tabId}`);
   if (content) content.classList.add("active");
 
-  // Auto-cerrar sidebar drawer al seleccionar
-  const drawer = document.getElementById("admin-sidebar-drawer");
-  const overlay = document.getElementById("admin-drawer-overlay");
-  if (drawer) drawer.classList.remove("open");
-  if (overlay) overlay.style.display = "none";
+  closeAdminDrawer();
 }
 
 function openModal(id) { document.getElementById(id).classList.add("open"); }
@@ -146,32 +209,39 @@ function updateWizardUI() {
 async function submitWizardFinish() {
   const nombre = document.getElementById("wiz-nombre").value;
   const historia = document.getElementById("wiz-historia").value;
-  const tasa = document.getElementById("wiz-tasa").value;
+  const tasa = document.getElementById("wiz-tasa").value.trim();
   const whatsapp = document.getElementById("wiz-whatsapp").value;
 
-  tasaCambioBs = parseFloat(tasa) || 36.50;
+  if (tasa && (!Number.isFinite(Number(tasa)) || Number(tasa) <= 0)) {
+    showToast("La tasa manual debe ser un número mayor que cero.", "warning");
+    return;
+  }
+  tasaCambioBs = Number(tasa) > 0 ? Number(tasa) : null;
 
   const items = [
     { clave: "nombre_restaurante", valor: nombre },
     { clave: "historia_restaurante", valor: historia },
-    { clave: "tasa_cambio_bs", valor: tasa },
     { clave: "whatsapp_contacto", valor: whatsapp }
   ];
+  if (tasa) items.push({ clave: "tasa_cambio_bs", valor: tasa });
 
-  for (const item of items) {
-    try {
-      await fetch("/api/v1/admin/configuraciones", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(item)
-      });
-    } catch(e){}
+  try {
+    const response = await fetch("/api/v1/admin/configuraciones/lote", {
+      method: "POST",
+      headers: Auth.getHeaders(),
+      body: JSON.stringify({ configuraciones: items })
+    });
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.detail || "El servidor rechazó la configuración.");
+    }
+    showToast("Configuración inicial guardada correctamente.", "success");
+    closeModal("wizard-modal");
+    await loadPortalConfigsAdmin();
+    loadDashboardStats();
+  } catch (err) {
+    showToast(`No se guardó la configuración: ${err.message}`, "danger");
   }
-
-  showToast("¡Configuración inicial de negocio guardada con éxito!", "success");
-  closeModal("wizard-modal");
-  loadPortalConfigsAdmin();
-  loadDashboardStats();
 }
 
 async function loadDashboardStats() {
@@ -180,23 +250,29 @@ async function loadDashboardStats() {
     if (res.ok) {
       adminStats = await res.json();
       
-      const vHoy = adminStats.ventas_hoy || 1240.00;
-      const vSemana = adminStats.ventas_semana || 4850.00;
-      const vMes = adminStats.ventas_mes || 18750.50;
-      const vTotal = adminStats.total_ventas || 18750.50;
-      const montoCaja = adminStats.monto_caja || 950.50;
+      const vHoy = Number(adminStats.ventas_hoy ?? 0);
+      const vSemana = Number(adminStats.ventas_semana ?? 0);
+      const vMes = Number(adminStats.ventas_mes ?? 0);
+      const vTotal = Number(adminStats.total_ventas ?? 0);
+      const montoCaja = Number(adminStats.monto_caja ?? 0);
 
       if (document.getElementById("stat-sales-today")) {
-        document.getElementById("stat-sales-today").innerHTML = `$${vHoy.toFixed(2)} <span style="font-size: 0.8rem; color: #fff;">(Bs. ${(vHoy * tasaCambioBs).toFixed(2)})</span>`;
+        document.getElementById("stat-sales-today").innerHTML = formatPriceDual(vHoy);
       }
       if (document.getElementById("stat-sales-week")) {
-        document.getElementById("stat-sales-week").innerHTML = `$${vSemana.toFixed(2)} <span style="font-size: 0.8rem; color: #fff;">(Bs. ${(vSemana * tasaCambioBs).toFixed(2)})</span>`;
+        document.getElementById("stat-sales-week").innerHTML = formatPriceDual(vSemana);
       }
       if (document.getElementById("stat-sales-month")) {
-        document.getElementById("stat-sales-month").innerHTML = `$${vMes.toFixed(2)} <span style="font-size: 0.8rem; color: #fff;">(Bs. ${(vMes * tasaCambioBs).toFixed(2)})</span>`;
+        document.getElementById("stat-sales-month").innerHTML = formatPriceDual(vMes);
       }
       if (document.getElementById("stat-sales-total")) {
-        document.getElementById("stat-sales-total").innerHTML = `$${vTotal.toFixed(2)} <span style="font-size: 0.8rem; color: #fff;">(Bs. ${(vTotal * tasaCambioBs).toFixed(2)})</span>`;
+        document.getElementById("stat-sales-total").innerHTML = formatPriceDual(vTotal);
+      }
+      if (document.getElementById("stat-pct-week")) {
+        document.getElementById("stat-pct-week").innerText = `${adminStats.pct_crecimiento_semanal || "N/D"} vs semana anterior`;
+      }
+      if (document.getElementById("stat-pct-month")) {
+        document.getElementById("stat-pct-month").innerText = `${adminStats.pct_crecimiento_mensual || "N/D"} vs mes anterior`;
       }
       if (document.getElementById("stat-caja")) {
         document.getElementById("stat-caja").innerText = `$${montoCaja.toFixed(2)}`;
@@ -204,12 +280,17 @@ async function loadDashboardStats() {
 
       if (document.getElementById("stat-critical")) document.getElementById("stat-critical").innerText = `${adminStats.stock_critico} insumos`;
       if (document.getElementById("stat-cocina")) document.getElementById("stat-cocina").innerText = `${adminStats.pedidos_cocina} pedidos`;
-      if (document.getElementById("stat-mesas")) document.getElementById("stat-mesas").innerText = `${adminStats.mesas_ocupadas} / 20`;
+      if (document.getElementById("stat-mesas")) document.getElementById("stat-mesas").innerText = `${adminStats.mesas_ocupadas || 0} / ${adminStats.total_mesas || 0}`;
 
       if (adminStats.desglose_canales) {
         if (document.getElementById("pct-canal-mesa")) document.getElementById("pct-canal-mesa").innerText = `${adminStats.desglose_canales.pct_mesa}%`;
         if (document.getElementById("pct-canal-delivery")) document.getElementById("pct-canal-delivery").innerText = `${adminStats.desglose_canales.pct_delivery}%`;
         if (document.getElementById("pct-canal-llevar")) document.getElementById("pct-canal-llevar").innerText = `${adminStats.desglose_canales.pct_llevar}%`;
+        ["mesa", "delivery", "llevar"].forEach(channel => {
+          const bar = document.getElementById(`bar-canal-${channel}`);
+          const value = Number(adminStats.desglose_canales[`pct_${channel}`] || 0);
+          if (bar) bar.style.width = `${Math.max(0, Math.min(100, value))}%`;
+        });
       }
 
       let topHtml = "";
@@ -218,7 +299,7 @@ async function loadDashboardStats() {
           topHtml += `
             <div style="display: flex; justify-content: space-between; padding: 0.75rem 0; border-bottom: 1px solid var(--toon-border);">
               <span><strong>#${idx + 1} ${p.nombre}</strong> (${p.unidades} unidades vendidas)</span>
-              <strong style="color: var(--gold-accent);">$${p.total.toFixed(2)} (Bs. ${(p.total * tasaCambioBs).toFixed(2)})</strong>
+              <strong style="color: var(--gold-accent);">${formatPriceDual(p.total)}</strong>
             </div>
           `;
         });
@@ -235,7 +316,7 @@ async function loadDashboardStats() {
 /* ==================== PUBLICACIONES WEB ADMIN ==================== */
 async function loadPublicacionesAdmin() {
   try {
-    const res = await fetch("/api/v1/admin/publicaciones");
+    const res = await fetch("/api/v1/admin/publicaciones", { headers: Auth.getHeaders() });
     if (res.ok) {
       adminPublicaciones = await res.json();
       renderPublicacionesAdmin();
@@ -286,7 +367,7 @@ async function submitCreatePublicacion() {
   try {
     const res = await fetch("/api/v1/admin/publicaciones", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: Auth.getHeaders(),
       body: JSON.stringify(payload)
     });
     if (!res.ok) throw new Error("Error al publicar");
@@ -301,7 +382,7 @@ async function submitCreatePublicacion() {
 async function deletePublicacion(id) {
   if (!confirm("¿Eliminar esta publicación de la web pública?")) return;
   try {
-    const res = await fetch(`/api/v1/admin/publicaciones/${id}`, { method: "DELETE" });
+    const res = await fetch(`/api/v1/admin/publicaciones/${id}`, { method: "DELETE", headers: Auth.getHeaders() });
     if (!res.ok) throw new Error("Error al eliminar");
     showToast("Publicación eliminada", "success");
     loadPublicacionesAdmin();
@@ -313,7 +394,7 @@ async function deletePublicacion(id) {
 /* ==================== PRODUCTOS E INGREDIENTES EDITABLES ==================== */
 async function loadProducts() {
   try {
-    const res = await fetch("/api/v1/admin/productos");
+    const res = await fetch("/api/v1/admin/productos", { headers: Auth.getHeaders() });
     if (res.ok) {
       adminProducts = await res.json();
       renderProducts();
@@ -327,25 +408,50 @@ function renderProducts() {
   const tbody = document.getElementById("products-tbody");
   if (!tbody) return;
 
-  let html = "";
-  adminProducts.forEach(p => {
-    const img = p.imagen_url || "https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=500";
+  const query = (document.getElementById("products-search")?.value || "").trim().toLocaleLowerCase();
+  const sortBy = document.getElementById("products-sort")?.value || "category-name";
+  const categoriesById = new Map(adminCategories.map(category => [category.id, category.nombre]));
+  const products = adminProducts.filter(product => {
+    const categoryName = categoriesById.get(product.categoria_id) || product.categoria?.nombre || "";
+    return `${product.nombre} ${categoryName}`.toLocaleLowerCase().includes(query);
+  });
+  products.sort((left, right) => {
+    if (sortBy === "newest") return right.id - left.id;
+    if (sortBy === "name") return left.nombre.localeCompare(right.nombre, "es", { sensitivity: "base" });
+    const categorySort = (categoriesById.get(left.categoria_id) || left.categoria?.nombre || "")
+      .localeCompare(categoriesById.get(right.categoria_id) || right.categoria?.nombre || "", "es", { sensitivity: "base" });
+    return categorySort || left.nombre.localeCompare(right.nombre, "es", { sensitivity: "base" });
+  });
+  if (!products.length) {
+    tbody.innerHTML = '<tr><td colspan="9" style="padding:1rem;text-align:center;color:var(--text-muted)">No hay productos que coincidan con la búsqueda.</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = products.map(p => {
+    const img = escapeAdminHtml(p.imagen_url || "/static/img/logo.png");
     let ingsStr = "";
     if (p.ingredientes_json) {
       try {
         const arr = JSON.parse(p.ingredientes_json);
-        ingsStr = arr.join(", ");
-      } catch(e) { ingsStr = p.ingredientes_json; }
+        ingsStr = Array.isArray(arr) ? arr.join(", ") : "Configuración inválida";
+      } catch(error) {
+        console.error(`Ingredientes inválidos para producto ${p.id}.`, error);
+        ingsStr = "Configuración inválida";
+      }
     } else {
       ingsStr = "Estándar";
     }
+    const category = categoriesById.get(p.categoria_id) || p.categoria?.nombre || "Sin categoría";
 
-    html += `
+    return `
       <tr style="border-bottom: 1px solid var(--toon-border);">
-        <td style="padding: 0.75rem;"><img src="${img}" style="width: 44px; height: 44px; border-radius: 8px; object-fit: cover;"></td>
-        <td style="padding: 0.75rem; font-weight: 700; color: #fff;">${p.nombre}</td>
+        <td style="padding: 0.75rem;"><img src="${img}" alt="" loading="lazy" style="width: 44px; height: 44px; border-radius: 8px; object-fit: cover;"></td>
+        <td style="padding: 0.75rem;">${escapeAdminHtml(category)}</td>
+        <td style="padding: 0.75rem; font-weight: 700; color: #fff;">${escapeAdminHtml(p.nombre)}</td>
         <td style="padding: 0.75rem; font-weight: 900;">${formatPriceDual(p.precio)}</td>
-        <td style="padding: 0.75rem; font-size: 0.8rem; color: var(--text-muted);">${ingsStr}</td>
+        <td style="padding: 0.75rem; font-size: 0.8rem; color: var(--text-muted);">${escapeAdminHtml(ingsStr)}</td>
+        <td style="padding: 0.75rem; font-size: 0.8rem;">${escapeAdminHtml(p.alergenos || "Sin declarar")}</td>
+        <td style="padding: 0.75rem;">${p.disponible ? "Disponible" : "No disponible"}</td>
         <td style="padding: 0.75rem;">${p.stock}</td>
         <td style="padding: 0.75rem; display: flex; gap: 0.4rem;">
           <button class="btn-gold" style="padding: 0.3rem 0.6rem; font-size: 0.75rem;" onclick="openEditProductModal(${p.id})">✏️ Editar</button>
@@ -353,8 +459,7 @@ function renderProducts() {
         </td>
       </tr>
     `;
-  });
-  tbody.innerHTML = html;
+  }).join("");
 }
 
 function openEditProductModal(prodId) {
@@ -366,7 +471,12 @@ function openEditProductModal(prodId) {
   document.getElementById("edit-prod-desc").value = p.descripcion || '';
   document.getElementById("edit-prod-price").value = p.precio;
   document.getElementById("edit-prod-price-promo").value = p.precio_promocion || '';
+  document.getElementById("edit-prod-tiempo-preparacion").value = p.tiempo_preparacion || 15;
   document.getElementById("edit-prod-img").value = p.imagen_url || '';
+  document.getElementById("edit-prod-alergenos").value = p.alergenos || '';
+  document.getElementById("edit-prod-disponible").checked = p.disponible !== false;
+  document.getElementById("edit-prod-extras").value = productEditorListValue(p.extras_json, "extras");
+  document.getElementById("edit-prod-media").value = productEditorListValue(p.media_json, "media");
 
   let ingsStr = "";
   if (p.ingredientes_json) {
@@ -392,23 +502,40 @@ async function submitUpdateProduct() {
   const ingsInput = document.getElementById("edit-prod-ingredientes").value;
   let ingsArr = ingsInput.split(",").map(i => i.trim()).filter(i => i.length > 0);
 
+  let extras;
+  let media;
+  try {
+    extras = parseProductEditorList(document.getElementById("edit-prod-extras").value, "extras");
+    media = parseProductEditorList(document.getElementById("edit-prod-media").value, "media");
+  } catch (error) {
+    showToast(error.message, "warning");
+    return;
+  }
   const payload = {
     nombre: document.getElementById("edit-prod-name").value,
     descripcion: document.getElementById("edit-prod-desc").value,
     precio: parseFloat(document.getElementById("edit-prod-price").value),
     precio_promocion: parseFloat(document.getElementById("edit-prod-price-promo").value) || null,
+    tiempo_preparacion: parseInt(document.getElementById("edit-prod-tiempo-preparacion").value, 10),
     categoria_id: parseInt(document.getElementById("edit-prod-cat-select").value),
     imagen_url: document.getElementById("edit-prod-img").value,
-    ingredientes_json: JSON.stringify(ingsArr)
+    ingredientes_json: JSON.stringify(ingsArr),
+    extras_json: JSON.stringify(extras),
+    media_json: JSON.stringify(media),
+    alergenos: document.getElementById("edit-prod-alergenos").value.trim() || null,
+    disponible: document.getElementById("edit-prod-disponible").checked
   };
 
   try {
     const res = await fetch(`/api/v1/admin/productos/${prodId}`, {
       method: "PUT",
-      headers: { "Content-Type": "application/json" },
+      headers: Auth.getHeaders(),
       body: JSON.stringify(payload)
     });
-    if (!res.ok) throw new Error("Error al actualizar producto");
+    if (!res.ok) {
+      const result = await res.json();
+      throw new Error(result.detail || "Error al actualizar producto");
+    }
     showToast("Producto e ingredientes actualizados con éxito", "success");
     closeModal("edit-product-modal");
     loadProducts();
@@ -420,7 +547,7 @@ async function submitUpdateProduct() {
 /* ==================== PROMOCIONES ADMIN ("BOOM! PROMO DEL DIA") ==================== */
 async function loadPromosAdmin() {
   try {
-    const res = await fetch("/api/v1/admin/promociones");
+    const res = await fetch("/api/v1/admin/promociones", { headers: Auth.getHeaders() });
     if (res.ok) {
       adminPromos = await res.json();
       renderPromosAdmin();
@@ -464,7 +591,7 @@ async function submitCreatePromo() {
   try {
     const res = await fetch("/api/v1/admin/promociones", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: Auth.getHeaders(),
       body: JSON.stringify(payload)
     });
     if (!res.ok) throw new Error("Error al guardar promoción");
@@ -479,7 +606,7 @@ async function submitCreatePromo() {
 async function deletePromo(id) {
   if (!confirm("¿Eliminar esta promoción?")) return;
   try {
-    const res = await fetch(`/api/v1/admin/promociones/${id}`, { method: "DELETE" });
+    const res = await fetch(`/api/v1/admin/promociones/${id}`, { method: "DELETE", headers: Auth.getHeaders() });
     if (!res.ok) throw new Error("Error al eliminar");
     showToast("Promoción eliminada", "success");
     loadPromosAdmin();
@@ -494,9 +621,10 @@ async function loadPortalConfigsAdmin() {
     const res = await fetch("/api/v1/cliente/configuraciones-publicas");
     if (res.ok) {
       const cfg = await res.json();
-      if (cfg.tasa_cambio_bs) {
-        tasaCambioBs = parseFloat(cfg.tasa_cambio_bs);
-        if (document.getElementById("cfg-tasa-cambio")) document.getElementById("cfg-tasa-cambio").value = tasaCambioBs;
+      const rate = Number(cfg.tasa_cambio_bs);
+      tasaCambioBs = Number.isFinite(rate) && rate > 0 ? rate : null;
+      if (document.getElementById("cfg-tasa-cambio")) {
+        document.getElementById("cfg-tasa-cambio").value = tasaCambioBs === null ? "" : tasaCambioBs;
       }
       if (document.getElementById("cfg-historia")) document.getElementById("cfg-historia").value = cfg.historia_restaurante || '';
       if (document.getElementById("cfg-whatsapp")) document.getElementById("cfg-whatsapp").value = cfg.whatsapp_contacto || '';
@@ -504,44 +632,96 @@ async function loadPortalConfigsAdmin() {
       if (document.getElementById("cfg-tiktok")) document.getElementById("cfg-tiktok").value = cfg.tiktok_link || '';
       if (document.getElementById("cfg-costo-delivery")) document.getElementById("cfg-costo-delivery").value = cfg.costo_delivery || '5.00';
       if (document.getElementById("cfg-costo-empaque")) document.getElementById("cfg-costo-empaque").value = cfg.costo_empaque || '3.00';
+      if (document.getElementById("cfg-pm-banco")) document.getElementById("cfg-pm-banco").value = cfg.pago_movil_banco || '';
+      if (document.getElementById("cfg-pm-telefono")) document.getElementById("cfg-pm-telefono").value = cfg.pago_movil_telefono || '';
+      if (document.getElementById("cfg-pm-rif")) document.getElementById("cfg-pm-rif").value = cfg.pago_movil_rif || '';
+      if (document.getElementById("cfg-pm-titular")) document.getElementById("cfg-pm-titular").value = cfg.pago_movil_titular || '';
+      if (document.getElementById("cfg-google-maps-api-key")) document.getElementById("cfg-google-maps-api-key").value = cfg.google_maps_api_key || '';
+      const rateStatus = document.getElementById("cfg-tasa-status");
+      if (rateStatus) {
+        rateStatus.textContent = cfg.tasa_cambio_bs
+          ? `Origen: ${cfg.tasa_fuente || "no identificado"} · Actualizada: ${cfg.tasa_actualizada_at || "fecha no disponible"} · Estado: ${cfg.tasa_estado || "manual"}${cfg.tasa_respaldo === "true" ? " (respaldo)" : ""}`
+          : "No hay una tasa válida. Consulta el feed o guarda un valor manual revisado.";
+      }
     }
   } catch (err) {
-    console.error(err);
+    showToast(`No se pudo cargar la configuración: ${err.message}`, "danger");
   }
 }
 
 async function submitSavePortalConfigs() {
-  const tasaVal = document.getElementById("cfg-tasa-cambio").value;
-  tasaCambioBs = parseFloat(tasaVal) || 36.50;
+  const tasaVal = document.getElementById("cfg-tasa-cambio").value.trim();
+  if (tasaVal && (!Number.isFinite(Number(tasaVal)) || Number(tasaVal) <= 0)) {
+    showToast("La tasa debe ser un número mayor que cero.", "warning");
+    return;
+  }
 
   const items = [
-    { clave: "tasa_cambio_bs", valor: tasaVal },
     { clave: "historia_restaurante", valor: document.getElementById("cfg-historia").value },
     { clave: "whatsapp_contacto", valor: document.getElementById("cfg-whatsapp").value },
     { clave: "instagram_link", valor: document.getElementById("cfg-instagram").value },
     { clave: "tiktok_link", valor: document.getElementById("cfg-tiktok").value },
     { clave: "costo_delivery", valor: document.getElementById("cfg-costo-delivery").value },
-    { clave: "costo_empaque", valor: document.getElementById("cfg-costo-empaque").value }
+    { clave: "costo_empaque", valor: document.getElementById("cfg-costo-empaque").value },
+    { clave: "pago_movil_banco", valor: document.getElementById("cfg-pm-banco").value.trim() },
+    { clave: "pago_movil_telefono", valor: document.getElementById("cfg-pm-telefono").value.trim() },
+    { clave: "pago_movil_rif", valor: document.getElementById("cfg-pm-rif").value.trim() },
+    { clave: "pago_movil_titular", valor: document.getElementById("cfg-pm-titular").value.trim() },
+    { clave: "google_maps_api_key", valor: document.getElementById("cfg-google-maps-api-key").value.trim() }
   ];
+  if (tasaVal) items.unshift({ clave: "tasa_cambio_bs", valor: tasaVal });
 
-  for (const item of items) {
-    try {
-      await fetch("/api/v1/admin/configuraciones", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(item)
-      });
-    } catch(e){}
+  try {
+    const response = await fetch("/api/v1/admin/configuraciones/lote", {
+      method: "POST",
+      headers: Auth.getHeaders(),
+      body: JSON.stringify({ configuraciones: items })
+    });
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.detail || "El servidor rechazó la configuración.");
+    }
+    if (tasaVal) {
+      tasaCambioBs = Number(tasaVal);
+      showToast(`Configuración guardada. Tasa manual: Bs. ${tasaCambioBs.toFixed(4)}/USD.`, "success");
+    } else {
+      showToast("Configuración guardada sin cambiar la tasa de referencia.", "success");
+    }
+    await loadPortalConfigsAdmin();
+    loadProducts();
+  } catch (err) {
+    showToast(`No se guardaron los cambios: ${err.message}`, "danger");
   }
-  showToast(`Configuraciones y Tasa (1 USD = Bs. ${tasaCambioBs}) guardadas`, "success");
-  if (typeof updateHeaderBcvRate === 'function') updateHeaderBcvRate();
-  loadProducts();
+}
+
+async function refreshBcvRate() {
+  const status = document.getElementById("cfg-tasa-status");
+  if (status) status.textContent = "Consultando proveedor de tasa oficial…";
+  try {
+    const response = await fetch("/api/v1/admin/tasa-bcv/actualizar", {
+      method: "POST",
+      headers: Auth.getHeaders()
+    });
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.detail || "No se pudo obtener la tasa.");
+    }
+    const data = await response.json();
+    tasaCambioBs = Number(data.tasa_cambio_bs);
+    document.getElementById("cfg-tasa-cambio").value = tasaCambioBs.toFixed(4);
+    if (status) status.textContent = `Origen: ${data.tasa_fuente} · Actualizada: ${data.tasa_actualizada_at}`;
+    showToast(`Tasa actualizada: Bs. ${tasaCambioBs.toFixed(4)}/USD`, "success");
+    loadProducts();
+  } catch (err) {
+    await loadPortalConfigsAdmin();
+    showToast(`No se actualizó la tasa; se conserva la última guardada. ${err.message}`, "warning");
+  }
 }
 
 /* ==================== RESEÑAS ADMIN ==================== */
 async function loadResenasAdmin() {
   try {
-    const res = await fetch("/api/v1/admin/resenas");
+    const res = await fetch("/api/v1/admin/resenas", { headers: Auth.getHeaders() });
     if (res.ok) {
       adminResenas = await res.json();
       renderResenasAdmin();
@@ -579,12 +759,12 @@ async function submitCreateResena() {
   try {
     const res = await fetch("/api/v1/admin/resenas", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: Auth.getHeaders(),
       body: JSON.stringify(payload)
     });
     if (!res.ok) throw new Error("Error al guardar reseña");
     showToast("Reseña publicada en el portal web", "success");
-    closeModal("add-resena-modal");
+    closeModal("resena-modal");
     loadResenasAdmin();
   } catch (err) {
     showToast(err.message, "danger");
@@ -594,7 +774,7 @@ async function submitCreateResena() {
 async function deleteResena(id) {
   if (!confirm("¿Eliminar esta reseña?")) return;
   try {
-    const res = await fetch(`/api/v1/admin/resenas/${id}`, { method: "DELETE" });
+    const res = await fetch(`/api/v1/admin/resenas/${id}`, { method: "DELETE", headers: Auth.getHeaders() });
     if (!res.ok) throw new Error("Error al eliminar");
     showToast("Reseña eliminada", "success");
     loadResenasAdmin();
@@ -606,7 +786,7 @@ async function deleteResena(id) {
 /* ==================== GUÍA & CARRUSEL ADMIN ==================== */
 async function loadGuiaAdmin() {
   try {
-    const res = await fetch("/api/v1/admin/guia");
+    const res = await fetch("/api/v1/admin/guia", { headers: Auth.getHeaders() });
     if (res.ok) {
       adminGuiaItems = await res.json();
       renderGuiaAdmin();
@@ -661,7 +841,7 @@ async function submitCreateGuia() {
   try {
     const res = await fetch("/api/v1/admin/guia", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: Auth.getHeaders(),
       body: JSON.stringify(payload)
     });
     if (!res.ok) throw new Error("Error al guardar diapositiva");
@@ -676,7 +856,7 @@ async function submitCreateGuia() {
 async function deleteGuiaItem(id) {
   if (!confirm("¿Deseas eliminar esta diapositiva del carrusel guía?")) return;
   try {
-    const res = await fetch(`/api/v1/admin/guia/${id}`, { method: "DELETE" });
+    const res = await fetch(`/api/v1/admin/guia/${id}`, { method: "DELETE", headers: Auth.getHeaders() });
     if (!res.ok) throw new Error("Error al eliminar");
     showToast("Diapositiva eliminada del carrusel", "success");
     loadGuiaAdmin();
@@ -687,7 +867,7 @@ async function deleteGuiaItem(id) {
 
 async function loadMesas() {
   try {
-    const res = await fetch("/api/v1/admin/mesas");
+    const res = await fetch("/api/v1/admin/mesas", { headers: Auth.getHeaders() });
     if (res.ok) {
       adminMesas = await res.json();
       renderMesas();
@@ -717,7 +897,7 @@ function renderMesas() {
 
 async function viewQrMesa(numMesa) {
   try {
-    const res = await fetch(`/api/v1/admin/mesas/${numMesa}/qr`);
+    const res = await fetch(`/api/v1/admin/mesas/${numMesa}/qr`, { headers: Auth.getHeaders() });
     if (!res.ok) throw new Error("Error al obtener QR");
     const data = await res.json();
     document.getElementById("qr-modal-title").innerText = `CÓDIGO QR MESA #${data.numero_mesa}`;
@@ -741,7 +921,7 @@ async function submitCreateMesa() {
   try {
     const res = await fetch("/api/v1/admin/mesas", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: Auth.getHeaders(),
       body: JSON.stringify({ numero_mesa: num, capacidad: cap })
     });
     if (!res.ok) throw new Error("Error al crear mesa");
@@ -756,7 +936,7 @@ async function submitCreateMesa() {
 async function deleteMesa(numMesa) {
   if (!confirm(`¿Eliminar la Mesa #${numMesa}?`)) return;
   try {
-    const res = await fetch(`/api/v1/admin/mesas/${numMesa}`, { method: "DELETE" });
+    const res = await fetch(`/api/v1/admin/mesas/${numMesa}`, { method: "DELETE", headers: Auth.getHeaders() });
     if (!res.ok) throw new Error("Error al eliminar la mesa");
     showToast(`Mesa #${numMesa} eliminada`, "success");
     loadMesas();
@@ -767,7 +947,7 @@ async function deleteMesa(numMesa) {
 
 async function loadInsumos() {
   try {
-    const res = await fetch("/api/v1/admin/insumos");
+    const res = await fetch("/api/v1/admin/insumos", { headers: Auth.getHeaders() });
     if (res.ok) {
       adminInsumos = await res.json();
       renderInsumos();
@@ -816,7 +996,7 @@ async function submitIngresoInsumo() {
   try {
     const res = await fetch(`/api/v1/admin/insumos/${selectedInsumoForIngreso.id}/ingreso`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: Auth.getHeaders(),
       body: JSON.stringify({ cantidad: cant })
     });
     if (!res.ok) throw new Error("Error al ingresar stock");
@@ -839,7 +1019,7 @@ async function submitCreateInsumo() {
   try {
     const res = await fetch("/api/v1/admin/insumos", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: Auth.getHeaders(),
       body: JSON.stringify(payload)
     });
     if (!res.ok) throw new Error("Error al crear insumo");
@@ -858,29 +1038,48 @@ function openProductModal() {
     opts += `<option value="${c.id}">${c.nombre}</option>`;
   });
   select.innerHTML = opts;
+  document.getElementById("prod-extras").value = "";
+  document.getElementById("prod-media").value = "";
   openModal("product-modal");
 }
 
 async function submitCreateProduct() {
   const ingsInput = document.getElementById("prod-ingredientes").value;
   let ingsArr = ingsInput.split(",").map(i => i.trim()).filter(i => i.length > 0);
+  let extras;
+  let media;
+  try {
+    extras = parseProductEditorList(document.getElementById("prod-extras").value, "extras");
+    media = parseProductEditorList(document.getElementById("prod-media").value, "media");
+  } catch (error) {
+    showToast(error.message, "warning");
+    return;
+  }
 
   const payload = {
     nombre: document.getElementById("prod-name").value,
     categoria_id: parseInt(document.getElementById("prod-cat-select").value),
     descripcion: document.getElementById("prod-desc").value,
     precio: parseFloat(document.getElementById("prod-price").value),
+    tiempo_preparacion: parseInt(document.getElementById("prod-tiempo-preparacion").value, 10),
     imagen_url: document.getElementById("prod-img").value || "https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=500",
-    ingredientes_json: JSON.stringify(ingsArr)
+    ingredientes_json: JSON.stringify(ingsArr),
+    extras_json: JSON.stringify(extras),
+    media_json: JSON.stringify(media),
+    alergenos: document.getElementById("prod-alergenos").value.trim() || null,
+    disponible: document.getElementById("prod-disponible").checked
   };
 
   try {
     const res = await fetch("/api/v1/admin/productos", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: Auth.getHeaders(),
       body: JSON.stringify(payload)
     });
-    if (!res.ok) throw new Error("Error al crear producto");
+    if (!res.ok) {
+      const result = await res.json();
+      throw new Error(result.detail || "Error al crear producto");
+    }
     showToast("Producto guardado correctamente en el catálogo", "success");
     closeModal("product-modal");
     loadProducts();
@@ -892,7 +1091,7 @@ async function submitCreateProduct() {
 async function deleteProducto(id) {
   if (!confirm("¿Eliminar este producto del catálogo?")) return;
   try {
-    const res = await fetch(`/api/v1/admin/productos/${id}`, { method: "DELETE" });
+    const res = await fetch(`/api/v1/admin/productos/${id}`, { method: "DELETE", headers: Auth.getHeaders() });
     if (!res.ok) throw new Error("Error al eliminar producto");
     showToast("Producto eliminado", "success");
     loadProducts();
@@ -903,10 +1102,11 @@ async function deleteProducto(id) {
 
 async function loadCategories() {
   try {
-    const res = await fetch("/api/v1/admin/categorias");
+    const res = await fetch("/api/v1/admin/categorias", { headers: Auth.getHeaders() });
     if (res.ok) {
       adminCategories = await res.json();
       renderCategories();
+      renderProducts();
     }
   } catch (err) {
     console.error(err);
@@ -940,7 +1140,7 @@ async function submitCreateCategory() {
   try {
     const res = await fetch("/api/v1/admin/categorias", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: Auth.getHeaders(),
       body: JSON.stringify(payload)
     });
     if (!res.ok) throw new Error("Error al crear categoría");
@@ -955,7 +1155,7 @@ async function submitCreateCategory() {
 async function deleteCategoria(id) {
   if (!confirm("¿Eliminar esta categoría?")) return;
   try {
-    const res = await fetch(`/api/v1/admin/categorias/${id}`, { method: "DELETE" });
+    const res = await fetch(`/api/v1/admin/categorias/${id}`, { method: "DELETE", headers: Auth.getHeaders() });
     if (!res.ok) throw new Error("Error al eliminar categoría");
     showToast("Categoría eliminada", "success");
     loadCategories();
@@ -999,9 +1199,11 @@ function renderUsers(users) {
   filtered.forEach(u => {
     const roleBadges = {
       'admin': '<span class="badge" style="background: var(--neon-red); color: #fff; font-weight: 800; padding: 0.2rem 0.5rem; border-radius: 6px;">👑 Admin</span>',
+      'gerente': '<span class="badge" style="background: #6366f1; color: #fff; font-weight: 800; padding: 0.2rem 0.5rem; border-radius: 6px;">📊 Gerente · lectura</span>',
       'caja': '<span class="badge" style="background: #38bdf8; color: #000; font-weight: 800; padding: 0.2rem 0.5rem; border-radius: 6px;">💵 Caja</span>',
       'cocina': '<span class="badge" style="background: var(--gold-accent); color: #000; font-weight: 800; padding: 0.2rem 0.5rem; border-radius: 6px;">🍳 Cocina</span>',
       'mesero': '<span class="badge" style="background: #a855f7; color: #fff; font-weight: 800; padding: 0.2rem 0.5rem; border-radius: 6px;">🤵 Mesero</span>',
+      'repartidor': '<span class="badge" style="background: #0ea5e9; color: #fff; font-weight: 800; padding: 0.2rem 0.5rem; border-radius: 6px;">🛵 Repartidor</span>',
       'cliente': '<span class="badge" style="background: rgba(255,255,255,0.1); color: #fff; font-weight: 800; padding: 0.2rem 0.5rem; border-radius: 6px;">📱 Cliente</span>'
     };
     const roleBadge = roleBadges[u.rol] || `<span class="badge">${u.rol}</span>`;
@@ -1120,12 +1322,7 @@ async function toggleUserActive(userId, newActive) {
   }
 }
 
-/* ==================== ESTILO CASHEA: HAMBURGER DRAWER, TOUCH SWIPE & FILTROS ==================== */
-function toggleAdminDrawer() {
-  const drawer = document.getElementById("admin-sidebar-drawer");
-  if (drawer) drawer.classList.toggle("open");
-}
-
+/* ==================== NAVEGACIÓN TÁCTIL Y FILTROS ==================== */
 let touchStartX = 0;
 let touchEndX = 0;
 
@@ -1176,10 +1373,10 @@ async function openRealtimeOpsModal() {
   openModal("realtime-ops-modal");
   
   if (document.getElementById("modal-ops-mesas")) {
-    document.getElementById("modal-ops-mesas").innerText = `${adminStats?.mesas_ocupadas || 5} / 20 Mesas`;
+    document.getElementById("modal-ops-mesas").innerText = `${adminStats?.mesas_ocupadas || 0} / ${adminStats?.total_mesas || 0} Mesas`;
   }
   if (document.getElementById("modal-ops-caja")) {
-    document.getElementById("modal-ops-caja").innerText = `$${(adminStats?.monto_caja || 950.50).toFixed(2)}`;
+    document.getElementById("modal-ops-caja").innerText = `$${Number(adminStats?.monto_caja || 0).toFixed(2)}`;
   }
 
   const container = document.getElementById("modal-ops-orders-list");
@@ -1196,7 +1393,8 @@ async function openRealtimeOpsModal() {
 
       let html = "";
       orders.forEach(o => {
-        const elapsedMin = Math.floor((new Date() - new Date(o.creado_en)) / 60000) || 5;
+        const createdAt = new Date(o.fecha_creacion).getTime();
+        const elapsedMin = Number.isFinite(createdAt) ? Math.max(0, Math.floor((Date.now() - createdAt) / 60000)) : 0;
         const isUrgent = elapsedMin >= 15;
 
         html += `
@@ -1214,6 +1412,7 @@ async function openRealtimeOpsModal() {
       container.innerHTML = html;
     }
   } catch(e) {
-    container.innerHTML = `<div style="text-align: center; color: var(--text-muted); padding: 1rem;">Detalles cargados en tiempo real.</div>`;
+    console.error("No se pudieron cargar las operaciones actuales:", e);
+    container.innerHTML = `<div role="alert" style="text-align: center; color: var(--neon-red); padding: 1rem;">No se pudieron cargar las operaciones. Intenta actualizar el panel.</div>`;
   }
 }

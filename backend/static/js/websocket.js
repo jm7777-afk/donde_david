@@ -7,6 +7,9 @@ class WSClient {
   }
 
   connect() {
+    const token = localStorage.getItem("token");
+    if (!token) return;
+
     const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
     const host = window.location.host;
     const wsUrl = `${protocol}//${host}/ws`;
@@ -15,6 +18,7 @@ class WSClient {
 
     this.socket.onopen = () => {
       console.log("🟢 Conexión WebSocket establecida con el servidor.");
+      this.socket.send(JSON.stringify({ token }));
     };
 
     this.socket.onmessage = (event) => {
@@ -28,7 +32,11 @@ class WSClient {
       }
     };
 
-    this.socket.onclose = () => {
+    this.socket.onclose = (event) => {
+      if ([4401, 4403, 4408].includes(event.code)) {
+        console.warn("WebSocket rechazado: inicia sesión con una cuenta de personal.");
+        return;
+      }
       console.warn("🔴 Conexión WebSocket cerrada. Reintentando en 3 segundos...");
       clearTimeout(this.reconnectTimer);
       this.reconnectTimer = setTimeout(() => this.connect(), 3000);

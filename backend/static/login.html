@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>DONDE DAVID - Portal de Personal & Empleados</title>
   <link rel="stylesheet" href="/static/css/global.css?v=2.0">
-  <link rel="stylesheet" href="/static/css/toon-theme.css?v=2.0">
+  <link rel="stylesheet" href="/static/css/toon-theme.css?v=2.4">
   <link rel="stylesheet" href="/static/css/index.css?v=2.0">
   <style>
     body.login-portal-body {
@@ -99,7 +99,8 @@
 
   <script src="/static/js/websocket.js?v=2.0"></script>
   <script src="/static/js/auth.js?v=2.0"></script>
-  <script src="/static/js/appShell.js?v=2.0"></script>
+  <script src="/static/js/theme-toggle.js?v=2.1"></script>
+  <script src="/static/js/appShell.js?v=2.3"></script>
   <script>
     document.getElementById("staff-portal-form").addEventListener("submit", async (e) => {
       e.preventDefault();
@@ -125,9 +126,11 @@
 
     function redirectByRole(rol) {
       if (rol === 'admin' || rol === 'supervisor') window.location.href = '/static/admin/index.html';
+      else if (rol === 'gerente') window.location.href = '/static/gerencia/panel.html';
       else if (rol === 'cocina') window.location.href = '/static/cocina/monitor.html';
       else if (rol === 'caja') window.location.href = '/static/caja/panel.html';
       else if (rol === 'mesero') window.location.href = '/static/mesero/panel.html';
+      else if (rol === 'repartidor') window.location.href = '/static/delivery/panel.html';
       else window.location.href = '/static/admin/index.html';
     }
   </script>

@@ -13,6 +13,9 @@ from backend.app.models.guia_item import GuiaItem
 from backend.app.models.resena import Resena
 from backend.app.models.publicacion import Publicacion
 from backend.app.models.movimiento_inventario import MovimientoInventario
+from backend.app.models.solicitud_mesa import SolicitudMesa
+from backend.app.models.movimiento_caja import MovimientoCaja
+from backend.app.models.arqueo_turno import ArqueoTurno
 
 __all__ = [
     "Usuario",
@@ -29,5 +32,8 @@ __all__ = [
     "GuiaItem",
     "Resena",
     "Publicacion",
-    "MovimientoInventario"
+    "MovimientoInventario",
+    "SolicitudMesa",
+    "MovimientoCaja",
+    "ArqueoTurno"
 ]

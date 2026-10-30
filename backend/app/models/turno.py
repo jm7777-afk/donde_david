@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Numeric, Boolean, DateTime, ForeignKey
+from sqlalchemy import Column, Integer, Numeric, Boolean, DateTime, ForeignKey
 from sqlalchemy.orm import relationship
 from datetime import datetime, timezone
 from backend.app.core.database import Base
@@ -20,3 +20,4 @@ class Turno(Base):
     usuario_caja_id = Column(Integer, ForeignKey("usuarios.id"), nullable=False)
 
     usuario_caja = relationship("Usuario")
+    arqueo = relationship("ArqueoTurno", cascade="all, delete-orphan")

@@ -21,9 +21,13 @@ let pendingOrders = [];
 let paidOrders = [];
 let selectedOrderForPayment = null;
 let allProductsPos = [];
+let frequentPosProducts = [];
 let posCategories = [];
 let posCart = [];
-let tasaCambioBs = 36.50;
+let tasaCambioBs = null;
+let tasaFuente = "";
+let tasaActualizadaAt = null;
+let deliveryCouriers = [];
 
 let currentOrderType = 'llevar'; // llevar, mesa, delivery
 let currentPaymentMethod = 'Efectivo';
@@ -33,35 +37,121 @@ let currentCustomizingProduct = null;
 let currentCustomizingQty = 1;
 
 document.addEventListener("DOMContentLoaded", () => {
-  loadPosConfig();
+  loadPosConfig().catch(error => {
+    console.error("No se pudo cargar la tasa de cambio:", error);
+    showToast("Tasa en bolívares no disponible. Los cobros en USD siguen habilitados.", "warning");
+  });
   loadShiftStatus();
   loadPendingOrders();
   loadPaidOrders();
+  loadPickupOrders();
   loadPosCategories();
   loadPosProducts();
+  if (window.location.hash === "#delivery") {
+    setTimeout(() => switchPosMainView("deliverys"), 0);
+  }
 
   new WSClient((event, data) => {
-    if (event === "NUEVO_PEDIDO" || event === "PAGO_CONFIRMADO" || event === "TURNO_ACTUALIZADO") {
+    if (event === "NUEVO_PEDIDO" || event === "PAGO_CONFIRMADO" || event === "TURNO_ACTUALIZADO"
+        || event === "CAMBIO_ESTADO_PEDIDO" || event === "MOVIMIENTO_CAJA") {
       loadShiftStatus();
       loadPendingOrders();
       loadPaidOrders();
+      loadPickupOrders();
     }
   });
 });
 
 async function loadPosConfig() {
-  try {
-    const res = await fetch("/api/v1/cliente/configuraciones-publicas");
-    if (res.ok) {
-      const cfg = await res.json();
-      if (cfg.tasa_cambio_bs) tasaCambioBs = parseFloat(cfg.tasa_cambio_bs);
+  const res = await fetch("/api/v1/cliente/configuraciones-publicas");
+  if (!res.ok) throw new Error("No se pudo consultar la configuración pública.");
+  const cfg = await res.json();
+  const rate = Number(cfg.tasa_cambio_bs);
+  tasaCambioBs = Number.isFinite(rate) && rate > 0 ? rate : null;
+  tasaFuente = cfg.tasa_fuente || "";
+  tasaActualizadaAt = cfg.tasa_actualizada_at || null;
+  const vesOption = document.querySelector('#pay-currency-select option[value="VES"]');
+  if (vesOption) vesOption.disabled = tasaCambioBs === null;
+  const rateInfo = document.getElementById("pay-rate-info");
+  if (rateInfo) {
+    if (tasaCambioBs === null) {
+      rateInfo.textContent = "Tasa no disponible; solo se permiten cobros en USD.";
+    } else {
+      const source = tasaFuente || "Fuente no identificada";
+      const updatedAt = tasaActualizadaAt ? new Date(tasaActualizadaAt).toLocaleString("es-VE") : "fecha no disponible";
+      rateInfo.textContent = `Tasa: Bs. ${tasaCambioBs.toFixed(4)}/USD · ${source} · ${updatedAt}`;
     }
-  } catch(e){}
+  }
+
+  function openCashExpenseModal() {
+    openModal("cash-expense-modal");
+    loadCashMovements();
+  }
+
+  async function loadCashMovements() {
+    const container = document.getElementById("cash-movements-list");
+    if (!container) return;
+    try {
+      const response = await fetch("/api/v1/caja/movimientos", { headers: Auth.getHeaders() });
+      if (response.status === 404) {
+        container.innerHTML = `<p style="color:var(--text-muted)">No hay turno activo.</p>`;
+        return;
+      }
+      const movements = await response.json();
+      if (!response.ok) throw new Error(movements.detail || "No se pudieron cargar los egresos.");
+      container.innerHTML = `<h4>Egresos de este turno</h4>${movements.length
+        ? movements.map(item => `<div style="display:flex;justify-content:space-between;gap:.5rem;padding:.4rem 0;border-top:1px solid var(--toon-border)">
+            <span>${escapeCajaHtml(item.concepto)} · ${escapeCajaHtml(item.metodo_pago)}${item.observacion ? `<small style="display:block;color:var(--text-muted)">${escapeCajaHtml(item.observacion)}</small>` : ""}</span>
+            <strong>-$${Number(item.monto_usd).toFixed(2)}</strong>
+          </div>`).join("")
+        : `<p style="color:var(--text-muted)">Sin egresos registrados.</p>`}`;
+    } catch (error) {
+      console.error("Error al consultar egresos de caja:", error);
+      container.innerHTML = `<p role="alert" style="color:var(--mc-red)">No se pudo cargar el historial de egresos.</p>`;
+    }
+  }
+
+  async function submitCashExpense() {
+    const concepto = document.getElementById("cash-expense-concept").value.trim();
+    const monto = Number(document.getElementById("cash-expense-amount").value);
+    const metodo = document.getElementById("cash-expense-method").value;
+    const observacion = document.getElementById("cash-expense-note").value.trim();
+    if (concepto.length < 3 || !Number.isFinite(monto) || monto <= 0) {
+      showToast("Indica un concepto y un monto de egreso válido.", "warning");
+      return;
+    }
+    try {
+      const response = await fetch("/api/v1/caja/movimientos", {
+        method: "POST",
+        headers: Auth.getHeaders(),
+        body: JSON.stringify({ concepto, monto_usd: monto, metodo_pago: metodo, observacion })
+      });
+      const body = await response.json();
+      if (!response.ok) throw new Error(body.detail || "No se pudo registrar el egreso.");
+      showToast("Egreso registrado en el turno actual.", "success");
+      closeModal("cash-expense-modal");
+      document.getElementById("cash-expense-concept").value = "";
+      document.getElementById("cash-expense-amount").value = "";
+      document.getElementById("cash-expense-note").value = "";
+      await loadShiftStatus();
+      await loadCashMovements();
+    } catch (error) {
+      showToast(error.message, "danger");
+    }
+  }
 }
 
 function formatPriceDual(usdAmount) {
-  const bsAmount = (usdAmount * tasaCambioBs).toFixed(2);
-  return `$${usdAmount.toFixed(2)} <span style="font-size: 0.8rem; color: var(--mc-yellow);">(Bs. ${bsAmount})</span>`;
+  const amount = Number(usdAmount) || 0;
+  if (!Number.isFinite(tasaCambioBs) || tasaCambioBs <= 0) return `$${amount.toFixed(2)}`;
+  const bsAmount = (amount * tasaCambioBs).toFixed(2);
+  return `$${amount.toFixed(2)} <span style="font-size: 0.8rem; color: var(--mc-yellow);">(Bs. ${bsAmount})</span>`;
+}
+
+function escapeCajaHtml(value) {
+  return String(value ?? "").replace(/[&<>"']/g, char => ({
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
+  })[char]);
 }
 
 function switchPosMainView(viewName) {
@@ -78,11 +168,15 @@ function switchPosMainView(viewName) {
   if (document.getElementById("view-deliverys-container")) {
     document.getElementById("view-deliverys-container").style.display = viewName === 'deliverys' ? 'block' : 'none';
   }
+  if (document.getElementById("view-pickup-container")) {
+    document.getElementById("view-pickup-container").style.display = viewName === 'pickup' ? 'block' : 'none';
+  }
 
   if (document.getElementById("view-btn-pos")) document.getElementById("view-btn-pos").classList.toggle("active", viewName === 'pos');
   if (document.getElementById("view-btn-postres")) document.getElementById("view-btn-postres").classList.toggle("active", viewName === 'postres');
   if (document.getElementById("view-btn-app-payments")) document.getElementById("view-btn-app-payments").classList.toggle("active", viewName === 'app-payments');
   if (document.getElementById("view-btn-deliverys")) document.getElementById("view-btn-deliverys").classList.toggle("active", viewName === 'deliverys');
+  if (document.getElementById("view-btn-pickup")) document.getElementById("view-btn-pickup").classList.toggle("active", viewName === 'pickup');
   if (document.getElementById("view-btn-queue")) document.getElementById("view-btn-queue").classList.toggle("active", viewName === 'queue');
   if (document.getElementById("view-btn-history")) document.getElementById("view-btn-history").classList.toggle("active", viewName === 'history');
 
@@ -92,51 +186,123 @@ function switchPosMainView(viewName) {
     renderAppPaymentsQueue();
   } else if (viewName === 'deliverys') {
     renderDeliverysQueue();
+  } else if (viewName === 'pickup') {
+    loadPickupOrders();
+  }
+}
+
+async function loadPickupOrders() {
+  const container = document.getElementById("pickup-orders-list");
+  if (!container) return;
+  try {
+    const response = await fetch("/api/v1/caja/pedidos-retiro", { headers: Auth.getHeaders() });
+    if (!response.ok) throw new Error("No se pudieron cargar los pedidos de retiro.");
+    const orders = await response.json();
+    const count = document.getElementById("pickup-count");
+    if (count) count.textContent = `${orders.length} listo(s)`;
+    if (orders.length === 0) {
+      container.innerHTML = `<div style="grid-column:1/-1;padding:2rem;text-align:center;color:var(--text-muted)">No hay pedidos listos para retirar.</div>`;
+      return;
+    }
+    container.innerHTML = orders.map(order => `
+      <article style="background:var(--toon-card);border:1px solid var(--toon-border);border-radius:16px;padding:1rem">
+        <h3 style="margin-top:0">Pedido #${order.id}</h3>
+        <p><strong>${escapeCajaHtml(order.nombre_factura || "Cliente")}</strong> · ${escapeCajaHtml(order.numero_mesa)}</p>
+        <p>Total: ${formatPriceDual(order.total)}</p>
+        <label for="pickup-code-${order.id}">Código de retiro del cliente</label>
+        <input id="pickup-code-${order.id}" class="form-control" inputmode="numeric" autocomplete="one-time-code" maxlength="6" pattern="[0-9]{6}" aria-label="Código de retiro del pedido ${order.id}">
+        <button class="btn btn-cta" style="width:100%;margin-top:.65rem" onclick="confirmPickupOrder(${order.id})">Confirmar entrega</button>
+      </article>
+    `).join("");
+  } catch (error) {
+    console.error("Error en cola de retiros:", error);
+    showToast(error.message, "danger");
+  }
+}
+
+async function confirmPickupOrder(orderId) {
+  const input = document.getElementById(`pickup-code-${orderId}`);
+  const code = input?.value.trim();
+  if (!/^[0-9]{6}$/.test(code || "")) {
+    showToast("Ingresa el código de retiro de seis dígitos.", "warning");
+    return;
+  }
+  try {
+    const response = await fetch(`/api/v1/caja/pedidos/${orderId}/confirmar-retiro`, {
+      method: "POST",
+      headers: Auth.getHeaders(),
+      body: JSON.stringify({ codigo_retiro: code })
+    });
+    const body = await response.json();
+    if (!response.ok) throw new Error(body.detail || "No se pudo confirmar el retiro.");
+    showToast(body.mensaje, "success");
+    await loadPickupOrders();
+    await loadPaidOrders();
+  } catch (error) {
+    showToast(error.message, "danger");
   }
 }
 
 function renderAppPaymentsQueue() {
   const container = document.getElementById("app-payments-grid-list");
   if (!container) return;
+  const validationOrders = pendingOrders.filter(o => o.estado_pago === "PENDIENTE_VALIDACION");
 
   if (document.getElementById("app-payments-count")) {
-    document.getElementById("app-payments-count").innerText = `${pendingOrders.length} Pagos / Comandas por Confirmar en Caja`;
+    document.getElementById("app-payments-count").innerText = `${validationOrders.length} pagos móviles por validar`;
   }
 
-  if (pendingOrders.length === 0) {
+  if (validationOrders.length === 0) {
     container.innerHTML = `<div style="grid-column: 1/-1; text-align: center; color: var(--text-muted); padding: 2rem;">No hay pagos pendientes por confirmar en la caja.</div>`;
     return;
   }
 
-  container.innerHTML = pendingOrders.map(o => {
-    const isPagoMovil = o.metodo_pago && o.metodo_pago.includes("Pago Móvil");
-    const isTarjeta = o.metodo_pago && o.metodo_pago.includes("Tarjeta");
-
+  container.innerHTML = validationOrders.map(o => {
     return `
-      <div class="card fade-in" style="background: var(--toon-card); border: 2px solid ${isPagoMovil ? 'var(--cyan-accent)' : 'var(--gold-accent)'}; border-radius: var(--radius-md); padding: 1.25rem;">
+      <div class="card fade-in" style="background: var(--toon-card); border: 2px solid var(--cyan-accent); border-radius: var(--radius-md); padding: 1.25rem;">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
-          <span class="badge" style="background: ${isPagoMovil ? 'var(--cyan-accent)' : 'var(--gold-gradient)'}; color: #000; font-weight: 900; font-size: 0.85rem;">
-            ${isPagoMovil ? '📱 PAGO MÓVIL' : (isTarjeta ? '💳 PUNTO TARJETA' : '💵 EFECTIVO')} #${o.id}
+          <span class="badge" style="background: var(--cyan-accent); color: #000; font-weight: 900; font-size: 0.85rem;">
+            📱 PAGO MÓVIL #${o.id}
           </span>
-          <strong style="color: var(--gold-accent); font-size: 1.25rem; font-weight: 900;">$${parseFloat(o.total).toFixed(2)}</strong>
+          <strong style="color: var(--gold-accent); font-size: 1.25rem; font-weight: 900;">Bs. ${parseFloat(o.monto_pago || 0).toFixed(2)}</strong>
         </div>
 
-        <p style="font-size: 0.9rem; color: #fff; margin-bottom: 0.3rem;"><strong>Cliente:</strong> ${o.nombre_cliente_delivery || o.nombre_factura || o.numero_mesa || 'Cliente'}</p>
-        ${o.direccion_delivery ? `<p style="font-size: 0.85rem; color: var(--cyan-accent); margin-bottom: 0.4rem;">📍 ${o.direccion_delivery}</p>` : ''}
+        <p style="font-size: 0.9rem; color: #fff; margin-bottom: 0.3rem;"><strong>Cliente:</strong> ${escapeCajaHtml(o.nombre_cliente_delivery || o.nombre_factura || o.numero_mesa || 'Cliente')}</p>
+        ${o.direccion_delivery ? `<p style="font-size: 0.85rem; color: var(--cyan-accent); margin-bottom: 0.4rem;">📍 ${escapeCajaHtml(o.direccion_delivery)}</p>` : ''}
         
         <div style="background: rgba(255,255,255,0.05); border: 1px solid var(--toon-border); border-radius: 10px; padding: 0.65rem; margin-bottom: 0.85rem;">
-          <div style="font-size: 0.8rem; color: var(--text-muted); font-weight: 700;">DETALLE DE TRANSACCIÓN:</div>
-          <div style="font-size: 1rem; font-weight: 900; color: ${isPagoMovil ? 'var(--cyan-accent)' : 'var(--gold-accent)'}; margin-top: 0.15rem;">
-            ${o.metodo_pago || 'Confirmación en Caja POS'}
-          </div>
+          <div>Referencia: <strong>${escapeCajaHtml(o.referencia_pago || "Sin referencia")}</strong></div>
+          <div>Total base: $${Number(o.total).toFixed(2)} · Tasa aplicada: Bs. ${Number(o.tasa_cambio_pago || 0).toFixed(4)}/USD</div>
         </div>
 
-        <button class="btn btn-cta" style="width: 100%; font-size: 0.92rem; font-weight: 900;" onclick="openPaymentModal(${o.id})">
-          ${isPagoMovil ? '✅ VALIDAR 4 DÍGITOS Y APROBAR PAGO MÓVIL' : (isTarjeta ? '💳 PROCESAR PUNTO Y CONFIRMAR' : '💵 CONFIRMAR COBRO EN CAJA')}
-        </button>
+        <div style="display:flex; gap:.5rem">
+          <button class="btn btn-cta" style="flex:1" onclick="confirmMobilePayment(${o.id}, true)">✓ Confirmar pago</button>
+          <button class="btn btn-outline" style="flex:1" onclick="confirmMobilePayment(${o.id}, false)">Rechazar</button>
+        </div>
       </div>
     `;
   }).join('');
+}
+
+async function confirmMobilePayment(orderId, approved) {
+  const observation = approved ? "" : (prompt("Motivo del rechazo (opcional):") || "");
+  try {
+    const response = await fetch(`/api/v1/caja/pedidos/${orderId}/confirmar-pago`, {
+      method: "POST",
+      headers: Auth.getHeaders(),
+      body: JSON.stringify({ aprobado: approved, observacion: observation })
+    });
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.detail || "No se pudo validar el pago.");
+    }
+    const result = await response.json();
+    showToast(result.mensaje, approved ? "success" : "warning");
+    await loadPendingOrders();
+    await loadPaidOrders();
+  } catch (error) {
+    showToast(error.message, "danger");
+  }
 }
 
 // ==================== BÚSQUEDA DE CLIENTES REGISTRADOS POR ID O NOMBRE EN CAJA ====================
@@ -154,7 +320,7 @@ async function searchCustomerPosLive() {
   }
 
   try {
-    const res = await fetch(`/api/v1/caja/clientes/buscar?q=${encodeURIComponent(query)}`);
+    const res = await fetch(`/api/v1/caja/clientes/buscar?q=${encodeURIComponent(query)}`, { headers: Auth.getHeaders() });
     if (!res.ok) return;
     const clients = await res.json();
 
@@ -192,15 +358,23 @@ function selectCustomerForPos(id, name, code, points) {
   showToast(`👤 Cliente Seleccionado: ${name} (${code}) - ${points} Pts`, "success");
 }
 
-function renderDeliverysQueue() {
+async function renderDeliverysQueue() {
   const container = document.getElementById("deliverys-grid-list");
   if (!container) return;
-
-  const deliveryOrders = pendingOrders.concat(paidOrders).filter(o => 
-    (o.tipo && o.tipo.toLowerCase() === 'delivery') || 
-    (o.numero_mesa && o.numero_mesa.toLowerCase().includes('delivery')) || 
-    (o.direccion_delivery && o.direccion_delivery.trim().length > 0)
-  );
+  container.innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:2rem">Cargando entregas…</div>';
+  let deliveryOrders;
+  try {
+    const [ordersResponse, couriersResponse] = await Promise.all([
+      fetch("/api/v1/delivery/despacho/pedidos", { headers: Auth.getHeaders() }),
+      fetch("/api/v1/delivery/despacho/repartidores", { headers: Auth.getHeaders() })
+    ]);
+    if (!ordersResponse.ok || !couriersResponse.ok) throw new Error("No se pudo cargar despacho o repartidores.");
+    deliveryOrders = await ordersResponse.json();
+    deliveryCouriers = await couriersResponse.json();
+  } catch (error) {
+    container.innerHTML = `<div role="alert" style="grid-column:1/-1;color:var(--neon-red)">${error.message}</div>`;
+    return;
+  }
   if (document.getElementById("deliverys-count")) {
     document.getElementById("deliverys-count").innerText = `${deliveryOrders.length} Envíos Delivery Activos`;
   }
@@ -211,36 +385,68 @@ function renderDeliverysQueue() {
   }
 
   container.innerHTML = deliveryOrders.map(o => {
-    let mapsUrl = "";
-    if (o.direccion_delivery && o.direccion_delivery.includes("http")) {
-      const match = o.direccion_delivery.match(/(https?:\/\/[^\s]+)/);
-      if (match) mapsUrl = match[0];
-    } else if (o.direccion_delivery && (o.direccion_delivery.includes("GPS:") || o.direccion_delivery.includes("Lat"))) {
-      const cleanAddr = o.direccion_delivery.replace("📍 GPS:", "").trim();
-      mapsUrl = `https://maps.google.com/?q=${encodeURIComponent(cleanAddr)}`;
-    }
+    const mapsUrl = `https://maps.google.com/?q=${encodeURIComponent(o.direccion_delivery || "")}`;
+    const assignedCourier = deliveryCouriers.find(c => c.id === o.repartidor_id);
+    const courierOptions = deliveryCouriers.map(c =>
+      `<option value="${Number(c.id)}" ${c.id === o.repartidor_id ? "selected" : ""}>${escapeCajaHtml(c.nombre)}</option>`
+    ).join("");
+    const paymentLabel = o.estado_pago === "PAGADO" ? "Pago confirmado" : "Pendiente de cobro en caja";
+    const clientName = o.nombre_cliente_delivery || o.nombre_factura || "Cliente Delivery";
+    const phone = o.telefono_delivery || "Sin teléfono";
+    const address = o.direccion_delivery || "Sin dirección";
 
     return `
       <div class="card fade-in" style="background: var(--toon-card); border: 1.5px solid var(--cyan-accent); border-radius: var(--radius-md); padding: 1.25rem;">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
-          <span class="badge" style="background: var(--cyan-accent); color: #000; font-weight: 900;">🛵 Delivery #${o.id}</span>
+          <span class="badge" style="background: var(--cyan-accent); color: #000; font-weight: 900;">🛵 Delivery #${Number(o.id)}</span>
           <strong style="color: var(--gold-accent); font-size: 1.25rem;">$${parseFloat(o.total).toFixed(2)}</strong>
         </div>
-        <p style="font-size: 0.9rem; color: #fff; margin-bottom: 0.3rem;"><strong>Cliente:</strong> ${o.nombre_cliente_delivery || o.nombre_factura || 'Cliente Delivery'}</p>
-        <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 0.4rem;"><strong>Teléfono:</strong> ${o.telefono_delivery || 'Sin teléfono'}</p>
+        <p style="font-size: 0.9rem; color: #fff; margin-bottom: 0.3rem;"><strong>Cliente:</strong> ${escapeCajaHtml(clientName)}</p>
+        <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 0.4rem;"><strong>Teléfono:</strong> ${escapeCajaHtml(phone)}</p>
         
         <div style="background: rgba(0,245,212,0.06); border: 1px solid var(--cyan-accent); border-radius: 10px; padding: 0.75rem; margin-bottom: 0.85rem;">
           <div style="font-size: 0.78rem; color: var(--cyan-accent); font-weight: 800; margin-bottom: 0.2rem;">📍 UBICACIÓN Y GPS RECIBIDOS EN CAJA:</div>
-          <div style="font-size: 0.88rem; color: #fff; word-break: break-all;">${o.direccion_delivery || 'Ubicación GPS capturada desde el celular'}</div>
+          <div style="font-size: 0.88rem; color: #fff; word-break: break-all;">${escapeCajaHtml(address)}</div>
         </div>
 
-        <div style="display: flex; gap: 0.5rem;">
-          ${mapsUrl ? `<a href="${mapsUrl}" target="_blank" class="btn btn-outline" style="flex: 1; font-size: 0.82rem; border-color: var(--cyan-accent); color: var(--cyan-accent); text-align: center; text-decoration: none; padding: 0.5rem; border-radius: 8px; font-weight: 800;" title="Abrir ubicación en Google Maps">🗺️ VER GPS MAPS</a>` : `<button class="btn btn-outline" style="flex: 1; font-size: 0.8rem;" onclick="showToast('📍 GPS: ${o.direccion_delivery || "Sin ubicación"}', 'info')">🗺️ GPS</button>`}
-          <button class="btn btn-cta" style="flex: 1.2; font-size: 0.85rem; font-weight: 900;" onclick="showToast('🛵 Repartidor asignado a Pedido #${o.id}', 'success')">🛵 ASIGNAR MOTORIZADO</button>
+        <div style="margin-bottom:.7rem"><strong>Estado de entrega:</strong> ${escapeCajaHtml(o.estado_delivery || "PENDIENTE")} · ${paymentLabel}</div>
+        ${assignedCourier ? `<div style="margin-bottom:.7rem"><strong>Repartidor:</strong> ${escapeCajaHtml(assignedCourier.nombre)}</div>` : ""}
+        <div style="display:flex;gap:.5rem;flex-wrap:wrap">
+          <a href="${mapsUrl}" target="_blank" rel="noopener noreferrer" class="btn btn-outline">🗺️ Abrir mapa</a>
+          ${o.estado_pago === "PAGADO" && deliveryCouriers.length && ["PENDIENTE", "ASIGNADO"].includes(o.estado_delivery || "PENDIENTE")
+            ? `<select id="courier-${o.id}" class="form-control" style="flex:1;min-width:160px">${courierOptions || '<option value="">Selecciona repartidor</option>'}</select><button class="btn btn-cta" onclick="assignDeliveryOrder(${o.id})">${assignedCourier ? "Guardar asignación" : "Asignar"}</button>`
+            : o.estado_pago === "PAGADO"
+              ? assignedCourier
+                ? `<span class="badge">Repartidor en ruta: ${escapeCajaHtml(o.estado_delivery)}</span>`
+                : `<a class="btn btn-outline" href="/static/admin/index.html#tab-usuarios">Crear usuario con rol Repartidor</a>`
+              : `<button class="btn btn-outline" onclick="openPaymentModal(${o.id})">Cobrar antes de asignar</button>`}
         </div>
       </div>
     `;
   }).join('');
+}
+
+async function assignDeliveryOrder(orderId) {
+  const courierId = Number(document.getElementById(`courier-${orderId}`)?.value);
+  if (!courierId) {
+    showToast("Selecciona un repartidor activo.", "warning");
+    return;
+  }
+  try {
+    const response = await fetch(`/api/v1/delivery/despacho/pedidos/${orderId}/asignar`, {
+      method: "POST",
+      headers: Auth.getHeaders(),
+      body: JSON.stringify({ repartidor_id: courierId })
+    });
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.detail || "No se pudo asignar el pedido.");
+    }
+    showToast(`Pedido #${orderId} asignado.`, "success");
+    await renderDeliverysQueue();
+  } catch (error) {
+    showToast(error.message, "danger");
+  }
 }
 
 let dispatchedDessertIds = new Set(JSON.parse(localStorage.getItem("dispatched_desserts") || "[]"));
@@ -401,25 +607,15 @@ function filterCategoryPos(catId) {
 async function loadPosProducts() {
   try {
     const res = await fetch("/api/v1/cliente/productos");
-    if (res.ok) {
-      allProductsPos = await res.json();
-    }
+    if (!res.ok) throw new Error("No se pudo cargar el catálogo real de productos.");
+    allProductsPos = await res.json();
   } catch (err) {
     console.error(err);
+    allProductsPos = [];
+    showToast(err.message, "danger");
   }
-
-  if (!allProductsPos || allProductsPos.length === 0) {
-    allProductsPos = [
-      { id: 1, categoria_id: 1, nombre: "Hamburguesa Clásica", precio: 8.50, descripcion: "Carne 150g, Queso Cheddar, Tomate, Cebolla Morada", imagen_url: "https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=500", ingredientes_json: '["Carne 150g", "Queso Cheddar", "Tomate", "Cebolla Morada"]' },
-      { id: 2, categoria_id: 1, nombre: "Hamburguesa Doble Queso", precio: 10.50, descripcion: "Doble Carne 150g, Doble Cheddar, Tocineta", imagen_url: "https://images.unsplash.com/photo-1586190848861-99aa4a171e90?w=500", ingredientes_json: '["Doble Carne 150g", "Doble Cheddar", "Tocineta"]' },
-      { id: 3, categoria_id: 2, nombre: "Hot Dog Especial", precio: 5.00, descripcion: "Salchicha Jumbo, Papita, Queso Fundido", imagen_url: "https://images.unsplash.com/photo-1619740455993-9e612b1af08a?w=500", ingredientes_json: '["Salchicha Jumbo", "Papita", "Queso Fundido"]' },
-      { id: 4, categoria_id: 3, nombre: "Papas Rústicas Tocineta", precio: 6.00, descripcion: "Papas rústicas con queso cheddar fundido y tocineta", imagen_url: "https://images.unsplash.com/photo-1573080496219-bb080dd4f877?w=500", ingredientes_json: '["Cheddar Fundido", "Tocineta Crispy"]' },
-      { id: 5, categoria_id: 4, nombre: "Refresco 500ml", precio: 2.00, descripcion: "Coca Cola / Pepsi bien fría", imagen_url: "https://images.unsplash.com/photo-1622483767028-3f66f32aef97?w=500", ingredientes_json: '[]' },
-      { id: 6, categoria_id: 6, nombre: "Malteada de Chocolate", precio: 4.50, descripcion: "Malteada cremosa con helado artesanal y crema", imagen_url: "https://images.unsplash.com/photo-1572490122747-3968b75cc699?w=500", ingredientes_json: '["Helado de Chocolate", "Crema Batida"]' }
-    ];
-  }
-
   renderPosTouchProducts();
+  loadFrequentPosProducts();
 }
 
 function filterProductsPos() {
@@ -456,7 +652,33 @@ function renderPosTouchProducts(query = "") {
     `;
   });
 
-  container.innerHTML = html;
+  container.innerHTML = html || `<p style="grid-column:1/-1;color:var(--text-muted)">No hay productos disponibles para vender.</p>`;
+}
+
+async function loadFrequentPosProducts() {
+  const section = document.getElementById("pos-frequent-products");
+  const container = document.getElementById("pos-frequent-products-list");
+  if (!section || !container) return;
+  try {
+    const response = await fetch("/api/v1/caja/productos-frecuentes", { headers: Auth.getHeaders() });
+    if (!response.ok) throw new Error("No se pudieron cargar los productos frecuentes.");
+    frequentPosProducts = await response.json();
+    const availableProducts = frequentPosProducts
+      .map(item => ({ item, product: allProductsPos.find(product => product.id === item.id) }))
+      .filter(entry => entry.product);
+    section.style.display = availableProducts.length ? "block" : "none";
+    container.replaceChildren(...availableProducts.map(({ item, product }) => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "mc-mode-btn";
+      button.textContent = `${product.nombre} · ${item.unidades_vendidas} ventas`;
+      button.addEventListener("click", () => addPosItemDirect(product.id));
+      return button;
+    }));
+  } catch (error) {
+    console.error(error);
+    section.style.display = "none";
+  }
 }
 
 // ⚡ ADICIÓN ULTRA RÁPIDA DE 1-CLIC DIRECTO AL TICKET DE CAJA (SIN MODALES NI ESPERAS)
@@ -535,9 +757,9 @@ function addPosItem(prodId) {
   });
 
   html += `<div style="font-weight: 800; color: var(--gold-accent); font-size: 0.85rem; margin-top: 0.8rem; margin-bottom: 0.4rem;">🧀 EXTRAS OPCIONALES</div>
-    <label style="display: flex; align-items: center; justify-content: space-between; font-size: 0.8rem; margin-bottom: 0.4rem; cursor: pointer; color: #fff;"><span>Extra Queso (+$1.00 / Bs. ${(1.0 * tasaCambioBs).toFixed(2)})</span><input type="checkbox" id="pos-extra-queso" value="1.0"></label>
-    <label style="display: flex; align-items: center; justify-content: space-between; font-size: 0.8rem; margin-bottom: 0.4rem; cursor: pointer; color: #fff;"><span>Extra Tocino (+$1.50 / Bs. ${(1.5 * tasaCambioBs).toFixed(2)})</span><input type="checkbox" id="pos-extra-tocino" value="1.5"></label>
-    <label style="display: flex; align-items: center; justify-content: space-between; font-size: 0.8rem; margin-bottom: 0.4rem; cursor: pointer; color: #fff;"><span>Extra Carne (+$2.50 / Bs. ${(2.5 * tasaCambioBs).toFixed(2)})</span><input type="checkbox" id="pos-extra-carne" value="2.5"></label>
+    <label style="display: flex; align-items: center; justify-content: space-between; font-size: 0.8rem; margin-bottom: 0.4rem; cursor: pointer; color: #fff;"><span>Extra Queso (${formatPriceDual(1.0)})</span><input type="checkbox" id="pos-extra-queso" value="1.0"></label>
+    <label style="display: flex; align-items: center; justify-content: space-between; font-size: 0.8rem; margin-bottom: 0.4rem; cursor: pointer; color: #fff;"><span>Extra Tocino (${formatPriceDual(1.5)})</span><input type="checkbox" id="pos-extra-tocino" value="1.5"></label>
+    <label style="display: flex; align-items: center; justify-content: space-between; font-size: 0.8rem; margin-bottom: 0.4rem; cursor: pointer; color: #fff;"><span>Extra Carne (${formatPriceDual(2.5)})</span><input type="checkbox" id="pos-extra-carne" value="2.5"></label>
   `;
 
   if (document.getElementById("pos-cust-ingredients-container")) {
@@ -743,8 +965,10 @@ function calcPosChange() {
 
   const rec = parseFloat(document.getElementById("pos-received-input").value) || 0;
   const changeUsd = Math.max(0, rec - total);
-  const changeBs = (changeUsd * tasaCambioBs).toFixed(2);
-  document.getElementById("pos-change-lbl").innerHTML = `Cambio: $${changeUsd.toFixed(2)} (Bs. ${changeBs})`;
+  const changeLabel = !Number.isFinite(tasaCambioBs) || tasaCambioBs <= 0
+    ? `$${changeUsd.toFixed(2)}`
+    : `$${changeUsd.toFixed(2)} (Bs. ${(changeUsd * tasaCambioBs).toFixed(2)})`;
+  document.getElementById("pos-change-lbl").innerHTML = `Cambio: ${changeLabel}`;
 }
 
 async function submitPosOrderFast() {
@@ -785,6 +1009,9 @@ async function submitPosOrderFast() {
     
     posCart = [];
     renderPosTicket();
+    if (order.tipo === "llevar" && order.codigo_retiro) {
+      showToast(`Código de retiro para entregar al cliente: ${order.codigo_retiro}`, "warning");
+    }
     // 🔒 ABRIR SIEMPRE LA PASARELA DIGITAL DE PAGO EN CAJA CON EL PEDIDO CREADO
     openPaymentModal(order);
   } catch (err) {
@@ -795,7 +1022,7 @@ async function submitPosOrderFast() {
 /* ==================== SHIFT & QUEUE LOADERS ==================== */
 async function loadShiftStatus() {
   try {
-    const res = await fetch("/api/v1/caja/turno-activo");
+    const res = await fetch("/api/v1/caja/turno-activo", { headers: Auth.getHeaders() });
     if (res.ok) {
       activeShift = await res.json();
       renderShiftBar(true);
@@ -816,9 +1043,10 @@ function renderShiftBar(isOpen) {
 
   if (isOpen && activeShift) {
     labelNumber.innerText = `Turno #${activeShift.numero_turno} Activo`;
-    labelSales.innerHTML = `Ventas: ${formatPriceDual(activeShift.total_ventas)} (${activeShift.total_pedidos} cobrados)`;
+    labelSales.innerHTML = `Ventas: ${formatPriceDual(activeShift.total_ventas)} (${activeShift.total_pedidos} cobrados) · Efectivo esperado: $${Number(activeShift.efectivo_esperado || activeShift.monto_apertura).toFixed(2)}`;
     actionsContainer.innerHTML = `
       <button class="btn-gold" style="background: var(--mc-red); color: #fff; border-color: var(--mc-red); font-size: 0.75rem;" onclick="submitCerrarTurno()">🔴 CERRAR TURNO</button>
+      <button class="btn-gold" style="font-size:0.75rem" onclick="openCashExpenseModal()">➖ REGISTRAR EGRESO</button>
     `;
   } else {
     labelNumber.innerText = "Caja: CERRADA";
@@ -831,7 +1059,7 @@ function renderShiftBar(isOpen) {
 
 async function loadPendingOrders() {
   try {
-    const res = await fetch("/api/v1/caja/pedidos-pendientes");
+    const res = await fetch("/api/v1/caja/pedidos-pendientes", { headers: Auth.getHeaders() });
     if (res.ok) {
       pendingOrders = await res.json();
       renderPendingOrders();
@@ -854,6 +1082,11 @@ function searchPosQueueLive() {
 }
 
 function renderPendingOrders() {
+  const queueButton = document.getElementById("view-btn-queue");
+  if (queueButton) {
+    queueButton.textContent = `🧾 CUENTAS Y PAGOS POR COBRAR (${pendingOrders.length})`;
+  }
+
   const container = document.getElementById("pending-orders-list");
   if (!container) return;
 
@@ -910,7 +1143,7 @@ function renderPendingOrders() {
     }
 
     const clientCode = o.usuario_id ? `CLI-${String(o.usuario_id).padStart(4, '0')}` : 'CLIENTE CASUAL';
-    const clientName = o.nombre_cliente_delivery || o.nombre_factura || 'Consumidor Final';
+    const clientName = escapeCajaHtml(o.nombre_cliente_delivery || o.nombre_factura || 'Consumidor Final');
 
     html += `
       <div class="card fade-in" style="background: var(--toon-card); border: 2px solid ${isPagoMovil ? 'var(--cyan-accent)' : 'var(--gold-accent)'}; border-radius: var(--radius-md); padding: 1.25rem; display: flex; flex-direction: column; justify-content: space-between;">
@@ -919,12 +1152,12 @@ function renderPendingOrders() {
           <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 0.75rem;">
             <div>
               <div style="font-size: 1.3rem; font-weight: 900; color: #fff; font-family: var(--font-display);">
-                ID #${o.id} <span style="font-size: 0.95rem; color: var(--gold-accent);">(${o.numero_mesa})</span>
+                ID #${o.id} <span style="font-size: 0.95rem; color: var(--gold-accent);">(${escapeCajaHtml(o.numero_mesa)})</span>
               </div>
               <small style="color: var(--cyan-accent); font-size: 0.75rem; font-weight: 800;">👤 ${clientName} • <span style="color: var(--gold-accent);">${clientCode}</span></small>
             </div>
             <span class="badge" style="background: ${isCuentaAbierta ? 'var(--cyan-accent)' : 'var(--gold-gradient)'}; color: #000; font-weight: 900; font-size: 0.72rem; padding: 0.25rem 0.55rem; border-radius: 6px;">
-              ${isCuentaAbierta ? '🧾 CUENTA ABIERTA' : (isPagoMovil ? '📱 PAGO MÓVIL 4 DÍGITOS' : '⚡ POR COBRAR')}
+              ${isCuentaAbierta ? '🧾 CUENTA ABIERTA' : (isPagoMovil ? '📱 REFERENCIA POR VALIDAR' : '⚡ POR COBRAR')}
             </span>
           </div>
 
@@ -939,7 +1172,7 @@ function renderPendingOrders() {
           <!-- Método de Pago / Referencia -->
           <div style="background: rgba(0,245,212,0.06); border: 1px solid var(--cyan-accent); border-radius: 8px; padding: 0.5rem 0.75rem; margin-bottom: 0.85rem;">
             <small style="color: var(--cyan-accent); font-weight: 800; display: block; font-size: 0.72rem;">FORMA DE PAGO SELECCIONADA:</small>
-            <div style="font-size: 0.88rem; font-weight: 900; color: #fff;">${o.metodo_pago || 'Confirmación en Caja POS'}</div>
+            <div style="font-size: 0.88rem; font-weight: 900; color: #fff;">${escapeCajaHtml(o.metodo_pago || 'Confirmación en Caja POS')}</div>
           </div>
         </div>
 
@@ -949,9 +1182,9 @@ function renderPendingOrders() {
             <small style="color: var(--text-muted); font-size: 0.7rem; font-weight: 800; display: block;">TOTAL NETO:</small>
             <div style="font-size: 1.25rem; font-weight: 900; color: var(--gold-accent); line-height: 1;">${formatPriceDual(o.total)}</div>
           </div>
-          <button class="btn btn-cta" style="padding: 0.6rem 1.1rem; font-size: 0.88rem; font-weight: 900;" onclick="openPaymentModal(${o.id})">
-            💳 COBRAR #${o.id}
-          </button>
+          ${o.estado_pago === "PENDIENTE_VALIDACION"
+            ? `<button class="btn btn-outline" style="padding: 0.6rem 1.1rem; font-size: 0.88rem; font-weight: 900;" onclick="switchPosMainView('app-payments')">📱 Validar Pago Móvil</button>`
+            : `<button class="btn btn-cta" style="padding: 0.6rem 1.1rem; font-size: 0.88rem; font-weight: 900;" onclick="openPaymentModal(${o.id})">💳 COBRAR #${o.id}</button>`}
         </div>
       </div>
     `;
@@ -961,7 +1194,7 @@ function renderPendingOrders() {
 
 async function loadPaidOrders() {
   try {
-    const res = await fetch("/api/v1/caja/pedidos-cobrados");
+    const res = await fetch("/api/v1/caja/pedidos-cobrados", { headers: Auth.getHeaders() });
     if (res.ok) {
       paidOrders = await res.json();
       renderPaidOrders();
@@ -1006,7 +1239,7 @@ function renderPaidOrders() {
     html += `
       <tr style="border-bottom: 1px solid var(--toon-border);">
         <td style="padding: 0.75rem;"><strong style="color: var(--mc-yellow);">${facNum}</strong></td>
-        <td style="padding: 0.75rem;">${o.numero_mesa}</td>
+        <td style="padding: 0.75rem;">${escapeCajaHtml(o.numero_mesa)}</td>
         <td style="padding: 0.75rem;"><span class="badge" style="background: rgba(255,255,255,0.1); color: var(--gold-accent); font-weight: 800;">${o.metodo_pago || 'Efectivo'}</span></td>
         <td style="padding: 0.75rem; font-weight: 900;">${formatPriceDual(o.total)}</td>
         <td style="padding: 0.75rem;"><button class="btn-gold" style="padding: 0.3rem 0.6rem; font-size: 0.75rem;" onclick="viewReceipt(${o.id})">📄 FACTURA TICKET</button></td>
@@ -1019,7 +1252,12 @@ function renderPaidOrders() {
 
 
 async function submitAbrirTurno() {
-  const monto = parseFloat(document.getElementById("monto-apertura-input").value) || 50.0;
+  const rawAmount = document.getElementById("monto-apertura-input").value.trim();
+  const monto = Number(rawAmount);
+  if (!rawAmount || !Number.isFinite(monto) || monto < 0) {
+    showToast("Ingresa un monto inicial válido en USD equivalente.", "warning");
+    return;
+  }
   try {
     const res = await fetch("/api/v1/caja/abrir-turno", {
       method: "POST",
@@ -1039,19 +1277,49 @@ async function submitAbrirTurno() {
 }
 
 async function submitCerrarTurno() {
-  if (!confirm("¿Deseas cerrar el turno de caja activo?")) return;
+  if (!activeShift) return;
+  const expected = activeShift.esperado_por_metodo || {};
+  document.getElementById("shift-cash-expected").textContent =
+    `Esperado: efectivo $${Number(expected["Efectivo"] ?? activeShift.efectivo_esperado ?? 0).toFixed(2)} · pago móvil $${Number(expected["Pago Móvil"] || 0).toFixed(2)} · punto de venta $${Number(expected["Punto de Venta"] || 0).toFixed(2)}.`;
+  document.getElementById("monto-cierre-input").value =
+    Math.max(0, Number(expected["Efectivo"] ?? activeShift.efectivo_esperado ?? 0)).toFixed(2);
+  document.getElementById("cierre-movil-input").value = Math.max(0, Number(expected["Pago Móvil"] || 0)).toFixed(2);
+  document.getElementById("cierre-pos-input").value = Math.max(0, Number(expected["Punto de Venta"] || 0)).toFixed(2);
+  openModal("close-shift-modal");
+}
+
+async function confirmarCerrarTurno() {
+  const rawAmount = document.getElementById("monto-cierre-input").value.trim();
+  const amount = Number(rawAmount);
+  const mobileAmount = Number(document.getElementById("cierre-movil-input").value);
+  const posAmount = Number(document.getElementById("cierre-pos-input").value);
+  if (!rawAmount || !Number.isFinite(amount) || amount < 0
+      || !Number.isFinite(mobileAmount) || mobileAmount < 0
+      || !Number.isFinite(posAmount) || posAmount < 0) {
+    showToast("Ingresa montos contados válidos para cada método de pago.", "warning");
+    return;
+  }
   try {
     const res = await fetch("/api/v1/caja/cerrar-turno", {
       method: "POST",
       headers: Auth.getHeaders(),
-      body: JSON.stringify({ monto_cierre: activeShift ? activeShift.total_ventas + activeShift.monto_apertura : 0.0 })
+      body: JSON.stringify({
+        monto_cierre: amount,
+        arqueo: [
+          { metodo_pago: "Efectivo", contado_usd: amount },
+          { metodo_pago: "Pago Móvil", contado_usd: mobileAmount },
+          { metodo_pago: "Punto de Venta", contado_usd: posAmount }
+        ]
+      })
     });
     if (!res.ok) {
       const err = await res.json();
       throw new Error(err.detail || "Error al cerrar turno");
     }
-    showToast("🔴 Turno cerrado exitosamente", "success");
-    loadShiftStatus();
+    const closedShift = await res.json();
+    showToast(`Turno cerrado. Diferencia de caja: $${Number(closedShift.diferencia || 0).toFixed(2)} USD.`, "success");
+    closeModal("close-shift-modal");
+    await loadShiftStatus();
   } catch (err) {
     showToast(err.message, "danger");
   }
@@ -1077,35 +1345,76 @@ function openPaymentModal(orderId) {
   if (document.getElementById("pay-order-id")) document.getElementById("pay-order-id").innerText = `#${selectedOrderForPayment.id}`;
   if (document.getElementById("pay-order-mesa")) document.getElementById("pay-order-mesa").innerText = selectedOrderForPayment.numero_mesa || "Mostrador";
   if (document.getElementById("pay-order-total")) document.getElementById("pay-order-total").innerHTML = formatPriceDual(selectedOrderForPayment.total);
-  if (document.getElementById("pay-received-input")) document.getElementById("pay-received-input").value = selectedOrderForPayment.total.toFixed(2);
-
-  calculateChange();
+  const methodSelect = document.getElementById("pay-method-select");
+  if (methodSelect && ["Efectivo", "Punto de Venta"].includes(selectedOrderForPayment.metodo_pago)) {
+    methodSelect.value = selectedOrderForPayment.metodo_pago;
+  } else if (methodSelect) {
+    methodSelect.value = "Efectivo";
+  }
+  const currencySelect = document.getElementById("pay-currency-select");
+  if (currencySelect) currencySelect.value = "USD";
+  updatePaymentCurrencyAmount();
   openModal("payment-modal");
+}
+
+function updatePaymentCurrencyAmount() {
+  if (!selectedOrderForPayment) return;
+  const currency = document.getElementById("pay-currency-select")?.value || "USD";
+  const receivedInput = document.getElementById("pay-received-input");
+  if (receivedInput) {
+    const total = currency === "VES" && tasaCambioBs !== null
+      ? Number(selectedOrderForPayment.total) * tasaCambioBs
+      : Number(selectedOrderForPayment.total);
+    receivedInput.value = total.toFixed(2);
+  }
+  calculateChange();
 }
 
 function calculateChange() {
   if (!selectedOrderForPayment) return;
   const received = parseFloat(document.getElementById("pay-received-input").value) || 0;
-  const total = selectedOrderForPayment.total;
-  const changeUsd = Math.max(0, received - total);
-  const changeBs = (changeUsd * tasaCambioBs).toFixed(2);
-  document.getElementById("pay-change-display").innerHTML = `$${changeUsd.toFixed(2)} (Bs. ${changeBs})`;
+  const currency = document.getElementById("pay-currency-select")?.value || "USD";
+  const rate = tasaCambioBs || 0;
+  if (currency === "VES" && rate === 0) {
+    document.getElementById("pay-change-display").textContent = "No hay tasa disponible para cobrar en Bs.";
+    return;
+  }
+  const total = currency === "VES" ? selectedOrderForPayment.total * rate : selectedOrderForPayment.total;
+  const change = Math.max(0, received - total);
+  const label = currency === "VES" ? `Bs. ${change.toFixed(2)}` : `$${change.toFixed(2)}`;
+  document.getElementById("pay-change-display").innerHTML = rate > 0
+    ? `${label} (${currency === "VES" ? "$" + (change / rate).toFixed(2) : "Bs. " + (change * rate).toFixed(2)})`
+    : label;
+  const receivedLabel = document.getElementById("pay-received-label");
+  if (receivedLabel) receivedLabel.textContent = `Monto recibido (${currency === "VES" ? "Bs." : "USD"})`;
 }
 
 async function submitPayment() {
   if (!selectedOrderForPayment) return;
 
   const method = document.getElementById("pay-method-select").value;
+  const currency = document.getElementById("pay-currency-select").value;
   const received = parseFloat(document.getElementById("pay-received-input").value) || 0;
   const nit = document.getElementById("pay-nit-input").value || "CF";
   const nombre = document.getElementById("pay-nombre-input").value || "Consumidor Final";
 
-  if (received < selectedOrderForPayment.total) {
-    showToast(`El monto recibido debe ser al menos $${selectedOrderForPayment.total.toFixed(2)}`, "warning");
+  if (currency === "VES") {
+    try {
+      await loadPosConfig();
+    } catch (error) {
+      showToast(error.message, "danger");
+      return;
+    }
+    if (tasaCambioBs === null) {
+      showToast("No hay una tasa BCV válida para cobrar en bolívares.", "warning");
+      return;
+    }
+  }
+  const totalDue = currency === "VES" ? selectedOrderForPayment.total * tasaCambioBs : selectedOrderForPayment.total;
+  if (received < totalDue) {
+    showToast(`El monto recibido debe ser al menos ${currency === "VES" ? "Bs. " : "$"}${totalDue.toFixed(2)}`, "warning");
     return;
   }
-
-  closeModal("payment-modal");
 
   try {
     const res = await fetch(`/api/v1/caja/pedidos/${selectedOrderForPayment.id}/cobrar`, {
@@ -1114,6 +1423,7 @@ async function submitPayment() {
       body: JSON.stringify({
         metodo_pago: method,
         monto_recibido: received,
+        moneda_pago: currency,
         nit_cliente: nit,
         nombre_factura: nombre
       })
@@ -1125,11 +1435,13 @@ async function submitPayment() {
     }
 
     const data = await res.json();
-    showToast(`✅ Factura emitida ${data.factura_numero} (Cambio: $${data.cambio.toFixed(2)})`, "success");
+    const changeLabel = currency === "VES" ? `Bs. ${data.cambio.toFixed(2)}` : `$${data.cambio.toFixed(2)}`;
+    showToast(`✅ Factura emitida ${data.factura_numero} (Cambio: ${changeLabel})`, "success");
     
     loadShiftStatus();
     loadPendingOrders();
     loadPaidOrders();
+    closeModal("payment-modal");
     viewReceipt(selectedOrderForPayment.id);
   } catch (err) {
     showToast(err.message, "danger");
@@ -1138,35 +1450,39 @@ async function submitPayment() {
 
 async function viewReceipt(orderId) {
   try {
-    const res = await fetch(`/api/v1/caja/pedidos/${orderId}/factura`);
+    const res = await fetch(`/api/v1/caja/pedidos/${orderId}/factura`, { headers: Auth.getHeaders() });
     if (!res.ok) throw new Error("Error al obtener la factura");
     const fac = await res.json();
+    const invoiceRateValue = Number(fac.tasa_cambio_pago) || tasaCambioBs;
+    const invoiceHasRate = Number.isFinite(invoiceRateValue) && invoiceRateValue > 0;
+    const invoiceCurrency = fac.moneda_pago === "VES" ? "VES" : "USD";
+    const currencyLabel = invoiceCurrency === "VES" ? "Bs. " : "$";
+    const dualAmount = amount => invoiceHasRate
+      ? `$${Number(amount).toFixed(2)} (Bs. ${(Number(amount) * invoiceRateValue).toFixed(2)})`
+      : `$${Number(amount).toFixed(2)}`;
 
     let itemsHtml = "";
     fac.detalles.forEach(d => {
       itemsHtml += `
         <tr>
-          <td>${d.cantidad}x ${d.producto}</td>
-          <td style="text-align: right;">$${d.subtotal.toFixed(2)} (Bs. ${(d.subtotal * tasaCambioBs).toFixed(2)})</td>
+          <td>${escapeCajaHtml(d.cantidad)}x ${escapeCajaHtml(d.producto)}</td>
+          <td style="text-align: right;">${dualAmount(d.subtotal)}</td>
         </tr>
       `;
     });
 
-    const totalBs = (fac.total * tasaCambioBs).toFixed(2);
-    const subBs = (fac.subtotal * tasaCambioBs).toFixed(2);
-
     const ticketHtml = `
       <div class="factura-header">
-        <h2 style="margin: 0; font-size: 1.2rem;">${fac.restaurante}</h2>
-        <div style="font-size: 0.8rem;">NIT: ${fac.nit_emisor} | Tasa: Bs. ${tasaCambioBs.toFixed(2)}/$</div>
-        <div style="font-weight: bold; margin-top: 0.5rem;">FACTURA: ${fac.factura_numero}</div>
-        <div style="font-size: 0.75rem; color: #555;">${fac.fecha.substring(0, 19)}</div>
+        <h2 style="margin: 0; font-size: 1.2rem;">${escapeCajaHtml(fac.restaurante)}</h2>
+        <div style="font-size: 0.8rem;">NIT: ${escapeCajaHtml(fac.nit_emisor)}${invoiceHasRate ? ` | Tasa aplicada: Bs. ${invoiceRateValue.toFixed(4)}/USD` : ""}</div>
+        <div style="font-weight: bold; margin-top: 0.5rem;">FACTURA: ${escapeCajaHtml(fac.factura_numero)}</div>
+        <div style="font-size: 0.75rem; color: #555;">${escapeCajaHtml(String(fac.fecha).substring(0, 19))}</div>
       </div>
       <div style="font-size: 0.8rem; margin-bottom: 0.5rem;">
-        <div><strong>CLIENTE:</strong> ${fac.nombre_factura}</div>
-        <div><strong>NIT:</strong> ${fac.nit_cliente}</div>
-        <div><strong>UBICACIÓN:</strong> ${fac.numero_mesa}</div>
-        ${fac.direccion_delivery ? `<div><strong>DIRECCIÓN:</strong> ${fac.direccion_delivery}</div>` : ''}
+        <div><strong>CLIENTE:</strong> ${escapeCajaHtml(fac.nombre_factura)}</div>
+        <div><strong>NIT:</strong> ${escapeCajaHtml(fac.nit_cliente)}</div>
+        <div><strong>UBICACIÓN:</strong> ${escapeCajaHtml(fac.numero_mesa)}</div>
+        ${fac.direccion_delivery ? `<div><strong>DIRECCIÓN:</strong> ${escapeCajaHtml(fac.direccion_delivery)}</div>` : ''}
       </div>
       <table class="factura-items">
         <thead>
@@ -1180,15 +1496,15 @@ async function viewReceipt(orderId) {
         </tbody>
       </table>
       <div style="border-top: 1px dashed #000; padding-top: 0.5rem; font-size: 0.85rem;">
-        <div style="display: flex; justify-content: space-between;"><span>Subtotal:</span><span>$${fac.subtotal.toFixed(2)} (Bs. ${subBs})</span></div>
+        <div style="display: flex; justify-content: space-between;"><span>Subtotal:</span><span>${dualAmount(fac.subtotal)}</span></div>
         <div style="display: flex; justify-content: space-between; font-size: 1.1rem; font-weight: bold; margin-top: 0.3rem;" class="factura-total-row">
-          <span>TOTAL COMPRA:</span><span>$${fac.total.toFixed(2)} (Bs. ${totalBs})</span>
+          <span>TOTAL COMPRA:</span><span>${dualAmount(fac.total)}</span>
         </div>
       </div>
       <div style="font-size: 0.8rem; margin-top: 0.5rem;">
-        <div>Método de Pago: ${fac.metodo_pago}</div>
-        <div>Monto Recibido: $${fac.monto_recibido.toFixed(2)}</div>
-        <div>Cambio Entregado: $${fac.cambio.toFixed(2)} (Bs. ${(fac.cambio * tasaCambioBs).toFixed(2)})</div>
+        <div>Método de Pago: ${escapeCajaHtml(fac.metodo_pago)}</div>
+        <div>Monto recibido: ${currencyLabel}${Number(fac.monto_recibido).toFixed(2)}</div>
+        <div>Cambio entregado: ${currencyLabel}${Number(fac.cambio).toFixed(2)}${invoiceHasRate ? ` (${invoiceCurrency === "VES" ? "$" + (Number(fac.cambio) / invoiceRateValue).toFixed(2) : "Bs. " + (Number(fac.cambio) * invoiceRateValue).toFixed(2)})` : ""}</div>
       </div>
       <div style="text-align: center; margin-top: 1rem; font-size: 0.75rem; font-style: italic;">
         ¡Gracias por su compra en Donde David!

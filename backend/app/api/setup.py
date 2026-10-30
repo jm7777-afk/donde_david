@@ -1,9 +1,11 @@
 import os
-from fastapi import APIRouter, Depends, HTTPException, status
+from datetime import datetime, timezone
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from sqlalchemy.orm import Session
-from pydantic import BaseModel
+from pydantic import BaseModel, EmailStr, Field
 from typing import Optional
 from backend.app.core.database import get_db
+from backend.app.core.rate_limit import limiter
 from backend.app.core.security import get_password_hash, create_access_token
 from backend.app.models.configuracion import Configuracion
 from backend.app.models.usuario import Usuario
@@ -20,12 +22,12 @@ def check_system_installed(db: Session) -> bool:
 
 class SetupInstallRequest(BaseModel):
     # Datos de Marca
-    nombre_restaurante: str
+    nombre_restaurante: str = Field(min_length=1, max_length=150)
     logo_url: Optional[str] = "/static/images/logo-donde-david.jpg"
     color_primario: Optional[str] = "#ffb703"
     color_secundario: Optional[str] = "#ff8800"
     color_acento: Optional[str] = "#00f5d4"
-    tasa_cambio_bs: Optional[str] = "36.50"
+    tasa_cambio_bs: Optional[float] = Field(default=None, gt=0, lt=1_000_000, allow_inf_nan=False)
     
     # Datos de Contacto
     telefono: Optional[str] = "+502 4112 5554"
@@ -34,11 +36,11 @@ class SetupInstallRequest(BaseModel):
     horario: Optional[str] = "Lunes a Domingo: 11:00 AM - 11:00 PM"
     
     # Cuenta SuperAdmin
-    admin_nombre: str
-    admin_apellido: str
-    admin_email: str
-    admin_usuario: str
-    admin_password: str
+    admin_nombre: str = Field(min_length=1, max_length=100)
+    admin_apellido: str = Field(min_length=1, max_length=100)
+    admin_email: EmailStr
+    admin_usuario: str = Field(min_length=3, max_length=50)
+    admin_password: str = Field(min_length=12, max_length=72)
 
 @router.get("/status")
 def get_setup_status(db: Session = Depends(get_db)):
@@ -46,11 +48,26 @@ def get_setup_status(db: Session = Depends(get_db)):
     return {"is_installed": is_inst}
 
 @router.post("/install")
-def run_setup_install(data: SetupInstallRequest, db: Session = Depends(get_db)):
+@limiter.limit("5/hour")
+def run_setup_install(
+    request: Request,
+    response: Response,
+    data: SetupInstallRequest,
+    db: Session = Depends(get_db)
+):
     if check_system_installed(db):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Acceso denegado: El sistema ya se encuentra instalado y configurado previamente."
+        )
+
+    existing_admin = db.query(Usuario).filter(
+        (Usuario.nombre_usuario == data.admin_usuario) | (Usuario.email == data.admin_email)
+    ).first()
+    if existing_admin:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="El nombre de usuario o correo ya pertenece a una cuenta existente."
         )
 
     # 1. Guardar configuraciones del sistema
@@ -61,12 +78,17 @@ def run_setup_install(data: SetupInstallRequest, db: Session = Depends(get_db)):
         ("color_primario", data.color_primario or "#ffb703", "Color primario de la marca"),
         ("color_secundario", data.color_secundario or "#ff8800", "Color secundario de la marca"),
         ("color_acento", data.color_acento or "#00f5d4", "Color acento de la marca"),
-        ("tasa_cambio_bs", data.tasa_cambio_bs or "36.50", "Tasa de cambio en Bolívares"),
         ("telefono_contacto", data.telefono or "", "Teléfono principal de contacto"),
         ("whatsapp_contacto", data.whatsapp or "", "WhatsApp oficial"),
         ("direccion", data.direccion or "", "Dirección física"),
         ("horario", data.horario or "", "Horarios de atención")
     ]
+    if data.tasa_cambio_bs is not None:
+        config_items.extend([
+            ("tasa_cambio_bs", f"{data.tasa_cambio_bs:.4f}", "Tasa de cambio manual en Bolívares"),
+            ("tasa_fuente", "Manual (administrador)", "Origen de la tasa de cambio"),
+            ("tasa_actualizada_at", datetime.now(timezone.utc).isoformat(), "Fecha de actualización de la tasa"),
+        ])
 
     for clave, valor, desc in config_items:
         cfg = db.query(Configuracion).filter(Configuracion.clave == clave).first()
@@ -75,35 +97,20 @@ def run_setup_install(data: SetupInstallRequest, db: Session = Depends(get_db)):
         else:
             cfg.valor = valor
 
-    db.commit()
-
     # 2. Crear SuperAdmin principal
-    admin_user = db.query(Usuario).filter(
-        (Usuario.nombre_usuario == data.admin_usuario) | (Usuario.email == data.admin_email)
-    ).first()
-
     pwd_hash = get_password_hash(data.admin_password)
-
-    if not admin_user:
-        admin_user = Usuario(
-            nombre=data.admin_nombre,
-            apellido=data.admin_apellido,
-            email=data.admin_email,
-            nombre_usuario=data.admin_usuario,
-            contraseña_hash=pwd_hash,
-            rol="admin",
-            telefono=data.telefono,
-            tour_completed=False,
-            activo=True
-        )
-        db.add(admin_user)
-    else:
-        admin_user.nombre = data.admin_nombre
-        admin_user.apellido = data.admin_apellido
-        admin_user.contraseña_hash = pwd_hash
-        admin_user.rol = "admin"
-        admin_user.tour_completed = False
-
+    admin_user = Usuario(
+        nombre=data.admin_nombre,
+        apellido=data.admin_apellido,
+        email=data.admin_email,
+        nombre_usuario=data.admin_usuario,
+        contraseña_hash=pwd_hash,
+        rol="admin",
+        telefono=data.telefono,
+        tour_completed=False,
+        activo=True
+    )
+    db.add(admin_user)
     db.commit()
     db.refresh(admin_user)
 

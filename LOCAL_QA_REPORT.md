@@ -1,27 +1,46 @@
-# Reporte de QA Local y Coherencia Visual — DONDE DAVID
+# Reporte de QA técnico local — DONDE DAVID
 
-Reporte de control de calidad local ejecutado para validar la coherencia visual, rendimiento, responsividad y seguridad del sistema **Donde David**.
+## Alcance de la última verificación
 
----
+La verificación local cubrió el backend, las migraciones, los flujos por rol y las pantallas estáticas. No equivale a una certificación de seguridad ni a una validación visual autenticada de todos los breakpoints.
 
-## 🧪 1. MATRIZ DE VERIFICACIÓN DE PERFILES Y QA
+| Verificación | Resultado |
+|---|---|
+| `pytest -q` | 44 pruebas pasaron |
+| `python -m compileall -q backend tests` | Correcto |
+| `git diff --check` | Correcto |
+| `alembic upgrade head` en SQLite desechable | Correcto |
+| `alembic check` contra modelos ORM | Sin operaciones pendientes |
+| Generación SQL de Alembic para PostgreSQL offline | Correcta; no conectó a una base real |
+| `node --check` en los scripts principales | Correcto |
+| Escaneo HTML | 12 páginas; sin IDs duplicados ni recursos estáticos locales ausentes |
+| `/health` y `/ready` | Correcto; base de datos conectada |
+| Casos de prueba | RBAC, credenciales, validación de importes, autenticación WebSocket, cancelación/reposición de stock, auditoría, solicitudes QR, personalización, retiro, arqueo de caja, extras configurables y validación de coordenadas delivery |
 
-| PERFIL SIMULADO | VERIFICACIÓN REALIZADA | ESTADO | RESULTADO |
-|---|---|---|---|
-| **UI Designer** | Coherencia en paleta (60/30/10), tipografía Inter y espaciado | **APROBADO** | Jerarquía visual clara y marca reconocida |
-| **UX Designer** | Navegación intuitiva, CTAs Naranja `#FF7A00` y touch targets | **APROBADO** | Flujos sencillos de pedido y cobro |
-| **Frontend Senior** | Reutilización de componentes en `global.css` y capa `APIService` | **APROBADO** | Código modular y mantenible |
-| **Backend Senior** | Recálculo de precios en backend y precisión `Numeric(12,2)` | **APROBADO** | Sin discrepancias financieras |
-| **Responsive Specialist**| Adaptación desde 320px hasta 1920px sin overflow horizontal | **APROBADO** | Composición adecuada por dispositivo |
-| **Security Auditor**| RBAC estricto `require_roles`, CORS sin `*` y secretos en `.env` | **APROBADO** | 0 vulnerabilidades de token o bypass |
-| **QA Tester** | Suite de pruebas unitarias y de integración `test_system.py` | **APROBADO** | **7/7 Pruebas Pasaron [OK]** |
-| **Product Designer**| Sensación de producto SaaS / Food Tech Enterprise | **APROBADO** | Plataforma completa y profesional |
+## Controles incorporados
 
----
+- Producción exige una clave JWT aleatoria, PostgreSQL y orígenes CORS exactos.
+- No se siembran datos de demostración en producción ni se permite invocar el seed allí.
+- Admin/caja y WebSockets requieren autorización; pedidos de clientes se recalculan en backend.
+- Login, registro, recuperación, OTP, pedidos públicos, reseñas y setup tienen límites por IP en memoria.
+- Los cobros insuficientes no se aceptan; ventas, stock, turno y movimientos se confirman en una transacción.
+- El stock se restaura y audita cuando se cancela un pedido no pagado.
+- Los uploads validan extensión, MIME, firma y tamaño.
+- Los errores internos se registran en servidor y se responden sin detalles sensibles.
+- El perfil de usuario nuevo parte de historial y dirección vacíos; solo conserva los 50 puntos de bienvenida definidos explícitamente por el registro.
+- El panel administrativo antiguo redirige al panel vigente para evitar presentar métricas estáticas de demostración.
+- Las recomendaciones del cliente se calculan localmente con historial y ventas; no se envían datos a un proveedor de IA externo.
+- La base SQLite de desarrollo quedó inicializada sin ventas, pedidos, mesas ocupadas ni turno ficticios. Las bases anteriores se respaldaron antes del reinicio.
 
-## 📐 2. PRUEBA DE BREAKPOINTS RESPONSIVE
+## Pendientes antes de operación real
 
-- [x] **320px** (iPhone SE antiguo / móviles compactos) -> Sin desbordamiento.
-- [x] **375px / 390px / 414px** (Móviles estándar modernos) -> Navegación inferior y carrito flotante.
-- [x] **768px / 834px** (Tablets en portrait / landscape) -> Sidebar colapsable y grid 2 columnas.
-- [x] **1024px / 1280px / 1440px / 1920px** (Monitores PC Desktop) -> Sidebar completa 280px y grid 4 columnas.
+- Crear el PostgreSQL de producción, cargar secretos y configurar CORS en Render; esto no se puede comprobar desde el entorno local.
+- Revisar y respaldar bases SQLite existentes antes de adoptarlas con Alembic. La migración inicial se diseñó para una base nueva.
+- Configurar almacenamiento de objetos persistente para uploads en Render.
+- Usar Redis o un broker compartido antes de escalar a múltiples procesos/instancias: el rate limiter y los eventos WebSocket se mantienen en memoria.
+- Configurar un proveedor real de recuperación por correo/SMS; el endpoint permanece deshabilitado de forma explícita.
+- Ejecutar pruebas visuales/manuales de UI por rol y dispositivo. No se declara aquí que los breakpoints se hayan vuelto a comprobar.
+- La generación de QR todavía utiliza el servicio externo `api.qrserver.com`; configurar proxy/origen confiables en producción o alojar la generación internamente.
+- No se seleccionó ni conectó una pasarela de pago en esta implementación.
+- Probar en ambiente real la integración de tasa BCV y el flujo de delivery antes de operación.
+- Añadir observabilidad operativa, política de respaldo/restauración y pruebas de concurrencia en PostgreSQL antes de abrir el sistema a datos reales.

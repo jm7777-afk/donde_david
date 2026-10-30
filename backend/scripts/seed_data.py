@@ -1,16 +1,17 @@
 import sys
 import os
 import json
+import logging
+from sqlalchemy import inspect, text
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
 
-from backend.app.core.database import Base, engine, SessionLocal
+from backend.app.core.database import engine, SessionLocal
 from backend.app.core.security import get_password_hash
 from backend.app.models.usuario import Usuario
 from backend.app.models.categoria import Categoria
 from backend.app.models.producto import Producto
 from backend.app.models.configuracion import Configuracion
-from backend.app.models.turno import Turno
 from backend.app.models.mesa import Mesa
 from backend.app.models.insumo import Insumo
 from backend.app.models.promocion import Promocion
@@ -18,22 +19,22 @@ from backend.app.models.puntos_log import PuntosLog
 from backend.app.models.guia_item import GuiaItem
 from backend.app.models.resena import Resena
 
-def seed():
-    print("Inicializando base de datos Donde David...")
-    Base.metadata.create_all(bind=engine)
+logger = logging.getLogger(__name__)
 
-    # Migración automática de columnas para SQLite
-    from sqlalchemy import text
-    try:
-        with engine.connect() as conn:
-            try:
-                conn.execute(text("ALTER TABLE turnos ADD COLUMN efectivo_declarado NUMERIC(12, 2);"))
-            except Exception: pass
-            try:
-                conn.execute(text("ALTER TABLE turnos ADD COLUMN diferencia NUMERIC(12, 2);"))
-            except Exception: pass
-            conn.commit()
-    except Exception: pass
+def seed():
+    if os.getenv("ENVIRONMENT", "development").lower() == "production":
+        raise RuntimeError("Seed data is disabled in production.")
+    logger.info("Initializing Donde David development data.")
+
+    if engine.dialect.name == "sqlite":
+        table_names = inspect(engine).get_table_names()
+        if "turnos" in table_names:
+            columns = {column["name"] for column in inspect(engine).get_columns("turnos")}
+            with engine.begin() as connection:
+                if "efectivo_declarado" not in columns:
+                    connection.execute(text("ALTER TABLE turnos ADD COLUMN efectivo_declarado NUMERIC(12, 2)"))
+                if "diferencia" not in columns:
+                    connection.execute(text("ALTER TABLE turnos ADD COLUMN diferencia NUMERIC(12, 2)"))
 
     db = SessionLocal()
     try:
@@ -62,41 +63,40 @@ def seed():
         # 2. Usuarios del sistema
         usuarios = [
             ("Admin", "Donde David", "admin@dondedavid.com", "099111222", "admin", "admin123", "admin", 0),
-            ("Javier", "Mendoza", "javier@mail.com", "+502 5123 4567", "javier", "javier123", "cliente", 280),
+            ("Javier", "Mendoza", "javier@mail.com", "+502 5123 4567", "javier", "javier123", "cliente", 0),
             ("María", "García", "caja2@dondedavid.com", "099333444", "caja", "caja123", "caja", 0),
             ("Ana", "López", "caja@dondedavid.com", "099555777", "caja_user", "caja123", "caja", 0),
             ("Juan", "Pérez", "cocina@dondedavid.com", "099555666", "cocina1", "cocina123", "cocina", 0),
             ("Pedro", "Rojas", "delivery@dondedavid.com", "099777888", "delivery1", "delivery123", "mesero", 0)
         ]
-        for nom, ape, email, tel, user, pwd, rol, pts in usuarios:
-            u = db.query(Usuario).filter(Usuario.nombre_usuario == user).first()
-            if not u:
-                db.add(Usuario(
-                    nombre=nom,
-                    apellido=ape,
-                    email=email,
-                    telefono=tel,
-                    nombre_usuario=user,
-                    contraseña_hash=get_password_hash(pwd),
-                    rol=rol,
-                    puntos_fidelidad=pts
-                ))
-        db.commit()
+        if os.getenv("ENVIRONMENT", "development").lower() != "production":
+            for nom, ape, email, tel, user, pwd, rol, pts in usuarios:
+                u = db.query(Usuario).filter(Usuario.nombre_usuario == user).first()
+                if not u:
+                    db.add(Usuario(
+                        nombre=nom,
+                        apellido=ape,
+                        email=email,
+                        telefono=tel,
+                        nombre_usuario=user,
+                        contraseña_hash=get_password_hash(pwd),
+                        rol=rol,
+                        puntos_fidelidad=pts
+                    ))
+            db.commit()
 
         # 3. Mesas 1 a 20 con soporte para QR exclusivo
         for i in range(1, 21):
             if not db.query(Mesa).filter(Mesa.numero_mesa == i).first():
                 estado_m = "LIBRE"
-                if i in [3, 5, 8]: estado_m = "OCUPADA"
-                elif i in [2, 12]: estado_m = "RESERVADA"
 
                 db.add(Mesa(
                     numero_mesa=i,
                     estado=estado_m,
                     codigo_qr=f"QR_DONDE_DAVID_MESA_{i}",
                     capacidad=4,
-                    cliente_actual=f"Cliente Mesa {i}" if estado_m == "OCUPADA" else None,
-                    tiempo_ocupacion_min=45 if estado_m == "OCUPADA" else 0
+                    cliente_actual=None,
+                    tiempo_ocupacion_min=0
                 ))
         db.commit()
 
@@ -179,8 +179,6 @@ def seed():
                     tiempo_preparacion=12,
                     ingredientes_json=json.dumps(ings)
                 ))
-            else:
-                p.stock = 100
         db.commit()
 
         # 7. Promociones Editables (BOOM! PROMO DEL DÍA)
@@ -224,25 +222,12 @@ def seed():
                 db.add(Resena(nombre_cliente=nom, comentario=com, estrellas=est, foto_url=foto))
         db.commit()
 
-        # 10. Abrir Turno de prueba en caja
-        if not db.query(Turno).first():
-            caja_user = db.query(Usuario).filter(Usuario.rol == "caja").first()
-            if caja_user:
-                db.add(Turno(
-                    numero_turno=1,
-                    monto_apertura=200.0,
-                    total_ventas=1250.0,
-                    total_pedidos=86,
-                    activo=True,
-                    usuario_caja_id=caja_user.id
-                ))
-                db.commit()
-
-        print("[OK] Datos de semilla Donde David cargados exitosamente.")
+        logger.info("Donde David seed data loaded.")
 
     except Exception as e:
-        print(f"[ERROR] Error al poblar base de datos: {e}")
         db.rollback()
+        logger.exception("Failed to load seed data.")
+        raise
     finally:
         db.close()
 

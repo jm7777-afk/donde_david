@@ -1,5 +1,9 @@
 import sys
 import os
+import asyncio
+import json
+import logging
+from contextlib import asynccontextmanager
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
 
@@ -7,31 +11,47 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
-from fastapi.responses import RedirectResponse, Response, JSONResponse
+from fastapi.responses import RedirectResponse, JSONResponse
 import uvicorn
+from slowapi.errors import RateLimitExceeded
+from slowapi import _rate_limit_exceeded_handler
 
+from jose import JWTError, jwt
 from sqlalchemy import text
 from backend.app.core.config import settings
 from backend.app.core.database import Base, engine, SessionLocal
-from backend.app.api import auth, cliente, cocina, caja, admin, mesero, setup
+from backend.app.core.rate_limit import limiter
+from backend.app import models
+from backend.app.models.usuario import Usuario
+from backend.app.api import auth, cliente, cocina, caja, admin, mesero, setup, delivery, gerencia
 from backend.app.api.setup import check_system_installed, LOCK_FILE_PATH
 from backend.app.websockets.manager import ws_manager
 from backend.scripts.seed_data import seed
 
-# Create DB tables & Seed safely
-try:
-    if os.getenv("TESTING") == "true":
-        Base.metadata.drop_all(bind=engine)
-    Base.metadata.create_all(bind=engine)
-    seed()
-except Exception as e:
-    print(f"Aviso en inicio de base de datos: {e}")
+logging.basicConfig(
+    level=os.getenv("LOG_LEVEL", "INFO").upper(),
+    format="%(asctime)s %(levelname)s %(name)s %(message)s"
+)
+logger = logging.getLogger(__name__)
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    if settings.ENVIRONMENT != "production":
+        Base.metadata.create_all(bind=engine)
+        seed()
+    with engine.connect() as connection:
+        connection.execute(text("SELECT 1"))
+    yield
 
 app = FastAPI(
     title=settings.PROJECT_NAME,
     version=settings.VERSION,
-    description="API para la automatización de pedidos en restaurante con QR, tiempo real y turnos de caja"
+    description="API para la automatización de pedidos en restaurante con QR, tiempo real y turnos de caja",
+    lifespan=lifespan
 )
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 # GZip Middleware para compresión ultrarrápida de respuestas HTTP
 app.add_middleware(GZipMiddleware, minimum_size=500)
@@ -53,13 +73,16 @@ app.include_router(cocina.router, prefix=settings.API_V1_STR)
 app.include_router(caja.router, prefix=settings.API_V1_STR)
 app.include_router(admin.router, prefix=settings.API_V1_STR)
 app.include_router(mesero.router, prefix=settings.API_V1_STR)
+app.include_router(delivery.router, prefix=settings.API_V1_STR)
+app.include_router(gerencia.router, prefix=settings.API_V1_STR)
 
 # Global Exception Handler para capturar errores no controlados
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
+    logger.exception("Unhandled request error for %s %s", request.method, request.url.path)
     return JSONResponse(
         status_code=500,
-        content={"detail": f"Error interno en el servidor: {str(exc)}"}
+        content={"detail": "Error interno del servidor."}
     )
 
 # Middleware Guardia de Instalación Única (/setup Guard)
@@ -102,13 +125,48 @@ async def setup_installer_guard_middleware(request: Request, call_next):
 # WebSocket Endpoint
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
-    await ws_manager.connect(websocket)
+    await websocket.accept()
     try:
+        auth_message = await asyncio.wait_for(websocket.receive_text(), timeout=5)
+        auth_payload = json.loads(auth_message)
+        token = auth_payload.get("token") if isinstance(auth_payload, dict) else None
+        if not isinstance(token, str) or not token:
+            await websocket.close(code=4401, reason="Authentication required")
+            return
+        try:
+            token_payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
+        except JWTError:
+            await websocket.close(code=4401, reason="Invalid or expired token")
+            return
+
+        username = token_payload.get("sub")
+        if not isinstance(username, str) or not username:
+            await websocket.close(code=4401, reason="Invalid token")
+            return
+
+        db = SessionLocal()
+        try:
+            user = db.query(Usuario).filter(
+                Usuario.nombre_usuario == username,
+                Usuario.activo == True
+            ).first()
+            if not user or user.rol not in ["admin", "supervisor", "gerente", "caja", "cocina", "mesero", "repartidor"]:
+                await websocket.close(code=4403, reason="Staff access required")
+                return
+        finally:
+            db.close()
+
+        await ws_manager.connect(websocket, accepted=True)
         while True:
             await websocket.receive_text()
+    except asyncio.TimeoutError:
+        await websocket.close(code=4408, reason="Authentication timeout")
     except WebSocketDisconnect:
         ws_manager.disconnect(websocket)
+    except json.JSONDecodeError:
+        await websocket.close(code=4401, reason="Invalid authentication message")
     except Exception:
+        logger.exception("Unexpected WebSocket error.")
         ws_manager.disconnect(websocket)
 
 # Mount static files
@@ -137,19 +195,25 @@ def readiness_check():
     db = SessionLocal()
     try:
         db.execute(text("SELECT 1"))
-        db_status = "connected"
-    except Exception as e:
-        db_status = f"error: {str(e)}"
+        return {
+            "status": "ready",
+            "database": "connected",
+            "app": settings.PROJECT_NAME
+        }
+    except Exception:
+        logger.exception("Readiness database check failed.")
+        return JSONResponse(
+            status_code=503,
+            content={
+                "status": "degraded",
+                "database": "unavailable",
+                "app": settings.PROJECT_NAME
+            }
+        )
     finally:
         db.close()
-    
-    return {
-        "status": "ready" if db_status == "connected" else "degraded",
-        "database": db_status,
-        "app": settings.PROJECT_NAME
-    }
 
 if __name__ == "__main__":
     port = int(os.getenv("PORT", 8000))
     is_dev = os.getenv("ENVIRONMENT", "development").lower() == "development"
-    uvicorn.run("backend.app.main:app", host="0.0.0.0", port= 5000, reload=is_dev)
+    uvicorn.run("backend.app.main:app", host="0.0.0.0", port=port, reload=is_dev)

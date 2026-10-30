@@ -1,10 +1,16 @@
 import json
-import random
+import logging
+import math
+import secrets
+import hmac
 from typing import List, Optional
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status, Query
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 from backend.app.core.database import get_db
+from backend.app.core.rate_limit import limiter
 from backend.app.core.security import get_current_user_optional, get_current_user
+from backend.app.services.exchange_rate import get_bcv_rate
 from backend.app.models.categoria import Categoria
 from backend.app.models.producto import Producto
 from backend.app.models.pedido import Pedido
@@ -18,19 +24,27 @@ from backend.app.models.mesa import Mesa
 from backend.app.models.guia_item import GuiaItem
 from backend.app.models.resena import Resena
 from backend.app.models.publicacion import Publicacion
-from backend.app.schemas.schemas import CategoriaOut, ProductoOut, PedidoCreate, PedidoOut, OTPVerifyRequest, ResenaCreate, ResenaOut, PublicacionOut, CambiarMesaRequest
+from backend.app.models.movimiento_inventario import MovimientoInventario
+from backend.app.schemas.schemas import CategoriaOut, ProductoOut, PedidoCreate, PedidoCreadoOut, OTPVerifyRequest, ResenaCreate, ResenaOut, PublicacionOut, CambiarMesaRequest, SolicitudMesaCreate
+from backend.app.models.solicitud_mesa import SolicitudMesa
 from backend.app.websockets.manager import ws_manager
 
 router = APIRouter(prefix="/cliente", tags=["Cliente QR / App"])
+logger = logging.getLogger(__name__)
 
 @router.get("/configuraciones-publicas")
 def get_configuraciones_publicas(db: Session = Depends(get_db)):
     configs = db.query(Configuracion).all()
     res = {c.clave: c.valor for c in configs}
+    rate_status = get_bcv_rate(db)
+    if rate_status["tasa_cambio_bs"] is not None:
+        res["tasa_cambio_bs"] = str(rate_status["tasa_cambio_bs"])
+    res["tasa_fuente"] = rate_status["tasa_fuente"] or ""
+    res["tasa_actualizada_at"] = rate_status["tasa_actualizada_at"] or ""
+    res["tasa_estado"] = rate_status["tasa_estado"]
+    res["tasa_respaldo"] = str(rate_status["tasa_respaldo"]).lower()
     
     # Defaults
-    if "tasa_cambio_bs" not in res:
-        res["tasa_cambio_bs"] = "36.50"
     if "historia_restaurante" not in res:
         res["historia_restaurante"] = "Donde David comenzó con la pasión por ofrecer las mejores hamburguesas y perros al estilo Toon Gourmet en un ambiente divertido y tecnológico."
     if "instagram_link" not in res:
@@ -43,6 +57,13 @@ def get_configuraciones_publicas(db: Session = Depends(get_db)):
         res["costo_empaque"] = "3.00"
     if "costo_delivery" not in res:
         res["costo_delivery"] = "5.00"
+    if "costo_empaque" not in res:
+        res["costo_empaque"] = "3.00"
+    if "tiempo_delivery_estimado_minutos" not in res:
+        res["tiempo_delivery_estimado_minutos"] = "30"
+    res["google_maps_api_key"] = res.get("google_maps_api_key", "").strip()
+    if "impuesto_porcentaje" not in res:
+        res["impuesto_porcentaje"] = "16.00"
         
     return res
 
@@ -59,7 +80,13 @@ def get_resenas_publicas(db: Session = Depends(get_db)):
     return db.query(Resena).filter(Resena.activo == True).order_by(Resena.fecha_creacion.desc()).all()
 
 @router.post("/resenas", response_model=ResenaOut, status_code=status.HTTP_201_CREATED)
-def crear_resena_publica(resena_in: ResenaCreate, db: Session = Depends(get_db)):
+@limiter.limit("5/hour")
+def crear_resena_publica(
+    request: Request,
+    response: Response,
+    resena_in: ResenaCreate,
+    db: Session = Depends(get_db)
+):
     nueva = Resena(
         nombre_cliente=resena_in.nombre_cliente,
         comentario=resena_in.comentario,
@@ -84,15 +111,22 @@ def get_categorias(db: Session = Depends(get_db)):
 
 @router.get("/productos", response_model=List[ProductoOut])
 def get_productos(categoria_id: Optional[int] = None, search: Optional[str] = None, db: Session = Depends(get_db)):
-    query = db.query(Producto).filter(Producto.activo == True)
+    query = db.query(Producto).filter(
+        Producto.activo == True,
+        Producto.disponible == True,
+        Producto.stock > 0,
+    )
     if categoria_id:
         query = query.filter(Producto.categoria_id == categoria_id)
     if search:
         query = query.filter(Producto.nombre.ilike(f"%{search}%"))
     return query.all()
 
-@router.post("/pedidos", response_model=PedidoOut, status_code=status.HTTP_201_CREATED)
+@router.post("/pedidos", response_model=PedidoCreadoOut, status_code=status.HTTP_201_CREATED)
+@limiter.limit("20/hour")
 async def crear_pedido(
+    request: Request,
+    response: Response,
     pedido_in: PedidoCreate, 
     db: Session = Depends(get_db),
     current_user = Depends(get_current_user_optional)
@@ -104,10 +138,36 @@ async def crear_pedido(
     tax_rate = float(tax_config.valor) if tax_config else 16.0
 
     delivery_config = db.query(Configuracion).filter(Configuracion.clave == "costo_delivery").first()
-    delivery_fee = float(delivery_config.valor) if (delivery_config and pedido_in.tipo == "delivery") else 0.0
+    delivery_fee = float(delivery_config.valor) if pedido_in.tipo == "delivery" and delivery_config else (5.0 if pedido_in.tipo == "delivery" else 0.0)
 
     empaque_config = db.query(Configuracion).filter(Configuracion.clave == "costo_empaque").first()
-    costo_empaque_val = float(empaque_config.valor) if (empaque_config and pedido_in.tipo == "llevar") else 0.0
+    costo_empaque_val = float(empaque_config.valor) if pedido_in.tipo == "llevar" and empaque_config else (3.0 if pedido_in.tipo == "llevar" else 0.0)
+
+    deferred_payment = pedido_in.tipo == "mesa" and pedido_in.modo_pago == "PAGAR_DESPUES"
+    metodo_pago = None if deferred_payment else (pedido_in.metodo_pago or "Efectivo")
+    moneda_pago = pedido_in.moneda_pago or "USD"
+    if not deferred_payment and metodo_pago not in {"Pago Móvil", "Efectivo", "Punto de Venta"}:
+        raise HTTPException(status_code=422, detail="Método de pago no admitido.")
+    if not deferred_payment and metodo_pago == "Pago Móvil":
+        if moneda_pago != "VES" or not pedido_in.referencia_pago or not pedido_in.referencia_pago.strip():
+            raise HTTPException(status_code=422, detail="Pago Móvil requiere moneda Bs. y una referencia de pago.")
+        required_bank_config = db.query(Configuracion).filter(
+            Configuracion.clave.in_([
+                "pago_movil_banco",
+                "pago_movil_telefono",
+                "pago_movil_rif",
+                "pago_movil_titular",
+            ])
+        ).all()
+        if len(required_bank_config) != 4 or any(not item.valor.strip() for item in required_bank_config):
+            raise HTTPException(status_code=409, detail="El restaurante todavía no configuró los datos de Pago Móvil.")
+    elif not deferred_payment and pedido_in.referencia_pago:
+        raise HTTPException(status_code=422, detail="La referencia solo aplica a Pago Móvil.")
+
+    rate_status = get_bcv_rate(db) if moneda_pago == "VES" and not deferred_payment else None
+    if not deferred_payment and moneda_pago == "VES" and rate_status["tasa_cambio_bs"] is None:
+        raise HTTPException(status_code=503, detail="No hay una tasa BCV válida disponible para pagos en bolívares.")
+    rate_snapshot = rate_status["tasa_cambio_bs"] if rate_status else None
 
     turno_activo = db.query(Turno).filter(Turno.activo == True).order_by(Turno.id.desc()).first()
     turno_id = turno_activo.id if turno_activo else None
@@ -117,38 +177,85 @@ async def crear_pedido(
     if pedido_in.tipo == "mesa":
         try:
             mesa_num_val = int(num_mesa_clean.lower().replace("mesa", "").strip())
-            mesa_obj = db.query(Mesa).filter(Mesa.numero_mesa == mesa_num_val).first()
-            if mesa_obj:
-                mesa_obj.estado = "OCUPADA"
-                mesa_obj.cliente_actual = current_user.nombre if current_user else f"Cliente Mesa {mesa_num_val}"
-        except Exception:
-            pass
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail="El número de mesa no es válido.") from exc
+        mesa_obj = db.query(Mesa).filter(Mesa.numero_mesa == mesa_num_val).with_for_update().first()
+        if not mesa_obj:
+            raise HTTPException(status_code=404, detail=f"La Mesa #{mesa_num_val} no existe.")
+        mesa_obj.estado = "OCUPADA"
+        mesa_obj.cliente_actual = current_user.nombre if current_user else f"Cliente Mesa {mesa_num_val}"
+
+    requested_quantities: dict[int, int] = {}
+    for item in pedido_in.detalles:
+        requested_quantities[item.producto_id] = (
+            requested_quantities.get(item.producto_id, 0) + item.cantidad
+        )
+
+    products: dict[int, Producto] = {}
+    stock_before: dict[int, int] = {}
+    for product_id, quantity in requested_quantities.items():
+        product = db.query(Producto).filter(
+            Producto.id == product_id,
+            Producto.activo == True,
+            Producto.disponible == True,
+        ).with_for_update().first()
+        if not product:
+            raise HTTPException(status_code=404, detail=f"Producto con ID {product_id} no disponible.")
+        if product.stock < quantity:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f"Stock insuficiente para el producto '{product.nombre}' (Disponible: {product.stock}, Solicitado: {quantity})."
+            )
+        products[product_id] = product
+        stock_before[product_id] = product.stock
 
     subtotal_acumulado = 0.0
     detalles_db = []
 
     for item in pedido_in.detalles:
-        producto = db.query(Producto).filter(Producto.id == item.producto_id, Producto.activo == True).first()
-        if not producto:
-            raise HTTPException(status_code=404, detail=f"Producto con ID {item.producto_id} no disponible.")
-        
-        if producto.stock < item.cantidad:
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail=f"Stock insuficiente para el producto '{producto.nombre}' (Disponible: {producto.stock}, Solicitado: {item.cantidad})."
-            )
-        producto.stock -= item.cantidad
-
+        producto = products[item.producto_id]
         precio = float(producto.precio_promocion) if (producto.precio_promocion and producto.precio_promocion > 0) else float(producto.precio)
-        subtotal_item = round(precio * item.cantidad, 2)
+        customizations = item.personalizaciones or {}
+        extras_requested = customizations.get("extras", [])
+        if not isinstance(extras_requested, list):
+            raise HTTPException(status_code=422, detail="La lista de extras no es válida.")
+        try:
+            configured_extras = json.loads(producto.extras_json or "[]")
+        except json.JSONDecodeError:
+            logger.exception("Invalid extras_json for product %s", producto.id)
+            raise HTTPException(status_code=500, detail="La configuración de extras de un producto es inválida.")
+        if not isinstance(configured_extras, list):
+            logger.error("Invalid extras_json shape for product %s", producto.id)
+            raise HTTPException(status_code=500, detail="La configuración de extras de un producto es inválida.")
+        configured_by_name = {
+            entry["nombre"]: float(entry["precio"])
+            for entry in configured_extras
+            if isinstance(entry, dict)
+            and isinstance(entry.get("nombre"), str)
+            and isinstance(entry.get("precio"), (int, float))
+            and not isinstance(entry.get("precio"), bool)
+            and math.isfinite(entry["precio"])
+        }
+        selected_names = []
+        extra_total = 0.0
+        for extra in extras_requested:
+            if not isinstance(extra, str) or extra not in configured_by_name or extra in selected_names:
+                raise HTTPException(status_code=422, detail=f"El extra solicitado no está disponible para {producto.nombre}.")
+            selected_names.append(extra)
+            extra_total += configured_by_name[extra]
+        unit_price = round(precio + extra_total, 2)
+        subtotal_item = round(unit_price * item.cantidad, 2)
         subtotal_acumulado += subtotal_item
 
-        personalizaciones_str = json.dumps(item.personalizaciones) if item.personalizaciones else None
+        personalizations_to_save = dict(customizations)
+        if extras_requested:
+            personalizations_to_save["extras"] = selected_names
+        personalizaciones_str = json.dumps(personalizations_to_save) if personalizations_to_save else None
 
         detalle = DetallePedido(
             producto_id=producto.id,
             cantidad=item.cantidad,
-            precio_unitario=precio,
+            precio_unitario=unit_price,
             subtotal=subtotal_item,
             personalizaciones=personalizaciones_str,
             observaciones=item.observaciones,
@@ -156,40 +263,67 @@ async def crear_pedido(
         )
         detalles_db.append(detalle)
 
+    for product_id, quantity in requested_quantities.items():
+        products[product_id].stock -= quantity
+
     subtotal_final = round(subtotal_acumulado, 2)
     impuesto_monto = round(subtotal_final * (tax_rate / 100.0), 2)
     total_final = round(subtotal_final + impuesto_monto + delivery_fee + costo_empaque_val, 2)
 
     # Generar código OTP de 6 dígitos
-    otp_code = str(random.randint(100000, 999999))
+    otp_code = f"{secrets.randbelow(900000) + 100000:06d}"
 
+    is_mobile_payment = metodo_pago == "Pago Móvil"
     nuevo_pedido = Pedido(
-        numero_mesa=num_mesa_clean if pedido_in.tipo == "mesa" else f"Delivery #{db.query(Pedido).count() + 101}",
+        numero_mesa=(
+            num_mesa_clean if pedido_in.tipo == "mesa"
+            else "Mostrador" if pedido_in.tipo == "llevar"
+            else f"Delivery #{db.query(Pedido).count() + 101}"
+        ),
         codigo_qr=pedido_in.codigo_qr,
         tipo=pedido_in.tipo or "mesa",
         modo_pago=pedido_in.modo_pago or "PAGAR_ANTES",
-        estado="PENDIENTE",
+        estado="PAGO_PENDIENTE" if is_mobile_payment else "PENDIENTE",
         subtotal=subtotal_final,
         impuesto=impuesto_monto,
         costo_empaque=costo_empaque_val,
         descuento=0.0,
         total=total_final,
+        metodo_pago=metodo_pago,
+        estado_pago="PENDIENTE_VALIDACION" if is_mobile_payment else "PENDIENTE",
+        moneda_pago=moneda_pago,
+        monto_pago=None if deferred_payment else (round(total_final * rate_snapshot, 2) if moneda_pago == "VES" else total_final),
+        tasa_cambio_pago=rate_snapshot,
+        referencia_pago=pedido_in.referencia_pago.strip() if pedido_in.referencia_pago else None,
+        estado_delivery="PENDIENTE" if pedido_in.tipo == "delivery" else None,
         observaciones=pedido_in.observaciones,
         nombre_cliente_delivery=pedido_in.nombre_cliente_delivery or (current_user.nombre if current_user else "Cliente Local"),
         telefono_delivery=pedido_in.telefono_delivery,
         direccion_delivery=pedido_in.direccion_delivery,
+        delivery_lat=pedido_in.delivery_lat if pedido_in.tipo == "delivery" else None,
+        delivery_lng=pedido_in.delivery_lng if pedido_in.tipo == "delivery" else None,
         nombre_factura=pedido_in.nombre_cliente_delivery or (current_user.nombre if current_user else "Consumidor Final"),
         codigo_otp=otp_code,
         otp_verificado=False,
+        codigo_retiro=f"{secrets.randbelow(900000) + 100000:06d}" if pedido_in.tipo == "llevar" else None,
+        estado_retiro="PENDIENTE" if pedido_in.tipo == "llevar" else None,
         usuario_id=current_user.id if current_user else None,
         turno_id=turno_id,
         detalles=detalles_db
     )
 
     db.add(nuevo_pedido)
-    db.commit()
-    db.refresh(nuevo_pedido)
-
+    db.flush()
+    for product_id, quantity in requested_quantities.items():
+        db.add(MovimientoInventario(
+            producto_id=product_id,
+            tipo_movimiento="VENTA",
+            cantidad_cambio=-quantity,
+            cantidad_anterior=stock_before[product_id],
+            cantidad_nueva=products[product_id].stock,
+            motivo=f"Pedido #{nuevo_pedido.id}",
+            usuario_id=current_user.id if current_user else None
+        ))
     if current_user:
         user_db = db.query(Usuario).filter(Usuario.id == current_user.id).first()
         if user_db:
@@ -203,45 +337,63 @@ async def crear_pedido(
                 concepto=f"Pedido #{nuevo_pedido.id}",
                 pedido_id=nuevo_pedido.id
             ))
-            db.commit()
 
-    await ws_manager.broadcast("NUEVO_PEDIDO", {
-        "id": nuevo_pedido.id,
-        "numero_mesa": nuevo_pedido.numero_mesa,
-        "estado": nuevo_pedido.estado,
-        "modo_pago": nuevo_pedido.modo_pago,
-        "total": nuevo_pedido.total,
-        "tipo": nuevo_pedido.tipo,
-        "detalles_count": len(nuevo_pedido.detalles),
-        "fecha": str(nuevo_pedido.fecha_creacion)
-    })
+    db.commit()
+    db.refresh(nuevo_pedido)
+
+    if not is_mobile_payment:
+        await ws_manager.broadcast("NUEVO_PEDIDO", {
+            "id": nuevo_pedido.id,
+            "numero_mesa": nuevo_pedido.numero_mesa,
+            "estado": nuevo_pedido.estado,
+            "modo_pago": nuevo_pedido.modo_pago,
+            "total": nuevo_pedido.total,
+            "tipo": nuevo_pedido.tipo,
+            "detalles_count": len(nuevo_pedido.detalles),
+            "fecha": str(nuevo_pedido.fecha_creacion)
+        })
 
     return nuevo_pedido
 
 @router.post("/pedidos/{pedido_id}/cambiar-mesa")
+@limiter.limit("10/minute")
 async def cliente_cambiar_mesa(
+    request: Request,
+    response: Response,
     pedido_id: int,
     data: CambiarMesaRequest,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user)
 ):
-    pedido = db.query(Pedido).filter(Pedido.id == pedido_id).first()
+    pedido = db.query(Pedido).filter(Pedido.id == pedido_id).with_for_update().first()
     if not pedido:
         raise HTTPException(status_code=404, detail="Pedido no encontrado")
+    if pedido.usuario_id != current_user.id:
+        raise HTTPException(status_code=403, detail="No tienes permiso para cambiar esta mesa.")
+    if pedido.tipo != "mesa" or pedido.estado in ["COBRADO", "ENTREGADO", "CANCELADO"]:
+        raise HTTPException(status_code=409, detail="Este pedido ya no puede cambiar de mesa.")
 
     nueva_mesa_num = data.nueva_mesa
-    nueva_mesa_obj = db.query(Mesa).filter(Mesa.numero_mesa == nueva_mesa_num).first()
+    nueva_mesa_obj = db.query(Mesa).filter(
+        Mesa.numero_mesa == nueva_mesa_num
+    ).with_for_update().first()
     if not nueva_mesa_obj:
         raise HTTPException(status_code=404, detail=f"La Mesa #{nueva_mesa_num} no existe")
 
-    # Liberar mesa anterior
+    # Liberate the previous table only when no other active order still uses it.
     try:
         num_ant = int(pedido.numero_mesa.lower().replace("mesa", "").strip())
         mesa_ant_obj = db.query(Mesa).filter(Mesa.numero_mesa == num_ant).first()
-        if mesa_ant_obj and mesa_ant_obj.numero_mesa != nueva_mesa_num:
+        other_active_orders = db.query(Pedido).filter(
+            Pedido.numero_mesa == pedido.numero_mesa,
+            Pedido.id != pedido.id,
+            Pedido.estado.notin_(["ENTREGADO", "CANCELADO"])
+        ).count()
+        if mesa_ant_obj and mesa_ant_obj.numero_mesa != nueva_mesa_num and not other_active_orders:
             mesa_ant_obj.estado = "LIBRE"
             mesa_ant_obj.cliente_actual = None
-    except Exception:
-        pass
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail="No se pudo determinar la mesa actual del pedido.") from exc
 
     # Ocupar nueva mesa
     nueva_mesa_obj.estado = "OCUPADA"
@@ -260,12 +412,18 @@ async def cliente_cambiar_mesa(
     return {"mensaje": f"Has cambiado exitosamente a Mesa #{nueva_mesa_num}", "nueva_mesa": f"Mesa {nueva_mesa_num}"}
 
 @router.post("/pedidos/verificar-otp")
-def verificar_otp_pedido(req: OTPVerifyRequest, db: Session = Depends(get_db)):
+@limiter.limit("10/minute")
+def verificar_otp_pedido(
+    request: Request,
+    response: Response,
+    req: OTPVerifyRequest,
+    db: Session = Depends(get_db)
+):
     pedido = db.query(Pedido).filter(Pedido.id == req.pedido_id).first()
     if not pedido:
         raise HTTPException(status_code=404, detail="Pedido no encontrado")
     
-    if pedido.codigo_otp == req.codigo_otp or req.codigo_otp == "123456":
+    if pedido.codigo_otp and hmac.compare_digest(pedido.codigo_otp, req.codigo_otp):
         pedido.otp_verificado = True
         db.commit()
         return {"valido": True, "mensaje": "Verificación OTP completada exitosamente"}
@@ -276,6 +434,174 @@ def verificar_otp_pedido(req: OTPVerifyRequest, db: Session = Depends(get_db)):
 def get_historial_pedidos(db: Session = Depends(get_db), current_user = Depends(get_current_user)):
     pedidos = db.query(Pedido).filter(Pedido.usuario_id == current_user.id).order_by(Pedido.fecha_creacion.desc()).all()
     return pedidos
+
+
+@router.get("/personalizacion")
+def get_personalizacion_cliente(
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    orders = (
+        db.query(Pedido)
+        .filter(Pedido.usuario_id == current_user.id)
+        .order_by(Pedido.fecha_creacion.desc())
+        .limit(40)
+        .all()
+    )
+    valid_orders = [
+        order for order in orders
+        if order.estado != "CANCELADO" and order.estado_pago != "CANCELADO" and order.detalles
+    ]
+    latest = valid_orders[0] if valid_orders else None
+    bought_counts = {}
+    pair_counts = {}
+    recent_order_product_ids = set()
+    for order in valid_orders:
+        product_ids = {
+            detail.producto_id for detail in order.detalles
+            if detail.producto_id is not None
+        }
+        if order is latest:
+            recent_order_product_ids = product_ids
+        for detail in order.detalles:
+            bought_counts[detail.producto_id] = bought_counts.get(detail.producto_id, 0) + detail.cantidad
+        for product_id in product_ids:
+            pair_counts[product_id] = pair_counts.get(product_id, {})
+            for co_product_id in product_ids - {product_id}:
+                pair_counts[product_id][co_product_id] = (
+                    pair_counts[product_id].get(co_product_id, 0) + 1
+                )
+
+    popular_rows = (
+        db.query(DetallePedido.producto_id, func.sum(DetallePedido.cantidad).label("unidades"))
+        .join(Pedido, Pedido.id == DetallePedido.pedido_id)
+        .filter(Pedido.estado_pago == "PAGADO")
+        .group_by(DetallePedido.producto_id)
+        .all()
+    )
+    popular_counts = {row.producto_id: int(row.unidades or 0) for row in popular_rows}
+    available_products = (
+        db.query(Producto)
+        .filter(Producto.activo == True, Producto.disponible == True, Producto.stock > 0)
+        .all()
+    )
+    last_product_ids = recent_order_product_ids
+    scored_products = []
+    for product in available_products:
+        if product.id in last_product_ids:
+            continue
+        pair_score = sum(
+            counts.get(product.id, 0) for counts in pair_counts.values()
+        )
+        score = (
+            pair_score * 3
+            + min(bought_counts.get(product.id, 0), 6) * 0.5
+            + popular_counts.get(product.id, 0) * 0.05
+        )
+        if score > 0:
+            scored_products.append((score, popular_counts.get(product.id, 0), pair_score, product))
+
+    scored_products.sort(key=lambda row: (-row[0], -row[1], row[3].nombre.casefold()))
+
+    last_order = None
+    if latest:
+        last_order = {
+            "id": latest.id,
+            "total": float(latest.total or 0),
+            "fecha_creacion": latest.fecha_creacion,
+            "items": [
+                {
+                    "producto_id": detail.producto_id,
+                    "nombre": detail.producto.nombre if detail.producto else "Producto no disponible",
+                    "cantidad": detail.cantidad,
+                    "precio_unitario": float(detail.precio_unitario or 0),
+                    "subtotal": float(detail.subtotal or 0),
+                    "personalizaciones": detail.personalizaciones,
+                }
+                for detail in latest.detalles
+            ],
+        }
+
+    return {
+        "saludo": f"¡Hola, {current_user.nombre}!",
+        "puntos_fidelidad": int(current_user.puntos_fidelidad or 0),
+        "ultima_orden": last_order,
+        "recomendaciones": [
+            {
+                "id": product.id,
+                "nombre": product.nombre,
+                "descripcion": product.descripcion,
+                "precio": float(product.precio_promocion or product.precio or 0),
+                "imagen_url": product.imagen_url,
+                "stock": product.stock,
+                "unidades_vendidas": popular_counts.get(product.id, 0),
+                "motivo": (
+                    "Combinación basada en tus pedidos" if pair_score
+                    else "Ya lo has pedido antes" if bought_counts.get(product.id, 0)
+                    else "Popular entre nuestros clientes"
+                ),
+            }
+            for _, _, pair_score, product in scored_products[:3]
+        ],
+    }
+
+
+@router.post("/solicitudes-mesa", status_code=status.HTTP_201_CREATED)
+@limiter.limit("6/minute")
+async def crear_solicitud_mesa(
+    request: Request,
+    response: Response,
+    data: SolicitudMesaCreate,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user_optional),
+):
+    mesa = db.query(Mesa).filter(Mesa.numero_mesa == data.numero_mesa).first()
+    if not mesa:
+        raise HTTPException(status_code=404, detail="La mesa indicada no existe.")
+    if data.pedido_id:
+        pedido = db.query(Pedido).filter(
+            Pedido.id == data.pedido_id,
+            Pedido.tipo == "mesa",
+            Pedido.numero_mesa.in_([str(data.numero_mesa), f"Mesa {data.numero_mesa}"]),
+        ).first()
+        if not pedido:
+            raise HTTPException(status_code=404, detail="El pedido no corresponde a esta mesa.")
+    existing = db.query(SolicitudMesa).filter(
+        SolicitudMesa.mesa_id == mesa.id,
+        SolicitudMesa.tipo == data.tipo,
+        SolicitudMesa.estado == "PENDIENTE",
+    ).order_by(SolicitudMesa.id.desc()).first()
+    if existing:
+        return {
+            "id": existing.id,
+            "mesa": mesa.numero_mesa,
+            "tipo": existing.tipo,
+            "estado": existing.estado,
+            "mensaje": "Ya hay una solicitud igual pendiente para esta mesa.",
+        }
+    solicitud = SolicitudMesa(
+        mesa_id=mesa.id,
+        pedido_id=data.pedido_id,
+        usuario_id=current_user.id if current_user else None,
+        tipo=data.tipo,
+        nota=data.nota.strip() if data.nota else None,
+    )
+    db.add(solicitud)
+    db.commit()
+    db.refresh(solicitud)
+    await ws_manager.broadcast("SOLICITUD_MESA", {
+        "id": solicitud.id,
+        "mesa": mesa.numero_mesa,
+        "tipo": solicitud.tipo,
+        "estado": solicitud.estado,
+    })
+    return {
+        "id": solicitud.id,
+        "mesa": mesa.numero_mesa,
+        "tipo": solicitud.tipo,
+        "estado": solicitud.estado,
+        "mensaje": "Solicitud enviada al equipo de sala.",
+    }
 @router.post("/puntos/canjear")
 def canjear_puntos(
     recompensa: str = Query(...),

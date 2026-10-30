@@ -1,51 +1,33 @@
-# Guía de Despliegue en Render — DONDE DAVID Enterprise
+# Despliegue seguro en Render
 
-Guía técnica y lista de comprobación para el despliegue automático del proyecto **`tesis-restaurante`** en la plataforma **Render (Render Web Services)**.
+## Recursos y variables
 
----
+1. Crea una base PostgreSQL persistente en Render.
+2. En el Web Service configura `DATABASE_URL` con la URL interna de esa base.
+3. Configura `SECRET_KEY` como un valor aleatorio único de al menos 32 caracteres. Puedes generarlo localmente con `python -c "import secrets; print(secrets.token_urlsafe(48))"` y guardarlo solo en el panel de Render.
+4. Configura `ALLOWED_ORIGINS` con los orígenes HTTPS exactos, separados por coma. No uses `*`.
+5. Define `ENVIRONMENT=production`. No cargues un archivo `.env` ni uses credenciales demo en producción.
+6. Si habilitas la selección de ubicación con Google Maps, configura la clave del navegador desde Administración. Restríngela por los dominios públicos exactos en Google Cloud y habilita solo las APIs requeridas; nunca uses una clave de servidor en el navegador.
 
-## ⚙️ 1. VARIABLES DE ENTORNO EN RENDER
+El `render.yaml` deja `DATABASE_URL`, `SECRET_KEY` y `ALLOWED_ORIGINS` como variables privadas de configuración para evitar valores inseguros en el repositorio. El comando de inicio aplica las migraciones de Alembic antes de arrancar Gunicorn.
 
-Configurar las siguientes variables en el panel de **Environment** de Render:
+## Comandos del servicio
 
-| VARIABLE | VALOR RECOMENDADO | PROPÓSITO |
-|---|---|---|
-| `ENVIRONMENT` | `production` | Activa modo producción y desactiva reloaders |
-| `SECRET_KEY` | `donde_david_super_secret_jwt_key_2026_tesis_restaurante` | Firma segura de tokens JWT |
-| `DATABASE_URL` | `sqlite:///./restaurante.db` (o PostgreSQL URL) | Conexión ORM a Base de Datos |
-| `ALLOWED_ORIGINS` | `https://tesis-restaurante.onrender.com` | Dominios autorizados CORS |
-| `PORT` | Asignado automáticamente por Render (`$PORT`) | Puerto dinámico de enlace HTTP |
+- Build: `pip install -r requirements.txt`
+- Start: `alembic upgrade head && gunicorn -k uvicorn.workers.UvicornWorker --workers 1 backend.app.main:app --bind 0.0.0.0:$PORT`
+- Health check: `/health`
+- Readiness check: `/ready` (devuelve HTTP 503 si la base de datos no está disponible)
 
----
+Se mantiene un worker porque la difusión WebSocket y el rate limiter actual viven en memoria de proceso. Antes de escalar horizontalmente, deben migrarse a un broker compartido (por ejemplo, Redis/pub-sub y rate limit distribuido).
 
-## 🚀 2. CONFIGURACIÓN DEL SERVICIO WEBSERVICE (FastAPI)
+## Base de datos existente
 
-- **Name**: `tesis-restaurante`
-- **Environment**: `Python 3`
-- **Build Command**:
-  ```bash
-  pip install --upgrade pip && pip install -r requirements.txt
-  ```
-- **Start Command**:
-  ```bash
-  gunicorn backend.app.main:app -w 4 -k uvicorn.workers.UvicornWorker --bind 0.0.0.0:$PORT
-  ```
-  *(Alternativa directa)*:
-  ```bash
-  python backend/app/main.py
-  ```
-- **Health Check Path**: `/health`
+Las migraciones automáticas están destinadas a una base vacía nueva. Para una base ya existente, haz primero un respaldo, compara el esquema real con los modelos y define una migración de adopción revisada antes de marcar una versión. No ejecutes `alembic stamp head` sobre una base sin verificarla.
 
----
+En desarrollo, SQLite y las cuentas demo siguen disponibles. El proceso de producción no crea tablas automáticamente ni ejecuta semillas; los datos iniciales se cargan mediante el asistente de instalación y las migraciones.
 
-## 🩺 3. MONITOREO Y ENDPOINTS DE DIAGNÓSTICO
+La migración `f31a7b2c9d10` añade opciones y medios para productos y coordenadas para pedidos de delivery. Antes de desplegar una actualización, conserva un respaldo reciente y confirma que la base está en una revisión compatible; el comando de inicio aplica las revisiones pendientes.
 
-1. **`/health`**: Retorna `{"status": "ok", "app": "Donde David Restaurant Management System", "version": "2.0.0", "environment": "production"}`.
-2. **`/ready`**: Consulta activamente `SELECT 1` a la base de datos para asegurar disponibilidad antes de dirigir tráfico de usuarios.
+## Archivos subidos
 
----
-
-## 🛡️ 4. SEGURIDAD Y ARCHIVOS ESTÁTICOS
-
-- **Imágenes y Fuentes**: Rutas relativas `/static/...` sin hardcoding de carpetas locales `C:\Users\...`.
-- **Invalidación de Caché**: Servidor responde con cabeceras `Cache-Control: no-cache, no-store` para recursos `.css` y `.js`.
+Las imágenes aceptadas tienen límite de 5 MB y se restringen a JPEG, PNG o WEBP. Render puede usar almacenamiento efímero para el filesystem local; para conservar imágenes entre despliegues, configura un almacenamiento de objetos persistente antes de usar uploads en producción.

@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Donde David - Panel de Administración General</title>
   <link rel="stylesheet" href="/static/css/global.css?v=2.0">
-  <link rel="stylesheet" href="/static/css/toon-theme.css?v=2.0">
+  <link rel="stylesheet" href="/static/css/toon-theme.css?v=2.4">
   <link rel="stylesheet" href="/static/css/index.css">
   
   <!-- Driver.js CSS para Onboarding Tour Interactivo -->
@@ -64,6 +64,145 @@
     .wizard-step.active {
       display: block;
     }
+    .admin-drawer-overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 1050;
+      display: none;
+      background: rgba(0, 0, 0, 0.6);
+      backdrop-filter: blur(4px);
+    }
+    .admin-drawer-overlay.open {
+      display: block;
+    }
+    .admin-menu-toggle {
+      display: flex;
+    }
+    .admin-sidebar-layout {
+      display: block !important;
+      width: 100%;
+      max-width: none;
+      min-height: calc(100vh - 70px);
+      margin: 0;
+      padding: 0;
+    }
+    .admin-sidebar {
+      position: fixed !important;
+      inset: 0 auto 0 0 !important;
+      width: min(340px, 88vw) !important;
+      max-width: 88vw !important;
+      height: 100vh !important;
+      height: 100dvh !important;
+      max-height: 100vh;
+      box-sizing: border-box;
+      overflow-y: auto;
+      overscroll-behavior: contain;
+      z-index: 1060 !important;
+      border-radius: 0 var(--radius-md) var(--radius-md) 0;
+      transform: translateX(-105%) !important;
+      visibility: hidden;
+      pointer-events: none;
+      transition: transform 0.28s ease, visibility 0.28s ease;
+    }
+    .admin-sidebar-group {
+      margin: 0.8rem 0 0.2rem;
+      padding: 0.3rem 0.75rem;
+      color: var(--text-muted);
+      font-size: 0.68rem;
+      font-weight: 900;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+    }
+    .admin-sidebar-btn {
+      min-height: 44px;
+      box-sizing: border-box;
+    }
+    .admin-sidebar.open {
+      transform: translateX(0) !important;
+      visibility: visible;
+      pointer-events: auto;
+    }
+    .admin-sidebar-title {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+      padding-bottom: 0.85rem;
+      border-bottom: 1px solid var(--toon-border);
+    }
+    .admin-sidebar-close {
+      flex: 0 0 auto;
+      min-width: 42px;
+      min-height: 42px;
+      border: 1px solid var(--toon-border);
+      border-radius: 10px;
+      background: rgba(255, 255, 255, 0.06);
+      color: var(--text-primary);
+      font-size: 1.35rem;
+      cursor: pointer;
+    }
+    .admin-main-content {
+      width: 100% !important;
+      max-width: 1920px;
+      min-width: 0 !important;
+      margin: 0 auto;
+      padding: clamp(1rem, 2.5vw, 2.25rem) !important;
+      box-sizing: border-box;
+      overflow-x: clip;
+    }
+    .admin-main-content > .tab-content.active {
+      width: 100%;
+      min-width: 0;
+    }
+    #tab-dashboard > div[style*="grid-template-columns: 1fr 1fr"] {
+      grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr)) !important;
+    }
+    .admin-main-content .table-responsive {
+      width: 100%;
+      max-width: 100%;
+      overflow-x: auto;
+      overscroll-behavior-x: contain;
+      -webkit-overflow-scrolling: touch;
+    }
+    .product-editor-list {
+      display: grid;
+      gap: .45rem;
+      max-height: 180px;
+      overflow-y: auto;
+      margin: .5rem 0 1rem;
+    }
+    .product-editor-row {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 100px auto;
+      gap: .45rem;
+      align-items: center;
+    }
+    .product-editor-row.media-row {
+      grid-template-columns: 90px minmax(0, 1fr) auto;
+    }
+    .product-editor-row input,
+    .product-editor-row select {
+      min-width: 0;
+    }
+    @media (max-width: 520px) {
+      .product-editor-row { grid-template-columns: minmax(0, 1fr) 82px auto; }
+      .product-editor-row.media-row { grid-template-columns: 85px minmax(0, 1fr) auto; }
+    }
+    @media (max-width: 760px) {
+      .admin-main-content {
+        padding: 1rem !important;
+      }
+      .kpi-grid {
+        grid-template-columns: repeat(auto-fit, minmax(min(100%, 210px), 1fr));
+      }
+      button {
+        min-height: 42px;
+      }
+      .tab-nav {
+        padding-bottom: .35rem;
+        -webkit-overflow-scrolling: touch;
+      }
+    }
   </style>
 </head>
 <body class="toon-theme"><nav id="app-sidebar"></nav>
@@ -75,21 +214,25 @@
   <!-- Layout con Nav Lateral para el Panel de Administración -->
   <div class="admin-sidebar-layout">
     
-    <!-- Sidebar Navegación Lateral Deslizable (Estilo Hamburger Cashea) -->
-    <aside class="admin-sidebar" id="admin-sidebar-drawer">
-      <div style="display: flex; justify-content: space-between; align-items: center;" class="admin-sidebar-title">
+    <!-- El menú se abre sobre el contenido para conservar el ancho útil del panel. -->
+    <aside class="admin-sidebar" id="admin-sidebar-drawer" aria-label="Navegación de administración" aria-hidden="true">
+      <div class="admin-sidebar-title">
         <span>⚙️ MENÚ PRINCIPAL ADMIN</span>
-        <button id="admin-hamburger-btn" style="background: none; border: none; color: var(--gold-accent); font-size: 1.4rem; cursor: pointer;" onclick="toggleAdminDrawer()">☰</button>
+        <button class="admin-sidebar-close" type="button" aria-label="Cerrar menú" onclick="closeAdminDrawer()">×</button>
       </div>
+      <p class="admin-sidebar-group">Operación</p>
       <button class="admin-sidebar-btn active" id="btn-orders-panel" onclick="switchTab('dashboard')">📊 Dashboard & Métricas</button>
+      <button class="admin-sidebar-btn" onclick="switchTab('mesas')">🍽️ Mesas & QR</button>
+      <button class="admin-sidebar-btn" onclick="window.location.href='/static/delivery/panel.html'">🛵 Despacho Delivery</button>
+      <p class="admin-sidebar-group">Menú y contenido</p>
       <button class="admin-sidebar-btn" id="nav-menu-items" onclick="switchTab('productos')">🍔 Productos & Ingredientes</button>
       <button class="admin-sidebar-btn" onclick="switchTab('inventario')">📦 Insumos e Inventario</button>
+      <button class="admin-sidebar-btn" onclick="switchTab('categorias')">📂 Categorías de Menú</button>
       <button class="admin-sidebar-btn" onclick="switchTab('promociones')">🔥 Promociones & Banners</button>
       <button class="admin-sidebar-btn" onclick="switchTab('resenas')">⭐ Calificaciones de Clientes</button>
       <button class="admin-sidebar-btn" onclick="switchTab('publicaciones')">📰 Publicaciones Web</button>
+      <p class="admin-sidebar-group">Administración</p>
       <button class="admin-sidebar-btn" onclick="switchTab('portal')">🌐 Portal, Tasa & Historia</button>
-      <button class="admin-sidebar-btn" onclick="switchTab('mesas')">🍽️ Mesas & QR</button>
-      <button class="admin-sidebar-btn" onclick="switchTab('categorias')">📂 Categorías de Menú</button>
       <button class="admin-sidebar-btn" onclick="switchTab('usuarios')">👥 Usuarios del Sistema</button>
     </aside>
 
@@ -127,25 +270,25 @@
       <div class="kpi-grid" style="margin-bottom: 1.5rem;">
         <div class="kpi-card">
           <div style="font-size: 0.8rem; color: var(--text-muted); font-weight: 700;">☀️ VENTAS DE HOY</div>
-          <div style="font-size: 1.6rem; font-weight: 900; color: var(--gold-accent);" id="stat-sales-today">$1,240.00</div>
+          <div style="font-size: 1.6rem; font-weight: 900; color: var(--gold-accent);" id="stat-sales-today">$0.00</div>
           <small style="color: var(--neon-green); font-weight: 800;">⚡ Operaciones del día</small>
         </div>
 
         <div class="kpi-card">
           <div style="font-size: 0.8rem; color: var(--text-muted); font-weight: 700;">📅 VENTAS DE LA SEMANA</div>
-          <div style="font-size: 1.6rem; font-weight: 900; color: #38bdf8;" id="stat-sales-week">$4,850.00</div>
-          <small style="color: var(--neon-green); font-weight: 800;" id="stat-pct-week">▲ +18.5% esta semana</small>
+          <div style="font-size: 1.6rem; font-weight: 900; color: #38bdf8;" id="stat-sales-week">$0.00</div>
+          <small style="color: var(--text-muted); font-weight: 800;" id="stat-pct-week">Sin datos comparables</small>
         </div>
 
         <div class="kpi-card">
           <div style="font-size: 0.8rem; color: var(--text-muted); font-weight: 700;">📊 VENTAS MENSUALES</div>
-          <div style="font-size: 1.6rem; font-weight: 900; color: #a855f7;" id="stat-sales-month">$18,750.50</div>
-          <small style="color: var(--neon-green); font-weight: 800;" id="stat-pct-month">▲ +24.2% este mes</small>
+          <div style="font-size: 1.6rem; font-weight: 900; color: #a855f7;" id="stat-sales-month">$0.00</div>
+          <small style="color: var(--text-muted); font-weight: 800;" id="stat-pct-month">Sin datos comparables</small>
         </div>
 
         <div class="kpi-card">
           <div style="font-size: 0.8rem; color: var(--text-muted); font-weight: 700;">💰 RECAUDACIÓN TOTAL</div>
-          <div style="font-size: 1.6rem; font-weight: 900; color: var(--neon-green);" id="stat-sales-total">$18,750.50</div>
+          <div style="font-size: 1.6rem; font-weight: 900; color: var(--neon-green);" id="stat-sales-total">$0.00</div>
           <small style="color: var(--text-muted);">Acumulado histórico</small>
         </div>
       </div>
@@ -158,26 +301,26 @@
           <div style="margin-top: 1rem;">
             <div style="display: flex; justify-content: space-between; font-size: 0.88rem; margin-bottom: 0.3rem;">
               <span>🍽️ Ventas en Mesa (Vía QR)</span>
-              <strong style="color: var(--cyan-accent);" id="pct-canal-mesa">55%</strong>
+              <strong style="color: var(--cyan-accent);" id="pct-canal-mesa">0%</strong>
             </div>
             <div style="background: rgba(255,255,255,0.08); height: 10px; border-radius: 5px; overflow: hidden; margin-bottom: 1rem;">
-              <div style="background: var(--cyan-accent); width: 55%; height: 100%;"></div>
+              <div id="bar-canal-mesa" style="background: var(--cyan-accent); width: 0%; height: 100%;"></div>
             </div>
 
             <div style="display: flex; justify-content: space-between; font-size: 0.88rem; margin-bottom: 0.3rem;">
               <span>🛵 Pedidos por Delivery</span>
-              <strong style="color: var(--neon-red);" id="pct-canal-delivery">30%</strong>
+              <strong style="color: var(--neon-red);" id="pct-canal-delivery">0%</strong>
             </div>
             <div style="background: rgba(255,255,255,0.08); height: 10px; border-radius: 5px; overflow: hidden; margin-bottom: 1rem;">
-              <div style="background: var(--neon-red); width: 30%; height: 100%;"></div>
+              <div id="bar-canal-delivery" style="background: var(--neon-red); width: 0%; height: 100%;"></div>
             </div>
 
             <div style="display: flex; justify-content: space-between; font-size: 0.88rem; margin-bottom: 0.3rem;">
               <span>🛍️ Para Llevar / Mostrador</span>
-              <strong style="color: var(--gold-accent);" id="pct-canal-llevar">15%</strong>
+              <strong style="color: var(--gold-accent);" id="pct-canal-llevar">0%</strong>
             </div>
             <div style="background: rgba(255,255,255,0.08); height: 10px; border-radius: 5px; overflow: hidden;">
-              <div style="background: var(--gold-accent); width: 15%; height: 100%;"></div>
+              <div id="bar-canal-llevar" style="background: var(--gold-accent); width: 0%; height: 100%;"></div>
             </div>
           </div>
         </div>
@@ -195,11 +338,11 @@
             </div>
             <div style="background: rgba(255,255,255,0.03); padding: 0.85rem; border-radius: 8px; border: 1px solid var(--toon-border);">
               <small style="color: var(--text-muted);">Mesas Ocupadas</small>
-              <div style="font-size: 1.4rem; font-weight: 900; color: var(--neon-green);" id="stat-mesas">5 / 20</div>
+              <div style="font-size: 1.4rem; font-weight: 900; color: var(--neon-green);" id="stat-mesas">0 / 0</div>
             </div>
             <div style="background: rgba(255,255,255,0.03); padding: 0.85rem; border-radius: 8px; border: 1px solid var(--toon-border);">
-              <small style="color: var(--text-muted);">Apertura de Caja</small>
-              <div style="font-size: 1.4rem; font-weight: 900; color: var(--gold-accent);" id="stat-caja">$950.50</div>
+              <small style="color: var(--text-muted);">Efectivo esperado en caja</small>
+              <div style="font-size: 1.4rem; font-weight: 900; color: var(--gold-accent);" id="stat-caja">$0.00</div>
             </div>
           </div>
         </div>
@@ -219,11 +362,11 @@
       <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; margin-bottom: 1.25rem;">
         <div style="background: rgba(255,255,255,0.05); padding: 0.75rem; border-radius: 8px; text-align: center; border: 1px solid var(--toon-border);">
           <small style="color: var(--text-muted);">🍽️ Mesas Ocupadas</small>
-          <div style="font-size: 1.2rem; font-weight: 900; color: var(--neon-green);" id="modal-ops-mesas">5 / 20 Mesas</div>
+          <div style="font-size: 1.2rem; font-weight: 900; color: var(--neon-green);" id="modal-ops-mesas">0 / 0 Mesas</div>
         </div>
         <div style="background: rgba(255,255,255,0.05); padding: 0.75rem; border-radius: 8px; text-align: center; border: 1px solid var(--toon-border);">
           <small style="color: var(--text-muted);">💰 Monto en Caja</small>
-          <div style="font-size: 1.2rem; font-weight: 900; color: var(--gold-accent);" id="modal-ops-caja">$950.50</div>
+          <div style="font-size: 1.2rem; font-weight: 900; color: var(--gold-accent);" id="modal-ops-caja">$0.00</div>
         </div>
       </div>
 
@@ -246,15 +389,26 @@
         <h2>🍔 PRODUCTOS DEL CATÁLOGO & INGREDIENTES EDITABLES</h2>
         <button class="btn-gold" onclick="openProductModal()">➕ Crear Producto</button>
       </div>
+      <div style="display:flex;gap:.65rem;flex-wrap:wrap;margin-bottom:1rem">
+        <input id="products-search" class="form-control" style="flex:1;min-width:220px" type="search" placeholder="Buscar por producto o categoría" oninput="renderProducts()">
+        <select id="products-sort" class="form-control" style="width:auto;min-width:180px" onchange="renderProducts()" aria-label="Ordenar catálogo">
+          <option value="category-name">Categoría y nombre</option>
+          <option value="name">Nombre del producto</option>
+          <option value="newest">Más recientes</option>
+        </select>
+      </div>
 
       <div style="background: var(--toon-card); border: 1px solid var(--toon-border); border-radius: var(--radius-md); overflow-x: auto;">
         <table style="width: 100%; border-collapse: collapse; text-align: left;">
           <thead>
             <tr style="border-bottom: 1px solid var(--toon-border); color: var(--text-muted);">
               <th style="padding: 0.75rem;">Imagen</th>
+              <th style="padding: 0.75rem;">Categoría</th>
               <th style="padding: 0.75rem;">Nombre</th>
               <th style="padding: 0.75rem;">Precio ($ / Bs)</th>
               <th style="padding: 0.75rem;">Ingredientes / Opciones</th>
+              <th style="padding: 0.75rem;">Alérgenos declarados</th>
+              <th style="padding: 0.75rem;">Disponibilidad</th>
               <th style="padding: 0.75rem;">Stock</th>
               <th style="padding: 0.75rem;">Acciones</th>
             </tr>
@@ -313,14 +467,15 @@
 
     <!-- TAB 6: PORTAL WEB & TASA DE CAMBIO -->
     <div id="tab-portal" class="tab-content">
-      <h2>🌐 TASA DE CAMBIO BCV/PARALELO Y CONFIGURACIÓN DEL PORTAL</h2>
+      <h2>🌐 TASA DE CAMBIO DE REFERENCIA Y CONFIGURACIÓN DEL PORTAL</h2>
       <div style="background: var(--toon-card); border: 1px solid var(--toon-border); border-radius: var(--radius-md); padding: 1.5rem; margin-top: 1rem; max-width: 700px;">
         
         <div class="form-group" style="background: rgba(255, 188, 13, 0.1); border: 1px solid var(--gold-accent); padding: 1rem; border-radius: 10px; margin-bottom: 1.25rem;">
           <label style="font-weight: 900; color: var(--gold-accent); font-size: 1rem;">💵 TASA DE CAMBIO (1 USD = Bs.)</label>
-          <input type="number" step="0.01" id="cfg-tasa-cambio" class="form-control" style="font-size: 1.3rem; font-weight: 900; color: var(--gold-accent);" value="36.50">
-          <small style="color: var(--text-muted); margin-top: 0.3rem; display: block;">Esta tasa se utiliza para convertir automáticamente todos los precios de la app en Bolívares (Bs.)</small>
+          <input type="number" step="0.0001" id="cfg-tasa-cambio" class="form-control" style="font-size: 1.3rem; font-weight: 900; color: var(--gold-accent);" placeholder="Sin tasa guardada">
+          <small id="cfg-tasa-status" role="status" style="color: var(--text-muted); margin-top: 0.3rem; display: block;">Consulta externa con caché; puedes guardar manualmente si el proveedor no responde.</small>
         </div>
+        <button class="btn btn-outline" type="button" style="width: 100%; margin: 0 0 1rem;" onclick="refreshBcvRate()">🔄 Consultar tasa BCV ahora</button>
 
         <div class="form-group">
           <label>Nuestra Historia (Sección Web Pública)</label>
@@ -346,6 +501,17 @@
           <label>Costo Empaque Para Llevar ($ USD)</label>
           <input type="number" step="0.5" id="cfg-costo-empaque" class="form-control">
         </div>
+        <div class="form-group">
+          <label>Google Maps JavaScript API key (opcional)</label>
+          <input type="password" id="cfg-google-maps-api-key" class="form-control" maxlength="500" autocomplete="off" placeholder="AIza...">
+          <small style="display:block;color:var(--text-muted);margin-top:.35rem">Google exige una clave pública de navegador. Restringe su uso por HTTP referrer a los dominios de tu web y habilita Maps JavaScript API en Google Cloud. Si se deja vacío, se usa OpenStreetMap.</small>
+        </div>
+        <h3>📱 Datos para Pago Móvil</h3>
+        <p style="color: var(--text-muted); font-size: .85rem;">Estos datos se muestran al cliente. No se guardan credenciales bancarias.</p>
+        <div class="form-group"><label>Banco</label><input type="text" id="cfg-pm-banco" class="form-control" maxlength="100"></div>
+        <div class="form-group"><label>Teléfono afiliado</label><input type="text" id="cfg-pm-telefono" class="form-control" maxlength="30"></div>
+        <div class="form-group"><label>RIF / documento del titular</label><input type="text" id="cfg-pm-rif" class="form-control" maxlength="30"></div>
+        <div class="form-group"><label>Titular</label><input type="text" id="cfg-pm-titular" class="form-control" maxlength="120"></div>
         <button class="btn-gold" style="width: 100%; margin-top: 1rem; font-size: 1.05rem;" onclick="submitSavePortalConfigs()">💾 GUARDAR CONFIGURACIONES Y TASA DE CAMBIO</button>
       </div>
     </div>
@@ -474,7 +640,7 @@
         <div class="form-group"><label>Nombre del Restaurante / Negocio</label><input type="text" id="wiz-nombre" class="form-control" value="Donde David Fresh & Tasty!"></div>
         <div class="form-group"><label>Eslogan o Historia Corta</label><textarea id="wiz-historia" class="form-control" rows="2">Especialistas en hamburguesas artesanales gourmet y perros estilo Toon.</textarea></div>
         <div style="display: flex; gap: 1rem;">
-          <div class="form-group" style="flex: 1;"><label>Tasa Inicial en Bolívares (Bs.)</label><input type="number" step="0.1" id="wiz-tasa" class="form-control" value="36.50"></div>
+          <div class="form-group" style="flex: 1;"><label>Tasa manual opcional (Bs. por USD)</label><input type="number" step="0.0001" id="wiz-tasa" class="form-control" placeholder="Opcional"></div>
           <div class="form-group" style="flex: 1;"><label>WhatsApp Oficial</label><input type="text" id="wiz-whatsapp" class="form-control" value="+502 4112 5554"></div>
         </div>
       </div>
@@ -545,7 +711,18 @@
       <div class="form-group"><label>Descripción</label><input type="text" id="edit-prod-desc" class="form-control"></div>
       <div class="form-group"><label>Precio Regular ($ USD)</label><input type="number" step="0.01" id="edit-prod-price" class="form-control" required></div>
       <div class="form-group"><label>Precio Promoción ($ USD) (opcional)</label><input type="number" step="0.01" id="edit-prod-price-promo" class="form-control"></div>
+      <div class="form-group"><label>Preparación estimada (minutos)</label><input type="number" min="1" max="240" id="edit-prod-tiempo-preparacion" class="form-control" required></div>
       <div class="form-group"><label>Ingredientes (separados por coma)</label><input type="text" id="edit-prod-ingredientes" class="form-control" placeholder="Ej. Carne 150g, Queso Cheddar, Tomate, Cebolla"></div>
+      <div class="form-group">
+        <label>Extras disponibles (uno por línea: nombre | precio USD)</label>
+        <textarea id="edit-prod-extras" class="form-control" rows="3" placeholder="Queso cheddar | 1.00"></textarea>
+      </div>
+      <div class="form-group">
+        <label>Galería de fotos y videos (uno por línea: tipo | URL HTTPS o /static/uploads/)</label>
+        <textarea id="edit-prod-media" class="form-control" rows="3" placeholder="imagen | https://...&#10;video | https://..."></textarea>
+      </div>
+      <div class="form-group"><label>Alérgenos declarados (separados por coma)</label><input type="text" id="edit-prod-alergenos" class="form-control" maxlength="500" placeholder="Ej. leche, gluten, huevo"></div>
+      <div class="form-group"><label><input type="checkbox" id="edit-prod-disponible"> Disponible para pedidos</label></div>
       <div class="form-group">
         <label>Cambiar Foto (Upload Local)</label>
         <input type="file" accept="image/*" class="form-control" onchange="uploadLocalFile(event, 'edit-prod-img')">
@@ -570,18 +747,6 @@
       </div>
       <div class="form-group"><label>Ruta Imagen</label><input type="text" id="promo-img" class="form-control"></div>
       <button class="btn-gold" style="width: 100%; margin-top: 1rem;" onclick="submitCreatePromo()">GUARDAR PROMOCIÓN</button>
-    </div>
-  </div>
-
-  <!-- Modal Agregar Reseña Admin -->
-  <div class="product-modal-backdrop" id="add-resena-modal">
-    <div class="product-modal-card" style="max-width: 400px; padding: 1.5rem;">
-      <button class="modal-close-btn" onclick="closeModal('add-resena-modal')">&times;</button>
-      <h3 style="color: var(--gold-accent); margin-top: 0;">⭐ NUEVA RESEÑA DE CLIENTE</h3>
-      <div class="form-group"><label>Nombre del Cliente</label><input type="text" id="res-nombre" class="form-control" placeholder="Ej. Carlos Ramos"></div>
-      <div class="form-group"><label>Comentario</label><textarea id="res-comentario" class="form-control" rows="3" placeholder="Excelente comida..."></textarea></div>
-      <div class="form-group"><label>Estrellas (1 a 5)</label><input type="number" id="res-estrellas" class="form-control" value="5" min="1" max="5"></div>
-      <button class="btn-gold" style="width: 100%; margin-top: 1rem;" onclick="submitCreateResena()">PUBLICAR RESEÑA</button>
     </div>
   </div>
 
@@ -631,13 +796,15 @@
         <label>Rol en el Sistema</label>
         <select id="user-rol" class="form-control" required>
           <option value="admin">👑 Administrador</option>
+          <option value="gerente">📊 Gerente (solo lectura)</option>
           <option value="caja">💵 Caja Registradora (POS)</option>
           <option value="cocina">🍳 Cocina (Monitor KDS)</option>
           <option value="mesero">🤵 Mesero / Atención Salón</option>
+          <option value="repartidor">🛵 Repartidor</option>
           <option value="cliente">📱 Cliente</option>
         </select>
       </div>
-      <div class="form-group"><label id="user-pwd-label">Contraseña</label><input type="password" id="user-password" class="form-control" placeholder="••••••••"></div>
+      <div class="form-group"><label id="user-pwd-label">Contraseña</label><input type="password" id="user-password" class="form-control" placeholder="Mínimo 12 caracteres" minlength="12" maxlength="72"></div>
       <button class="btn-gold" style="width: 100%; margin-top: 1rem;" onclick="submitUserForm()">💾 GUARDAR USUARIO</button>
     </div>
   </div>
@@ -697,7 +864,18 @@
       <div class="form-group"><label>Categoría</label><select id="prod-cat-select" class="form-control" required></select></div>
       <div class="form-group"><label>Descripción</label><input type="text" id="prod-desc" class="form-control"></div>
       <div class="form-group"><label>Precio ($ USD)</label><input type="number" step="0.01" id="prod-price" class="form-control" required></div>
+      <div class="form-group"><label>Preparación estimada (minutos)</label><input type="number" min="1" max="240" id="prod-tiempo-preparacion" class="form-control" value="15" required></div>
       <div class="form-group"><label>Ingredientes (separados por coma)</label><input type="text" id="prod-ingredientes" class="form-control" placeholder="Ej. Carne 150g, Queso Cheddar, Tomate, Cebolla"></div>
+      <div class="form-group">
+        <label>Extras disponibles (uno por línea: nombre | precio USD)</label>
+        <textarea id="prod-extras" class="form-control" rows="3" placeholder="Queso cheddar | 1.00"></textarea>
+      </div>
+      <div class="form-group">
+        <label>Galería de fotos y videos (uno por línea: tipo | URL HTTPS o /static/uploads/)</label>
+        <textarea id="prod-media" class="form-control" rows="3" placeholder="imagen | https://...&#10;video | https://..."></textarea>
+      </div>
+      <div class="form-group"><label>Alérgenos declarados (separados por coma)</label><input type="text" id="prod-alergenos" class="form-control" maxlength="500" placeholder="Ej. leche, gluten, huevo"></div>
+      <div class="form-group"><label><input type="checkbox" id="prod-disponible" checked> Disponible para pedidos</label></div>
       <div class="form-group">
         <label>Subir Foto Local al Servidor</label>
         <input type="file" accept="image/*" class="form-control" onchange="uploadLocalFile(event, 'prod-img')">
@@ -737,11 +915,11 @@
 
   <!-- Driver.js Library script -->
   <script src="https://cdn.jsdelivr.net/npm/driver.js@1.3.1/dist/driver.js.iife.js"></script>
-  <script src="/static/js/theme-toggle.js?v=2.0"></script>
+  <script src="/static/js/theme-toggle.js?v=2.1"></script>
   <script src="/static/js/auth.js?v=2.0"></script>
-  <script src="/static/js/appShell.js?v=2.0"></script>
+  <script src="/static/js/appShell.js?v=2.3"></script>
   <script src="/static/js/websocket.js?v=2.0"></script>
-  <script src="/static/js/admin-toon.js?v=2.0"></script>
+  <script src="/static/js/admin-toon.js?v=2.2"></script>
 
   <!-- Script para Autodisparo del Tour Interactivo Driver.js -->
   <script>

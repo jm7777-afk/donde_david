@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Gerencia | Donde David</title>
+  <link rel="stylesheet" href="/static/css/global.css?v=2.0">
+  <link rel="stylesheet" href="/static/css/toon-theme.css?v=2.4">
+  <link rel="stylesheet" href="/static/css/app-modules.css?v=2.0">
+  <style>
+    .manager-page { max-width: 1280px; margin: auto; padding: 1.25rem; }
+    .manager-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 1rem; }
+    .manager-card { background: var(--toon-card); border: 1px solid var(--toon-border); border-radius: var(--radius-md); padding: 1.1rem; }
+    .manager-value { color: var(--gold-accent); font-size: clamp(1.5rem, 4vw, 2rem); font-weight: 900; margin-top: .5rem; }
+    .manager-alert { padding: .75rem; border-bottom: 1px solid var(--toon-border); }
+    @media (max-width: 600px) { .manager-page { padding: .75rem; } }
+  </style>
+</head>
+<body class="toon-theme">
+  <nav id="app-sidebar"></nav>
+  <header id="app-header"></header>
+  <main class="manager-page">
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:.75rem;flex-wrap:wrap;margin-bottom:1rem">
+      <div>
+        <h1 style="margin:0">Panel de gerencia</h1>
+        <p style="color:var(--text-muted);margin:.35rem 0 0">Indicadores operativos de solo lectura. Actualización automática cada minuto.</p>
+      </div>
+      <button class="btn-gold" onclick="loadManagerDashboard()">Actualizar</button>
+    </div>
+    <p id="manager-error" role="alert" style="color:var(--neon-red)" hidden></p>
+    <p id="manager-updated" style="color:var(--text-muted)"></p>
+    <section class="manager-grid" aria-label="Indicadores del negocio">
+      <article class="manager-card"><strong>Ventas de hoy</strong><div id="manager-sales-today" class="manager-value">—</div></article>
+      <article class="manager-card"><strong>Ventas de ayer</strong><div id="manager-sales-yesterday" class="manager-value">—</div></article>
+      <article class="manager-card"><strong>Pedidos en cocina</strong><div id="manager-kitchen-orders" class="manager-value">—</div></article>
+      <article class="manager-card"><strong>Pedidos con más de 15 min</strong><div id="manager-overdue-orders" class="manager-value">—</div></article>
+      <article class="manager-card"><strong>Delivery activos</strong><div id="manager-deliveries" class="manager-value">—</div></article>
+      <article class="manager-card"><strong>Mesas ocupadas</strong><div id="manager-tables" class="manager-value">—</div></article>
+      <article class="manager-card"><strong>Insumos críticos</strong><div id="manager-critical-inputs" class="manager-value">—</div></article>
+      <article class="manager-card"><strong>Productos agotados/no disponibles</strong><div id="manager-unavailable-products" class="manager-value">—</div></article>
+      <article class="manager-card"><strong>Turno activo</strong><div id="manager-shift" class="manager-value">—</div></article>
+    </section>
+    <section class="manager-card" style="margin-top:1rem">
+      <h2 style="margin-top:0">Pedidos que requieren atención</h2>
+      <div id="manager-overdue-list" aria-live="polite"></div>
+    </section>
+  </main>
+  <script src="/static/js/auth.js?v=2.0"></script>
+  <script src="/static/js/theme-toggle.js?v=2.1"></script>
+  <script src="/static/js/appShell.js?v=2.3"></script>
+  <script src="/static/js/gerencia.js?v=1.0"></script>
+</body>
+</html>

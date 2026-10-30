@@ -1,5 +1,7 @@
 let kdsOrders = [];
 let timerInterval = null;
+let kdsModeFilter = "todos";
+let kdsSearchTerm = "";
 
 document.addEventListener("DOMContentLoaded", () => {
   // Check auth
@@ -28,7 +30,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
 async function loadKDSOrders() {
   try {
-    const res = await fetch("/api/v1/cocina/pedidos", {
+    const params = new URLSearchParams();
+    if (kdsModeFilter !== "todos") params.set("tipo", kdsModeFilter);
+    const res = await fetch(`/api/v1/cocina/pedidos?${params}`, {
       headers: Auth.getHeaders()
     });
     if (!res.ok) throw new Error("Error al cargar pedidos de cocina");
@@ -44,26 +48,33 @@ function renderKDSOrders() {
   const container = document.getElementById("kds-grid");
   if (!container) return;
 
+  const searchTerm = kdsSearchTerm.trim().toLocaleLowerCase();
+  const visibleOrders = kdsOrders.filter(order => {
+    if (!searchTerm) return true;
+    return String(order.id).includes(searchTerm)
+      || String(order.numero_mesa || "").toLocaleLowerCase().includes(searchTerm)
+      || order.detalles.some(detail => String(detail.producto?.nombre || "").toLocaleLowerCase().includes(searchTerm));
+  });
   const countEl = document.getElementById("kds-order-count");
   if (countEl) {
-    countEl.innerText = `Comandas activas: ${kdsOrders.length}`;
+    countEl.innerText = `Comandas visibles: ${visibleOrders.length} / ${kdsOrders.length}`;
   }
 
-  if (kdsOrders.length === 0) {
+  if (visibleOrders.length === 0) {
     container.innerHTML = `
       <div style="grid-column: 1/-1; text-align: center; padding: 4rem; color: var(--color-text-secondary);">
         <span style="font-size: 3.5rem;">✨</span>
-        <h2 style="margin-top: 1rem; color: #FFFFFF; font-weight: 800;">No hay comandas pendientes</h2>
-        <p style="color: var(--color-text-secondary);">¡Excelente trabajo! La cocina está al día.</p>
+        <h2 style="margin-top: 1rem; color: #FFFFFF; font-weight: 800;">${kdsOrders.length ? "No hay resultados para este filtro" : "No hay comandas pendientes"}</h2>
+        <p style="color: var(--color-text-secondary);">${kdsOrders.length ? "Prueba otra modalidad o búsqueda." : "¡Excelente trabajo! La cocina está al día."}</p>
       </div>
     `;
     return;
   }
 
   // Clasificación en 3 columnas KDS
-  const pendientes = kdsOrders.filter(o => o.estado === "PENDIENTE" || o.estado === "COBRADO");
-  const preparando = kdsOrders.filter(o => o.estado === "EN_PREPARACION");
-  const listos = kdsOrders.filter(o => o.estado === "LISTO");
+  const pendientes = visibleOrders.filter(o => o.estado === "PENDIENTE" || o.estado === "COBRADO");
+  const preparando = visibleOrders.filter(o => o.estado === "EN_PREPARACION");
+  const listos = visibleOrders.filter(o => o.estado === "LISTO");
 
   function buildColumnHtml(title, icon, ordersList, bgBadge, nextStatus, nextBtnLabel, btnClass) {
     let orderCardsHtml = "";
@@ -125,7 +136,7 @@ function renderKDSOrders() {
           <div class="kds-card status-${order.estado} ${urgentBorder}" style="margin-bottom: 1rem;">
             <div style="display: flex; justify-content: space-between; align-items: center;">
               <h3 style="font-size: 1.15rem; font-weight: 800; color: #FFFFFF;">#${order.id} - ${order.numero_mesa}</h3>
-              <span class="${timerClass}">⏱️ ${elapsedMinutes}m</span>
+              <span class="${timerClass}" aria-label="${isUrgent ? "Comanda urgente" : "Tiempo transcurrido"}">⏱️ ${isUrgent ? "URGENTE · " : ""}${elapsedMinutes} min</span>
             </div>
 
             <div style="background: rgba(0,0,0,0.3); padding: 0.75rem; border-radius: var(--radius-sm); margin: 0.5rem 0;">
@@ -138,12 +149,22 @@ function renderKDSOrders() {
               </button>
             ` : `
               <div style="text-align: center; font-size: 0.8rem; color: var(--color-success); font-weight: 800; padding: 0.4rem; background: rgba(34, 197, 94, 0.1); border-radius: 8px;">
-                ✅ DESPACHADO / ESPERANDO MESERO
+                ${order.tipo === "llevar" ? "📦 LISTO PARA RETIRAR · Validación en caja" : order.tipo === "delivery" ? "🛵 LISTO PARA DESPACHO" : "✅ LISTO · ESPERANDO MESERO"}
               </div>
             `}
           </div>
         `;
       });
+    }
+
+    function setKDSModeFilter(value) {
+      kdsModeFilter = value;
+      loadKDSOrders();
+    }
+
+    function setKDSSearch(value) {
+      kdsSearchTerm = value;
+      renderKDSOrders();
     }
 
     return `

@@ -23,10 +23,12 @@ function closeModal(id) {
 
 function detectSystemRole() {
   const path = window.location.pathname.toLowerCase();
+  if (path.includes("/gerencia/")) return "gerente";
   if (path.includes("/admin/")) return "admin";
   if (path.includes("/cocina/")) return "cocina";
   if (path.includes("/caja/")) return "caja";
   if (path.includes("/mesero/")) return "mesero";
+  if (path.includes("/delivery/")) return "delivery";
   if (path.includes("/cliente/")) return "cliente";
   return "landing";
 }
@@ -42,14 +44,20 @@ function renderUniversalHeader() {
     landing: `<span class="universal-role-badge">🔥 GOURMET TECH</span>`,
     cliente: `<span class="universal-role-badge cliente" id="header-table-badge">📱 QR MESA</span>`,
     admin: `<span class="universal-role-badge admin">👑 ADMINISTRADOR</span>`,
+    gerente: `<span class="universal-role-badge admin">📊 GERENCIA</span>`,
     cocina: `<span class="universal-role-badge cocina">🍳 COCINA KDS</span>`,
     caja: `<span class="universal-role-badge caja">💵 CAJA POS TOUCH</span>`,
-    mesero: `<span class="universal-role-badge mesero">🤵 MESERO / SALÓN</span>`
+    mesero: `<span class="universal-role-badge mesero">🤵 MESERO / SALÓN</span>`,
+    delivery: `<span class="universal-role-badge delivery">🛵 REPARTIDOR</span>`
   };
 
   // Botón Hamburguesa Móvil Universal para Todos los Roles
+  const menuToggle = role === "admin" ? "toggleAdminDrawer()" : "toggleUniversalMobileDrawer()";
+  const menuButtonClass = role === "admin"
+    ? "universal-mobile-hamburger-trigger admin-menu-toggle"
+    : "universal-mobile-hamburger-trigger";
   let leftAction = `
-    <button class="universal-mobile-hamburger-trigger" onclick="toggleUniversalMobileDrawer()" style="margin-right: 0.6rem;">
+    <button class="${menuButtonClass}" type="button" aria-label="Abrir menú" aria-controls="${role === "admin" ? "admin-sidebar-drawer" : "universal-mobile-drawer"}" aria-expanded="false" onclick="${menuToggle}" style="margin-right: 0.6rem;">
       <span style="font-size: 1.15rem;">☰</span> <strong style="font-size: 0.78rem;">MENÚ</strong>
     </button>
   `;
@@ -75,6 +83,7 @@ function renderUniversalHeader() {
   } else if (role === "landing") {
     rightActions = `
       <a href="/static/cliente/app.html?mesa=5" class="btn btn-cta" style="padding: 0.4rem 0.9rem; font-size: 0.8rem;">🔥 PEDIR AHORA</a>
+      <a href="/static/cliente/app.html?login=1" class="btn btn-outline" style="padding: 0.4rem 0.9rem; font-size: 0.8rem;">👤 CLIENTES</a>
       <a href="/login" class="btn btn-outline" style="padding: 0.4rem 0.9rem; font-size: 0.8rem;">🔐 EMPLEADOS</a>
     `;
   }
@@ -105,7 +114,7 @@ function renderUniversalHeader() {
           ${roleBadges[role] || roleBadges.landing}
           
           <div class="bcv-rate-badge" title="Tasa Oficial en Bolívares">
-            💵 BCV: <span id="hdr-bcv-rate">Bs. 36.50/$</span>
+            💵 BCV: <span id="hdr-bcv-rate">No disponible</span>
           </div>
 
           <div class="ws-pulse-indicator" title="Estado de Conexión en Tiempo Real Servidor">
@@ -117,12 +126,13 @@ function renderUniversalHeader() {
         <!-- Derecha: Acciones, Tema & Salir -->
         <div style="display: flex; align-items: center; gap: 0.6rem;">
           ${rightActions}
-          <button class="theme-toggle-btn" onclick="typeof toggleThemeMode === 'function' ? toggleThemeMode() : null" title="Cambiar Tema Oscuro / Claro" style="padding: 0.35rem 0.65rem; font-size: 0.78rem;">🌓 TEMA</button>
+          <button class="theme-toggle-btn" type="button" onclick="typeof toggleThemeMode === 'function' ? toggleThemeMode() : null" title="Cambiar a tema blanco" style="padding: 0.35rem 0.65rem; font-size: 0.78rem;"><span aria-hidden="true">☀️</span><span>BLANCO</span></button>
           ${logoutBtn}
         </div>
       </div>
     </header>
   `;
+  if (typeof syncThemeToggleButtons === "function") syncThemeToggleButtons();
 }
 
 async function updateHeaderBcvRate() {
@@ -131,16 +141,20 @@ async function updateHeaderBcvRate() {
     const res = await fetch("/api/v1/cliente/configuraciones-publicas");
     if (res.ok) {
       const cfg = await res.json();
-      if (cfg.tasa_cambio_bs) {
-        const rate = parseFloat(cfg.tasa_cambio_bs).toFixed(2);
-        if (el) el.innerText = `Bs. ${rate}/$`;
-        if (typeof tasaCambioBs !== "undefined") {
-          tasaCambioBs = parseFloat(cfg.tasa_cambio_bs);
-        }
+      const rateValue = Number(cfg.tasa_cambio_bs);
+      if (Number.isFinite(rateValue) && rateValue > 0) {
+        if (el) el.innerText = `Bs. ${rateValue.toFixed(2)}/$`;
+        if (typeof tasaCambioBs !== "undefined") tasaCambioBs = rateValue;
+      } else if (el) {
+        el.innerText = "No disponible";
+        if (typeof tasaCambioBs !== "undefined") tasaCambioBs = null;
       }
+    } else if (el) {
+      el.innerText = "No disponible";
     }
   } catch (err) {
     console.error(err);
+    if (el) el.innerText = "No disponible";
   }
 }
 
@@ -243,6 +257,7 @@ function createUniversalMobileDrawerDOM() {
   if (document.getElementById("universal-mobile-drawer")) return;
 
   const role = detectSystemRole();
+  if (role === "admin") return;
 
   let roleItems = "";
   if (role === "caja") {
@@ -275,21 +290,18 @@ function createUniversalMobileDrawerDOM() {
       <div class="drawer-nav-item" onclick="closeUniversalMobileDrawer(); if (typeof loadMeseroData==='function') loadMeseroData();">🍽️ Actualizar Mesas Salón</div>
       <div class="drawer-nav-item" onclick="closeUniversalMobileDrawer(); if (typeof openModal==='function') openModal('mesero-guide-modal');">❓ Guía de Meseros</div>
     `;
-  } else if (role === "admin") {
+  } else if (role === "delivery") {
     roleItems = `
-      <div class="drawer-nav-item" onclick="closeUniversalMobileDrawer(); if (typeof switchTab==='function') switchTab('dashboard');">📊 Dashboard y Ventas</div>
-      <div class="drawer-nav-item" onclick="closeUniversalMobileDrawer(); if (typeof switchTab==='function') switchTab('productos');">🍔 Productos y Menú</div>
-      <div class="drawer-nav-item" onclick="closeUniversalMobileDrawer(); if (typeof switchTab==='function') switchTab('mesas');">🍽️ Mesas y Códigos QR</div>
-      <div class="drawer-nav-item" onclick="closeUniversalMobileDrawer(); if (typeof switchTab==='function') switchTab('insumos');">🚚 Insumos e Inventario</div>
-      <div class="drawer-nav-item" onclick="closeUniversalMobileDrawer(); if (typeof switchTab==='function') switchTab('configuracion');">💵 Configuración Tasa BCV</div>
-      <div class="drawer-nav-item" onclick="closeUniversalMobileDrawer(); if (typeof switchTab==='function') switchTab('reportes');">📈 Reportes & Exportar</div>
-      <div class="drawer-nav-item" onclick="closeUniversalMobileDrawer(); if (typeof switchTab==='function') switchTab('usuarios');">👥 Usuarios y Personal</div>
-      <div class="drawer-nav-item" onclick="closeUniversalMobileDrawer(); if (typeof switchTab==='function') switchTab('promos');">🎁 Promociones</div>
-      <div class="drawer-nav-item" onclick="closeUniversalMobileDrawer(); if (typeof switchTab==='function') switchTab('resenas');">⭐ Reseñas de Clientes</div>
+      <div class="drawer-nav-item" onclick="closeUniversalMobileDrawer(); if (typeof loadCourierOrders==='function') loadCourierOrders();">🛵 Actualizar mis entregas</div>
+    `;
+  } else if (role === "gerente") {
+    roleItems = `
+      <div class="drawer-nav-item" onclick="closeUniversalMobileDrawer(); loadManagerDashboard();">📊 Actualizar indicadores</div>
     `;
   } else {
     roleItems = `
       <div class="drawer-nav-item" onclick="closeUniversalMobileDrawer(); window.location.href='/static/cliente/app.html?mesa=5';">🔥 Ver Menú y Pedir</div>
+      <div class="drawer-nav-item" onclick="closeUniversalMobileDrawer(); window.location.href='/static/cliente/app.html?login=1';">👤 Acceso de Clientes</div>
       <div class="drawer-nav-item" onclick="closeUniversalMobileDrawer(); window.location.href='/login';">🔐 Portal de Empleados</div>
     `;
   }
@@ -317,13 +329,14 @@ function createUniversalMobileDrawerDOM() {
     </div>
 
     <div style="border-top: 1px solid var(--toon-border); padding-top: 1rem; margin-top: 1rem;">
-      <div class="drawer-nav-item" onclick="closeUniversalMobileDrawer(); if (typeof toggleThemeMode==='function') toggleThemeMode();">🌓 Cambiar Tema Claro/Oscuro</div>
+      <button type="button" class="drawer-nav-item theme-mode-drawer-toggle" onclick="closeUniversalMobileDrawer(); if (typeof toggleThemeMode==='function') toggleThemeMode();"><span aria-hidden="true">☀️</span><span>BLANCO</span></button>
       <div class="drawer-nav-item" style="color: var(--neon-red); border-color: rgba(255,71,87,0.3);" onclick="closeUniversalMobileDrawer(); if (typeof Auth!=='undefined') Auth.logout(); else window.location.href='/login';">🚪 Cerrar Sesión / Salir</div>
     </div>
   `;
 
   document.body.appendChild(backdrop);
   document.body.appendChild(drawer);
+  if (typeof syncThemeToggleButtons === "function") syncThemeToggleButtons();
 }
 
 function toggleUniversalMobileDrawer() {

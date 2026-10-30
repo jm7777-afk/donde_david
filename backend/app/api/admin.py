@@ -1,13 +1,16 @@
 import os
-import shutil
 import uuid
+import logging
+import math
+import tempfile
 import json
-import asyncio
-from typing import List, Optional
-from fastapi import APIRouter, Depends, HTTPException, status, File, UploadFile
+from urllib.parse import quote, urlsplit
+from datetime import datetime, timedelta, timezone
+from typing import List, Optional, Literal
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, File, Query, UploadFile, Request
 from sqlalchemy.orm import Session
 from sqlalchemy import func
-from pydantic import BaseModel
+from pydantic import BaseModel, EmailStr, Field
 from backend.app.core.database import get_db
 from backend.app.core.security import require_roles, get_password_hash
 from backend.app.models.usuario import Usuario
@@ -24,25 +27,33 @@ from backend.app.models.puntos_log import Auditoria
 from backend.app.models.guia_item import GuiaItem
 from backend.app.models.resena import Resena
 from backend.app.models.publicacion import Publicacion
+from backend.app.models.movimiento_inventario import MovimientoInventario
+from backend.app.models.movimiento_caja import MovimientoCaja
+from backend.app.services.exchange_rate import get_bcv_rate
+from backend.app.websockets.manager import ws_manager
 
-router = APIRouter(prefix="/admin", tags=["Administración"])
+router = APIRouter(
+    prefix="/admin",
+    tags=["Administración"],
+    dependencies=[Depends(require_roles(["admin", "supervisor"]))]
+)
 
 class IngresoCreate(BaseModel):
-    concepto: str
-    monto: float
+    concepto: str = Field(min_length=1, max_length=150)
+    monto: float = Field(gt=0, allow_inf_nan=False)
 
 class MesaCreate(BaseModel):
-    numero_mesa: int
-    capacidad: Optional[int] = 4
+    numero_mesa: int = Field(gt=0)
+    capacidad: Optional[int] = Field(default=4, gt=0)
 
 class InsumoCreate(BaseModel):
-    nombre: str
-    stock_actual: float
-    stock_minimo: float
-    unidad_medida: str
+    nombre: str = Field(min_length=1, max_length=100)
+    stock_actual: float = Field(ge=0, allow_inf_nan=False)
+    stock_minimo: float = Field(ge=0, allow_inf_nan=False)
+    unidad_medida: str = Field(min_length=1, max_length=20)
 
 class InsumoIngreso(BaseModel):
-    cantidad: float
+    cantidad: float = Field(gt=0, allow_inf_nan=False)
 
 class CategoriaCreate(BaseModel):
     nombre: str
@@ -51,30 +62,40 @@ class CategoriaCreate(BaseModel):
     orden: Optional[int] = 0
 
 class ProductoCreate(BaseModel):
-    nombre: str
+    nombre: str = Field(min_length=1, max_length=150)
     descripcion: Optional[str] = None
-    precio: float
-    precio_promocion: Optional[float] = None
-    categoria_id: int
+    precio: float = Field(ge=0, allow_inf_nan=False)
+    precio_promocion: Optional[float] = Field(default=None, ge=0, allow_inf_nan=False)
+    categoria_id: int = Field(gt=0)
     imagen_url: Optional[str] = None
-    stock: Optional[int] = 50
+    stock: Optional[int] = Field(default=50, ge=0)
+    tiempo_preparacion: int = Field(default=15, ge=1, le=240)
     ingredientes_json: Optional[str] = None
+    extras_json: Optional[str] = None
+    media_json: Optional[str] = None
+    alergenos: Optional[str] = Field(default=None, max_length=500)
+    disponible: bool = True
 
 class ProductoUpdate(BaseModel):
     nombre: Optional[str] = None
     descripcion: Optional[str] = None
-    precio: Optional[float] = None
-    precio_promocion: Optional[float] = None
-    stock: Optional[int] = None
+    precio: Optional[float] = Field(default=None, ge=0, allow_inf_nan=False)
+    precio_promocion: Optional[float] = Field(default=None, ge=0, allow_inf_nan=False)
+    stock: Optional[int] = Field(default=None, ge=0)
+    tiempo_preparacion: Optional[int] = Field(default=None, ge=1, le=240)
     imagen_url: Optional[str] = None
     categoria_id: Optional[int] = None
     ingredientes_json: Optional[str] = None
+    extras_json: Optional[str] = None
+    media_json: Optional[str] = None
+    alergenos: Optional[str] = Field(default=None, max_length=500)
+    disponible: Optional[bool] = None
     activo: Optional[bool] = None
 
 class PromocionCreateAdmin(BaseModel):
-    titulo: str
+    titulo: str = Field(min_length=1, max_length=150)
     descripcion: Optional[str] = None
-    descuento_pct: Optional[float] = 0.0
+    descuento_pct: Optional[float] = Field(default=0.0, ge=0, le=100, allow_inf_nan=False)
     codigo_cupon: Optional[str] = None
     banner_url: Optional[str] = None
     activo: Optional[bool] = True
@@ -104,26 +125,134 @@ class ConfiguracionUpdate(BaseModel):
     clave: str
     valor: str
 
+
+def validate_product_json(value: Optional[str], field: str) -> None:
+    if value is None:
+        return
+    try:
+        parsed = json.loads(value)
+    except (TypeError, json.JSONDecodeError) as exc:
+        raise HTTPException(status_code=422, detail=f"{field} debe contener JSON válido.") from exc
+    if not isinstance(parsed, list) or len(parsed) > 30:
+        raise HTTPException(status_code=422, detail=f"{field} debe ser una lista de hasta 30 elementos.")
+    if field == "extras_json":
+        names = set()
+        for item in parsed:
+            if (
+                not isinstance(item, dict)
+                or not isinstance(item.get("nombre"), str)
+                or not item["nombre"].strip()
+                or len(item["nombre"]) > 100
+                or isinstance(item.get("precio"), bool)
+                or not isinstance(item.get("precio"), (int, float))
+                or not math.isfinite(item["precio"])
+                or item["precio"] < 0
+                or item["precio"] > 100000
+            ):
+                raise HTTPException(status_code=422, detail="Cada extra requiere nombre y precio válido.")
+            normalized_name = item["nombre"].strip().casefold()
+            if normalized_name in names:
+                raise HTTPException(status_code=422, detail="No se permiten extras duplicados en un producto.")
+            names.add(normalized_name)
+    elif field == "media_json":
+        for item in parsed:
+            if (
+                not isinstance(item, dict)
+                or item.get("tipo") not in {"imagen", "video"}
+                or not isinstance(item.get("url"), str)
+                or not item["url"].strip()
+                or len(item["url"]) > 500
+            ):
+                raise HTTPException(status_code=422, detail="Cada contenido multimedia requiere tipo y URL.")
+            media_url = item["url"].strip()
+            parsed_url = urlsplit(media_url)
+            if not (
+                (parsed_url.scheme == "https" and parsed_url.netloc and not parsed_url.username and not parsed_url.password)
+                or media_url.startswith("/static/uploads/")
+            ):
+                raise HTTPException(
+                    status_code=422,
+                    detail="La URL multimedia debe usar HTTPS o una ruta local /static/uploads/.",
+                )
+
+
+class ConfiguracionBatchUpdate(BaseModel):
+    configuraciones: List[ConfiguracionUpdate] = Field(min_length=1, max_length=30)
+
+
+def validate_configuracion(data: ConfiguracionUpdate) -> None:
+    numeric_limits = {
+        "impuesto_porcentaje": (0.0, 100.0),
+        "costo_delivery": (0.0, None),
+        "costo_empaque": (0.0, None),
+        "tiempo_delivery_estimado_minutos": (1.0, 240.0),
+        "tasa_cambio_bs": (0.000001, 999999.0),
+    }
+    if data.clave in numeric_limits:
+        try:
+            numeric_value = float(data.valor)
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=f"El valor de {data.clave} debe ser numérico.") from exc
+        minimum, maximum = numeric_limits[data.clave]
+        if not math.isfinite(numeric_value) or numeric_value < minimum or (maximum is not None and numeric_value > maximum):
+            raise HTTPException(status_code=422, detail=f"El valor de {data.clave} está fuera del rango permitido.")
+
+
+def set_configuracion(db: Session, data: ConfiguracionUpdate) -> None:
+    config = db.query(Configuracion).filter(Configuracion.clave == data.clave).first()
+    if config is None:
+        db.add(Configuracion(clave=data.clave, valor=data.valor))
+    else:
+        config.valor = data.valor
+
+
+@router.post("/tasa-bcv/actualizar")
+def actualizar_tasa_bcv(db: Session = Depends(get_db)):
+    rate = get_bcv_rate(db, force_refresh=True)
+    if rate["tasa_cambio_bs"] is None or rate["tasa_estado"] != "actualizada":
+        raise HTTPException(status_code=503, detail="No se pudo validar una tasa BCV reciente. Se conserva la última tasa guardada.")
+    return rate
+
 # ==================== UPLOAD ARCHIVOS LOCALES EN SERVIDOR ====================
 UPLOAD_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../static/uploads"))
 os.makedirs(UPLOAD_DIR, exist_ok=True)
+MAX_UPLOAD_BYTES = 5 * 1024 * 1024
+logger = logging.getLogger(__name__)
 
 @router.post("/upload")
 async def upload_file(file: UploadFile = File(...)):
+    extension = os.path.splitext(file.filename or "")[1].lower()
+    supported_types = {
+        ".jpg": ("image/jpeg", lambda content: content.startswith(b"\xff\xd8\xff")),
+        ".jpeg": ("image/jpeg", lambda content: content.startswith(b"\xff\xd8\xff")),
+        ".png": ("image/png", lambda content: content.startswith(b"\x89PNG\r\n\x1a\n")),
+        ".webp": ("image/webp", lambda content: content.startswith(b"RIFF") and content[8:12] == b"WEBP"),
+    }
+    file_type = supported_types.get(extension)
+    if not file_type or file.content_type != file_type[0]:
+        raise HTTPException(status_code=415, detail="Solo se permiten imágenes JPEG, PNG o WEBP válidas.")
+
+    content = await file.read(MAX_UPLOAD_BYTES + 1)
+    if len(content) > MAX_UPLOAD_BYTES:
+        raise HTTPException(status_code=413, detail="El archivo supera el límite de 5 MB.")
+    if not file_type[1](content):
+        raise HTTPException(status_code=415, detail="El contenido del archivo no coincide con una imagen válida.")
+
+    unique_filename = f"{uuid.uuid4().hex}{extension}"
+    file_path = os.path.join(UPLOAD_DIR, unique_filename)
+    temporary_path = None
     try:
-        ext = os.path.splitext(file.filename)[1].lower()
-        if not ext:
-            ext = ".jpg"
-        unique_filename = f"{uuid.uuid4().hex}{ext}"
-        file_path = os.path.join(UPLOAD_DIR, unique_filename)
-
-        with open(file_path, "wb") as buffer:
-            shutil.copyfileobj(file.file, buffer)
-
+        with tempfile.NamedTemporaryFile(dir=UPLOAD_DIR, delete=False) as temporary_file:
+            temporary_path = temporary_file.name
+            temporary_file.write(content)
+        os.replace(temporary_path, file_path)
         relative_url = f"/static/uploads/{unique_filename}"
         return {"url": relative_url, "filename": unique_filename}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error al guardar archivo en el servidor: {str(e)}")
+    except OSError as exc:
+        if temporary_path and os.path.exists(temporary_path):
+            os.remove(temporary_path)
+        logger.exception("Failed to store uploaded image.")
+        raise HTTPException(status_code=500, detail="No se pudo guardar el archivo.") from exc
 
 # ==================== DASHBOARD & METRICS ====================
 @router.get("/dashboard-stats")
@@ -131,21 +260,51 @@ def get_dashboard_stats(
     db: Session = Depends(get_db),
     user = Depends(require_roles(["admin", "supervisor"]))
 ):
+    now = datetime.now(timezone.utc)
+    today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    week_start = now - timedelta(days=7)
+    previous_week_start = week_start - timedelta(days=7)
+    month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    previous_month_start = (month_start - timedelta(days=1)).replace(day=1)
+    def sales_between(start: datetime, end: datetime) -> float:
+        total = db.query(func.sum(Pedido.total)).filter(
+            Pedido.estado_pago == "PAGADO",
+            func.coalesce(Pedido.fecha_pago, Pedido.fecha_creacion) >= start,
+            func.coalesce(Pedido.fecha_pago, Pedido.fecha_creacion) < end
+        ).scalar()
+        return float(total or 0.0)
+
+    def growth(current: float, previous: float) -> str:
+        if previous == 0:
+            return "N/D"
+        return f"{((current - previous) / previous) * 100:+.1f}%"
+
     total_usuarios = db.query(Usuario).filter(Usuario.activo == True).count()
     total_productos = db.query(Producto).filter(Producto.activo == True).count()
     total_pedidos = db.query(Pedido).count()
     
-    sum_total = db.query(func.sum(Pedido.total)).filter(Pedido.estado.in_(["COBRADO", "ENTREGADO"])).scalar()
+    sum_total = db.query(func.sum(Pedido.total)).filter(Pedido.estado_pago == "PAGADO").scalar()
     total_ventas = float(sum_total) if sum_total else 0.0
-    
-    # Métricas de Ventas por Período
-    sum_hoy = db.query(func.sum(Pedido.total)).filter(Pedido.estado.in_(["COBRADO", "ENTREGADO"])).scalar()
-    ventas_hoy = float(sum_hoy) if sum_hoy else 0.0
-    ventas_semana = round(total_ventas * 0.4, 2) if total_ventas > 0 else 0.0
-    ventas_mes = round(total_ventas, 2)
+    ventas_hoy = sales_between(today_start, now + timedelta(microseconds=1))
+    ventas_semana = sales_between(week_start, now + timedelta(microseconds=1))
+    ventas_semana_anterior = sales_between(previous_week_start, week_start)
+    ventas_mes = sales_between(month_start, now + timedelta(microseconds=1))
+    ventas_mes_anterior = sales_between(previous_month_start, month_start)
 
     caja_efectivo = db.query(Turno).filter(Turno.activo == True).first()
-    monto_caja = round(caja_efectivo.total_ventas + caja_efectivo.monto_apertura, 2) if caja_efectivo else 0.0
+    monto_caja = float(caja_efectivo.monto_apertura or 0) if caja_efectivo else 0.0
+    if caja_efectivo:
+        cash_sales = db.query(func.coalesce(func.sum(Pedido.total), 0)).filter(
+            Pedido.turno_id == caja_efectivo.id,
+            Pedido.estado_pago == "PAGADO",
+            func.lower(Pedido.metodo_pago).in_(["efectivo", "cash"]),
+        ).scalar()
+        cash_expenses = db.query(func.coalesce(func.sum(MovimientoCaja.monto_usd), 0)).filter(
+            MovimientoCaja.turno_id == caja_efectivo.id,
+            MovimientoCaja.tipo == "EGRESO",
+            func.lower(MovimientoCaja.metodo_pago) == "efectivo",
+        ).scalar()
+        monto_caja = round(monto_caja + float(cash_sales or 0) - float(cash_expenses or 0), 2)
 
     stock_critico_count = db.query(Insumo).filter(Insumo.estado == "CRITICO").count()
     pedidos_cocina_count = db.query(Pedido).filter(Pedido.estado.in_(["PENDIENTE", "EN_PREPARACION"])).count()
@@ -157,6 +316,8 @@ def get_dashboard_stats(
         func.sum(DetallePedido.cantidad).label("unidades"),
         func.sum(DetallePedido.subtotal).label("total_ingresos")
     ).join(DetallePedido, Producto.id == DetallePedido.producto_id)\
+     .join(Pedido, Pedido.id == DetallePedido.pedido_id)\
+     .filter(Pedido.estado_pago == "PAGADO")\
      .group_by(Producto.id, Producto.nombre)\
      .order_by(func.sum(DetallePedido.cantidad).desc())\
      .limit(5).all()
@@ -167,14 +328,15 @@ def get_dashboard_stats(
     ] if top_productos else []
 
     # Cálculo dinámico de desglose de canales reales
-    count_mesa = db.query(Pedido).filter(Pedido.tipo == "mesa").count()
-    count_delivery = db.query(Pedido).filter(Pedido.tipo == "delivery").count()
-    count_llevar = db.query(Pedido).filter(Pedido.tipo == "llevar").count()
-    total_canales = count_mesa + count_delivery + count_llevar or 1
+    count_mesa = db.query(Pedido).filter(Pedido.tipo == "mesa", Pedido.estado_pago == "PAGADO").count()
+    count_delivery = db.query(Pedido).filter(Pedido.tipo == "delivery", Pedido.estado_pago == "PAGADO").count()
+    count_llevar = db.query(Pedido).filter(Pedido.tipo == "llevar", Pedido.estado_pago == "PAGADO").count()
+    total_canales = count_mesa + count_delivery + count_llevar
 
-    pct_mesa = int(round((count_mesa / total_canales) * 100))
-    pct_delivery = int(round((count_delivery / total_canales) * 100))
-    pct_llevar = 100 - pct_mesa - pct_delivery
+    pct_mesa = int(round((count_mesa / total_canales) * 100)) if total_canales else 0
+    pct_delivery = int(round((count_delivery / total_canales) * 100)) if total_canales else 0
+    pct_llevar = 100 - pct_mesa - pct_delivery if total_canales else 0
+    total_mesas = db.query(Mesa).count()
 
     return {
         "total_usuarios": total_usuarios,
@@ -184,18 +346,20 @@ def get_dashboard_stats(
         "ventas_hoy": round(ventas_hoy, 2),
         "ventas_semana": round(ventas_semana, 2),
         "ventas_mes": round(ventas_mes, 2),
-        "pct_crecimiento_semanal": "+18.5%",
-        "pct_crecimiento_mensual": "+24.2%",
+        "pct_crecimiento_semanal": growth(ventas_semana, ventas_semana_anterior),
+        "pct_crecimiento_mensual": growth(ventas_mes, ventas_mes_anterior),
         "desglose_canales": {
-            "pct_mesa": pct_mesa if total_canales > 1 else 55,
-            "pct_delivery": pct_delivery if total_canales > 1 else 30,
-            "pct_llevar": pct_llevar if total_canales > 1 else 15
+            "pct_mesa": pct_mesa,
+            "pct_delivery": pct_delivery,
+            "pct_llevar": pct_llevar,
+            "total_pedidos_pagados": total_canales,
         },
         "monto_caja": monto_caja,
         "stock_critico": stock_critico_count,
         "pedidos_cocina": pedidos_cocina_count,
         "delivery_pedidos": delivery_count,
         "mesas_ocupadas": mesas_ocupadas_count,
+        "total_mesas": total_mesas,
         "top_productos": top_list
     }
 
@@ -369,23 +533,32 @@ def delete_mesa(numero_mesa: int, db: Session = Depends(get_db)):
     return {"mensaje": f"Mesa #{numero_mesa} eliminada exitosamente"}
 
 @router.get("/mesas/{numero_mesa}/qr")
-def get_qr_mesa(numero_mesa: int, db: Session = Depends(get_db)):
+def get_qr_mesa(numero_mesa: int, request: Request, db: Session = Depends(get_db)):
     mesa = db.query(Mesa).filter(Mesa.numero_mesa == numero_mesa).first()
     if not mesa:
         raise HTTPException(status_code=404, detail="Mesa no encontrada")
     
-    qr_svg_url = f"https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=http://localhost:8000/static/cliente/app.html?mesa={numero_mesa}"
+    url_acceso = f"{str(request.base_url).rstrip('/')}/static/cliente/app.html?mesa={numero_mesa}"
+    qr_svg_url = f"https://api.qrserver.com/v1/create-qr-code/?size=250x250&data={quote(url_acceso, safe='')}"
     return {
         "numero_mesa": numero_mesa,
         "codigo_qr": mesa.codigo_qr,
         "qr_image_url": qr_svg_url,
-        "url_acceso": f"http://localhost:8000/static/cliente/app.html?mesa={numero_mesa}"
+        "url_acceso": url_acceso
     }
 
 # ==================== INGRESOS E INSUMOS ====================
 @router.post("/ingresos")
-def registrar_ingreso(data: IngresoCreate, db: Session = Depends(get_db)):
-    audit = Auditoria(accion="Ingreso Extra", usuario="Admin", detalle=f"{data.concepto} - Q{data.monto:.2f}")
+def registrar_ingreso(
+    data: IngresoCreate,
+    db: Session = Depends(get_db),
+    current_user=Depends(require_roles(["admin", "supervisor"]))
+):
+    audit = Auditoria(
+        accion="Ingreso Extra",
+        usuario=current_user.nombre_usuario,
+        detalle=f"{data.concepto} - Q{data.monto:.2f}"
+    )
     db.add(audit)
     db.commit()
     return {"mensaje": "Ingreso registrado correctamente", "concepto": data.concepto, "monto": data.monto}
@@ -394,8 +567,41 @@ def registrar_ingreso(data: IngresoCreate, db: Session = Depends(get_db)):
 def get_insumos(db: Session = Depends(get_db)):
     return db.query(Insumo).all()
 
+@router.get("/inventario/movimientos")
+def get_inventario_movimientos(
+    limit: int = Query(default=100, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
+    db: Session = Depends(get_db)
+):
+    movimientos = db.query(MovimientoInventario).order_by(
+        MovimientoInventario.fecha.desc(),
+        MovimientoInventario.id.desc()
+    ).offset(offset).limit(limit).all()
+    return [
+        {
+            "id": movimiento.id,
+            "producto_id": movimiento.producto_id,
+            "producto": movimiento.producto.nombre if movimiento.producto else None,
+            "insumo_id": movimiento.insumo_id,
+            "insumo": movimiento.insumo.nombre if movimiento.insumo else None,
+            "tipo_movimiento": movimiento.tipo_movimiento,
+            "cantidad_cambio": float(movimiento.cantidad_cambio),
+            "cantidad_anterior": float(movimiento.cantidad_anterior),
+            "cantidad_nueva": float(movimiento.cantidad_nueva),
+            "motivo": movimiento.motivo,
+            "usuario_id": movimiento.usuario_id,
+            "usuario": movimiento.usuario.nombre_usuario if movimiento.usuario else None,
+            "fecha": movimiento.fecha
+        }
+        for movimiento in movimientos
+    ]
+
 @router.post("/insumos")
-def create_insumo(data: InsumoCreate, db: Session = Depends(get_db)):
+def create_insumo(
+    data: InsumoCreate,
+    db: Session = Depends(get_db),
+    current_user=Depends(require_roles(["admin", "supervisor"]))
+):
     estado = "CRITICO" if data.stock_actual <= data.stock_minimo else "NORMAL"
     nuevo = Insumo(
         nombre=data.nombre,
@@ -405,21 +611,52 @@ def create_insumo(data: InsumoCreate, db: Session = Depends(get_db)):
         estado=estado
     )
     db.add(nuevo)
+    db.flush()
+    if data.stock_actual > 0:
+        db.add(MovimientoInventario(
+            insumo_id=nuevo.id,
+            tipo_movimiento="ENTRADA",
+            cantidad_cambio=data.stock_actual,
+            cantidad_anterior=0,
+            cantidad_nueva=data.stock_actual,
+            motivo="Stock inicial",
+            usuario_id=current_user.id
+        ))
     db.commit()
     db.refresh(nuevo)
     return nuevo
 
 @router.post("/insumos/{insumo_id}/ingreso")
-def registrar_ingreso_insumo(insumo_id: int, data: InsumoIngreso, db: Session = Depends(get_db)):
-    insumo = db.query(Insumo).filter(Insumo.id == insumo_id).first()
+def registrar_ingreso_insumo(
+    insumo_id: int,
+    data: InsumoIngreso,
+    db: Session = Depends(get_db),
+    current_user=Depends(require_roles(["admin", "supervisor"]))
+):
+    insumo = db.query(Insumo).filter(Insumo.id == insumo_id).with_for_update().first()
     if not insumo:
         raise HTTPException(status_code=404, detail="Insumo no encontrado")
     
+    stock_before = insumo.stock_actual
     insumo.stock_actual += data.cantidad
     insumo.estado = "CRITICO" if insumo.stock_actual <= insumo.stock_minimo else "NORMAL"
-    
-    audit = Auditoria(accion="Ingreso Insumo", usuario="Admin", detalle=f"+{data.cantidad} {insumo.unidad_medida} de {insumo.nombre}")
-    db.add(audit)
+
+    db.add_all([
+        MovimientoInventario(
+            insumo_id=insumo.id,
+            tipo_movimiento="ENTRADA",
+            cantidad_cambio=data.cantidad,
+            cantidad_anterior=stock_before,
+            cantidad_nueva=insumo.stock_actual,
+            motivo="Ingreso de inventario",
+            usuario_id=current_user.id
+        ),
+        Auditoria(
+            accion="Ingreso Insumo",
+            usuario=current_user.nombre_usuario,
+            detalle=f"+{data.cantidad} {insumo.unidad_medida} de {insumo.nombre}"
+        )
+    ])
     db.commit()
     db.refresh(insumo)
     return insumo
@@ -430,7 +667,11 @@ def list_categorias_admin(db: Session = Depends(get_db)):
     return db.query(Categoria).order_by(Categoria.orden.asc()).all()
 
 @router.post("/categorias")
-def create_categoria_admin(data: CategoriaCreate, db: Session = Depends(get_db)):
+def create_categoria_admin(
+    data: CategoriaCreate,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+):
     nueva = Categoria(
         nombre=data.nombre,
         descripcion=data.descripcion,
@@ -440,9 +681,7 @@ def create_categoria_admin(data: CategoriaCreate, db: Session = Depends(get_db))
     db.add(nueva)
     db.commit()
     db.refresh(nueva)
-    try:
-        asyncio.create_task(ws_manager.broadcast_event("PRODUCTOS_ACTUALIZADOS", {}))
-    except Exception: pass
+    background_tasks.add_task(ws_manager.broadcast, "PRODUCTOS_ACTUALIZADOS", {})
     return nueva
 
 @router.delete("/categorias/{categoria_id}")
@@ -460,6 +699,8 @@ def list_productos_admin(db: Session = Depends(get_db)):
 
 @router.post("/productos")
 async def create_producto_admin(data: ProductoCreate, db: Session = Depends(get_db)):
+    validate_product_json(data.extras_json, "extras_json")
+    validate_product_json(data.media_json, "media_json")
     nuevo = Producto(
         nombre=data.nombre,
         descripcion=data.descripcion,
@@ -467,38 +708,63 @@ async def create_producto_admin(data: ProductoCreate, db: Session = Depends(get_
         precio_promocion=data.precio_promocion,
         categoria_id=data.categoria_id,
         imagen_url=data.imagen_url or "https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=500",
-        stock=data.stock or 50,
-        ingredientes_json=data.ingredientes_json
+        stock=data.stock if data.stock is not None else 50,
+        tiempo_preparacion=data.tiempo_preparacion,
+        ingredientes_json=data.ingredientes_json,
+        extras_json=data.extras_json,
+        media_json=data.media_json,
+        alergenos=data.alergenos,
+        disponible=data.disponible,
     )
     db.add(nuevo)
     db.commit()
     db.refresh(nuevo)
-    try:
-        await ws_manager.broadcast_event("PRODUCTOS_ACTUALIZADOS", {"producto_id": nuevo.id, "nombre": nuevo.nombre})
-    except Exception: pass
+    await ws_manager.broadcast("PRODUCTOS_ACTUALIZADOS", {"producto_id": nuevo.id, "nombre": nuevo.nombre})
     return nuevo
 
 @router.put("/productos/{producto_id}")
-async def update_producto_admin(producto_id: int, data: ProductoUpdate, db: Session = Depends(get_db)):
-    p = db.query(Producto).filter(Producto.id == producto_id).first()
+async def update_producto_admin(
+    producto_id: int,
+    data: ProductoUpdate,
+    db: Session = Depends(get_db),
+    current_user=Depends(require_roles(["admin", "supervisor"]))
+):
+    p = db.query(Producto).filter(Producto.id == producto_id).with_for_update().first()
     if not p:
         raise HTTPException(status_code=404, detail="Producto no encontrado")
+    validate_product_json(data.extras_json, "extras_json")
+    validate_product_json(data.media_json, "media_json")
     
     if data.nombre is not None: p.nombre = data.nombre
     if data.descripcion is not None: p.descripcion = data.descripcion
     if data.precio is not None: p.precio = data.precio
-    if data.precio_promocion is not None: p.precio_promocion = data.precio_promocion
-    if data.stock is not None: p.stock = data.stock
+    if "precio_promocion" in data.model_fields_set: p.precio_promocion = data.precio_promocion
+    if data.stock is not None:
+        stock_before = int(p.stock or 0)
+        p.stock = data.stock
+        if data.stock != stock_before:
+            db.add(MovimientoInventario(
+                producto_id=p.id,
+                tipo_movimiento="AJUSTE",
+                cantidad_cambio=data.stock - stock_before,
+                cantidad_anterior=stock_before,
+                cantidad_nueva=data.stock,
+                motivo="Ajuste manual de stock",
+                usuario_id=current_user.id
+            ))
+    if data.tiempo_preparacion is not None: p.tiempo_preparacion = data.tiempo_preparacion
     if data.imagen_url is not None: p.imagen_url = data.imagen_url
     if data.categoria_id is not None: p.categoria_id = data.categoria_id
     if data.ingredientes_json is not None: p.ingredientes_json = data.ingredientes_json
+    if data.extras_json is not None: p.extras_json = data.extras_json
+    if data.media_json is not None: p.media_json = data.media_json
+    if "alergenos" in data.model_fields_set: p.alergenos = data.alergenos
+    if data.disponible is not None: p.disponible = data.disponible
     if data.activo is not None: p.activo = data.activo
 
     db.commit()
     db.refresh(p)
-    try:
-        await ws_manager.broadcast_event("PRODUCTOS_ACTUALIZADOS", {"producto_id": p.id, "nombre": p.nombre})
-    except Exception: pass
+    await ws_manager.broadcast("PRODUCTOS_ACTUALIZADOS", {"producto_id": p.id, "nombre": p.nombre})
     return p
 
 @router.delete("/productos/{producto_id}")
@@ -508,26 +774,50 @@ async def delete_producto_admin(producto_id: int, db: Session = Depends(get_db))
         raise HTTPException(status_code=404, detail="Producto no encontrado")
     db.delete(prod)
     db.commit()
-    try:
-        await ws_manager.broadcast_event("PRODUCTOS_ACTUALIZADOS", {"producto_id": producto_id})
-    except Exception: pass
+    await ws_manager.broadcast("PRODUCTOS_ACTUALIZADOS", {"producto_id": producto_id})
     return {"mensaje": "Producto eliminado"}
 
 # ==================== CONFIGURACIONES GLOBALES (HISTORIA & REDES) ====================
 @router.post("/configuraciones")
 async def update_configuracion_admin(data: ConfiguracionUpdate, db: Session = Depends(get_db)):
-    c = db.query(Configuracion).filter(Configuracion.clave == data.clave).first()
-    if not c:
-        c = Configuracion(clave=data.clave, valor=data.valor)
-        db.add(c)
-    else:
-        c.valor = data.valor
+    validate_configuracion(data)
+    set_configuracion(db, data)
+    if data.clave == "tasa_cambio_bs":
+        source = db.query(Configuracion).filter(Configuracion.clave == "tasa_fuente").first()
+        updated_at = db.query(Configuracion).filter(Configuracion.clave == "tasa_actualizada_at").first()
+        timestamp = datetime.now(timezone.utc).isoformat()
+        if source is None:
+            db.add(Configuracion(clave="tasa_fuente", valor="Manual (administrador)"))
+        else:
+            source.valor = "Manual (administrador)"
+        if updated_at is None:
+            db.add(Configuracion(clave="tasa_actualizada_at", valor=timestamp))
+        else:
+            updated_at.valor = timestamp
     db.commit()
-    try:
-        from backend.app.websockets.connection_manager import ws_manager
-        await ws_manager.broadcast_event("CONFIGURACION_ACTUALIZADA", {"clave": data.clave, "valor": data.valor})
-    except Exception: pass
+    await ws_manager.broadcast("CONFIGURACION_ACTUALIZADA", {"clave": data.clave, "valor": data.valor})
     return {"clave": data.clave, "valor": data.valor}
+
+
+@router.post("/configuraciones/lote")
+async def update_configuraciones_batch(data: ConfiguracionBatchUpdate, db: Session = Depends(get_db)):
+    keys = [item.clave for item in data.configuraciones]
+    if len(keys) != len(set(keys)):
+        raise HTTPException(status_code=422, detail="No se permiten claves duplicadas en el mismo guardado.")
+    for item in data.configuraciones:
+        validate_configuracion(item)
+    for item in data.configuraciones:
+        set_configuracion(db, item)
+    rate = next((item for item in data.configuraciones if item.clave == "tasa_cambio_bs"), None)
+    if rate:
+        set_configuracion(db, ConfiguracionUpdate(clave="tasa_fuente", valor="Manual (administrador)"))
+        set_configuracion(db, ConfiguracionUpdate(
+            clave="tasa_actualizada_at",
+            valor=datetime.now(timezone.utc).isoformat(),
+        ))
+    db.commit()
+    await ws_manager.broadcast("CONFIGURACION_ACTUALIZADA", {"claves": keys})
+    return {"guardadas": keys}
 
 # ==================== AUDITORIA & LOGS ====================
 @router.get("/auditoria")
@@ -538,22 +828,22 @@ def get_auditoria(
     return db.query(Auditoria).order_by(Auditoria.fecha.desc()).all()
 
 class UsuarioCreateAdmin(BaseModel):
-    nombre: str
-    apellido: str
-    email: str
+    nombre: str = Field(min_length=1, max_length=100)
+    apellido: str = Field(min_length=1, max_length=100)
+    email: EmailStr
     telefono: Optional[str] = None
-    nombre_usuario: str
-    password: str
-    rol: str = "mesero"
+    nombre_usuario: str = Field(min_length=3, max_length=50)
+    password: str = Field(min_length=12, max_length=72)
+    rol: Literal["admin", "supervisor", "gerente", "caja", "cocina", "cliente", "mesero", "repartidor"] = "mesero"
     activo: Optional[bool] = True
 
 class UsuarioUpdateAdmin(BaseModel):
     nombre: Optional[str] = None
     apellido: Optional[str] = None
-    email: Optional[str] = None
+    email: Optional[EmailStr] = None
     telefono: Optional[str] = None
-    rol: Optional[str] = None
-    password: Optional[str] = None
+    rol: Optional[Literal["admin", "supervisor", "gerente", "caja", "cocina", "cliente", "mesero", "repartidor"]] = None
+    password: Optional[str] = Field(default=None, min_length=12, max_length=72)
     activo: Optional[bool] = None
 
 @router.get("/usuarios")
@@ -569,6 +859,8 @@ def create_usuario_admin(
     db: Session = Depends(get_db),
     user = Depends(require_roles(["admin", "supervisor"]))
 ):
+    if data.rol == "admin" and user.rol != "admin":
+        raise HTTPException(status_code=403, detail="Solo un administrador puede crear otra cuenta admin.")
     if db.query(Usuario).filter(Usuario.nombre_usuario == data.nombre_usuario).first():
         raise HTTPException(status_code=400, detail=f"El nombre de usuario '{data.nombre_usuario}' ya existe.")
     if db.query(Usuario).filter(Usuario.email == data.email).first():
@@ -599,6 +891,8 @@ def update_usuario_admin(
     u = db.query(Usuario).filter(Usuario.id == usuario_id).first()
     if not u:
         raise HTTPException(status_code=404, detail="Usuario no encontrado")
+    if data.rol == "admin" and user.rol != "admin":
+        raise HTTPException(status_code=403, detail="Solo un administrador puede asignar el rol admin.")
     
     if data.nombre is not None: u.nombre = data.nombre
     if data.apellido is not None: u.apellido = data.apellido

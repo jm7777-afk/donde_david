@@ -1,7 +1,9 @@
 from datetime import datetime, timedelta, timezone
-from typing import Optional, Union, Any
+import logging
+from typing import Optional, Any
 from jose import jwt, JWTError
 from passlib.context import CryptContext
+from passlib.exc import UnknownHashError
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
@@ -11,29 +13,19 @@ from backend.app.core.database import get_db
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl=f"{settings.API_V1_STR}/auth/login", auto_error=False)
+logger = logging.getLogger(__name__)
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     if not hashed_password:
         return False
     try:
         return pwd_context.verify(plain_password, hashed_password)
-    except Exception:
-        try:
-            import bcrypt as pybcrypt
-            return pybcrypt.checkpw(plain_password.encode('utf-8'), hashed_password.encode('utf-8'))
-        except Exception:
-            return plain_password == hashed_password
+    except (UnknownHashError, ValueError):
+        logger.exception("Stored password hash is invalid.")
+        return False
 
 def get_password_hash(password: str) -> str:
-    try:
-        return pwd_context.hash(password)
-    except Exception:
-        try:
-            import bcrypt as pybcrypt
-            salt = pybcrypt.gensalt()
-            return pybcrypt.hashpw(password.encode('utf-8'), salt).decode('utf-8')
-        except Exception:
-            return password
+    return pwd_context.hash(password)
 
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
     to_encode = data.copy()
@@ -53,8 +45,8 @@ def get_current_user_optional(
         return None
     try:
         payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
-        username: str = payload.get("sub")
-        if username is None:
+        username = payload.get("sub")
+        if not isinstance(username, str) or not username:
             return None
     except JWTError:
         return None
@@ -76,8 +68,8 @@ def get_current_user(
         raise credentials_exception
     try:
         payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
-        username: str = payload.get("sub")
-        if username is None:
+        username = payload.get("sub")
+        if not isinstance(username, str) or not username:
             raise credentials_exception
     except JWTError:
         raise credentials_exception

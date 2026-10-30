@@ -1,7 +1,8 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from sqlalchemy.orm import Session
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, Field
 from backend.app.core.database import get_db
+from backend.app.core.rate_limit import limiter
 from backend.app.core.security import verify_password, create_access_token, get_current_user, get_password_hash
 from backend.app.models.usuario import Usuario
 from backend.app.schemas.schemas import LoginRequest, Token, UsuarioOut
@@ -9,18 +10,19 @@ from backend.app.schemas.schemas import LoginRequest, Token, UsuarioOut
 router = APIRouter(prefix="/auth", tags=["Autenticación"])
 
 class RegisterRequest(BaseModel):
-    nombre: str
-    apellido: str
-    email: str
-    telefono: str
-    nombre_usuario: str
-    password: str
+    nombre: str = Field(min_length=1, max_length=100)
+    apellido: str = Field(min_length=1, max_length=100)
+    email: EmailStr
+    telefono: str = Field(min_length=1, max_length=20)
+    nombre_usuario: str = Field(min_length=3, max_length=50)
+    password: str = Field(min_length=12, max_length=72)
 
 class RecoverPasswordRequest(BaseModel):
-    email_o_telefono: str
+    email_o_telefono: str = Field(min_length=3, max_length=150)
 
 @router.post("/login", response_model=Token)
-def login(login_data: LoginRequest, db: Session = Depends(get_db)):
+@limiter.limit("10/minute")
+def login(request: Request, response: Response, login_data: LoginRequest, db: Session = Depends(get_db)):
     user = db.query(Usuario).filter(
         (Usuario.nombre_usuario == login_data.nombre_usuario) | (Usuario.email == login_data.nombre_usuario),
         Usuario.activo == True
@@ -52,7 +54,8 @@ def login(login_data: LoginRequest, db: Session = Depends(get_db)):
     }
 
 @router.post("/register")
-def register(data: RegisterRequest, db: Session = Depends(get_db)):
+@limiter.limit("5/hour")
+def register(request: Request, response: Response, data: RegisterRequest, db: Session = Depends(get_db)):
     if db.query(Usuario).filter(Usuario.nombre_usuario == data.nombre_usuario).first():
         raise HTTPException(status_code=400, detail="El nombre de usuario ya está registrado.")
     if db.query(Usuario).filter(Usuario.email == data.email).first():
@@ -88,8 +91,12 @@ def register(data: RegisterRequest, db: Session = Depends(get_db)):
     }
 
 @router.post("/recuperar-password")
-def recuperar_password(data: RecoverPasswordRequest):
-    return {"mensaje": f"Se han enviado las instrucciones de recuperación a: {data.email_o_telefono}"}
+@limiter.limit("3/hour")
+def recuperar_password(request: Request, response: Response, data: RecoverPasswordRequest):
+    raise HTTPException(
+        status_code=status.HTTP_501_NOT_IMPLEMENTED,
+        detail="La recuperación de contraseña no está habilitada; contacte al administrador."
+    )
 
 @router.get("/me", response_model=UsuarioOut)
 def read_current_user(current_user: Usuario = Depends(get_current_user)):

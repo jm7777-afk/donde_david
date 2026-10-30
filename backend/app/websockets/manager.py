@@ -9,8 +9,9 @@ class ConnectionManager:
     def __init__(self):
         self.active_connections: List[WebSocket] = []
 
-    async def connect(self, websocket: WebSocket):
-        await websocket.accept()
+    async def connect(self, websocket: WebSocket, *, accepted: bool = False):
+        if not accepted:
+            await websocket.accept()
         self.active_connections.append(websocket)
         logger.info(f"WebSocket connected. Active connections: {len(self.active_connections)}")
 

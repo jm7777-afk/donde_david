@@ -10,7 +10,6 @@
 
 function toggleThemeMode() {
   const isLight = document.body.classList.contains("light-theme");
-  const msg = !isLight ? "☀️ Modo Claro Activado" : "🌙 Modo Oscuro Activado";
   if (isLight) {
     document.body.classList.remove("light-theme");
     localStorage.setItem("app_theme", "dark");
@@ -18,9 +17,27 @@ function toggleThemeMode() {
     document.body.classList.add("light-theme");
     localStorage.setItem("app_theme", "light");
   }
+  const activeTheme = isLight ? "oscuro" : "blanco";
+  const msg = `Tema ${activeTheme} activado`;
+  if (typeof syncThemeToggleButtons === "function") syncThemeToggleButtons();
   if (typeof showToast === "function") {
     showToast(msg, "info");
   } else {
     console.log(msg);
   }
 }
+
+function syncThemeToggleButtons() {
+  const isLight = document.body.classList.contains("light-theme");
+  const targetTheme = isLight ? "oscuro" : "blanco";
+  const targetLabel = isLight ? "OSCURO" : "BLANCO";
+  const icon = isLight ? "🌙" : "☀️";
+
+  document.querySelectorAll(".theme-toggle-btn, .theme-mode-drawer-toggle").forEach(button => {
+    button.setAttribute("aria-label", `Cambiar a tema ${targetTheme}`);
+    button.setAttribute("title", `Cambiar a tema ${targetTheme}`);
+    button.innerHTML = `<span aria-hidden="true">${icon}</span><span>${targetLabel}</span>`;
+  });
+}
+
+document.addEventListener("DOMContentLoaded", syncThemeToggleButtons);

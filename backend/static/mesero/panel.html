@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>DONDE DAVID - Panel de Meseros & Atención al Salón</title>
   <link rel="stylesheet" href="/static/css/global.css?v=2.0">
-  <link rel="stylesheet" href="/static/css/toon-theme.css?v=2.0">
+  <link rel="stylesheet" href="/static/css/toon-theme.css?v=2.4">
   <link rel="stylesheet" href="/static/css/index.css?v=2.0">
   <style>
     .mesero-layout {
@@ -52,6 +52,11 @@
 
     <div class="mesas-grid-mesero" id="mesero-mesas-grid"></div>
 
+    <section aria-labelledby="table-requests-title" style="margin-bottom:1.75rem;background:var(--toon-card);border:1px solid var(--toon-border);border-radius:14px;padding:1rem">
+      <h2 id="table-requests-title" style="font-size:1.2rem;color:var(--color-yellow);margin:.1rem 0 1rem">🔔 Solicitudes de las mesas</h2>
+      <div id="mesero-solicitudes-list" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,280px),1fr));gap:.75rem" aria-live="polite"></div>
+    </section>
+
     <!-- Pedidos Activos de Meseros -->
     <h2 style="font-size: 1.4rem; font-weight: 900; font-family: var(--font-display); color: #FFFFFF; margin-bottom: 1.25rem;">📋 PEDIDOS ACTIVOS PARA SERVIR EN MESA</h2>
     <div id="mesero-pedidos-list" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 1.25rem;"></div>
@@ -91,9 +96,9 @@
     </div>
   </div>
 
-  <script src="/static/js/theme-toggle.js?v=2.0"></script>
+  <script src="/static/js/theme-toggle.js?v=2.1"></script>
   <script src="/static/js/auth.js?v=2.0"></script>
-  <script src="/static/js/appShell.js?v=2.0"></script>
+  <script src="/static/js/appShell.js?v=2.3"></script>
   <script src="/static/js/websocket.js?v=2.0"></script>
   <script src="/static/js/mesero.js?v=2.0"></script>
 </body>

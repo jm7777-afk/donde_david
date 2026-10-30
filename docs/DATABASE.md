@@ -14,6 +14,10 @@ erDiagram
     PRODUCTO ||--o{ DETALLE_PEDIDO : "incluye"
     PEDIDO ||--|{ DETALLE_PEDIDO : "se compone de"
     TURNO ||--o{ PEDIDO : "agrupa"
+    TURNO ||--o{ MOVIMIENTO_CAJA : "registra"
+    TURNO ||--o{ ARQUEO_TURNO : "concilia"
+    MESA ||--o{ SOLICITUD_MESA : "solicita"
+    PEDIDO ||--o{ SOLICITUD_MESA : "contextualiza"
     PEDIDO ||--o| FACTURA : "genera"
 
     USUARIO {
@@ -40,6 +44,34 @@ erDiagram
         string estado
         decimal total_usd
         decimal total_bs
+        string codigo_retiro
+        string estado_retiro
+    }
+    SOLICITUD_MESA {
+        int id PK
+        int mesa_id FK
+        int pedido_id FK
+        string tipo
+        string estado
+        datetime fecha_creacion
+    }
+    MOVIMIENTO_CAJA {
+        int id PK
+        int turno_id FK
+        int usuario_id FK
+        string tipo
+        string metodo_pago
+        decimal monto_usd
+        string concepto
+        datetime fecha
+    }
+    ARQUEO_TURNO {
+        int id PK
+        int turno_id FK
+        string metodo_pago
+        decimal esperado_usd
+        decimal contado_usd
+        decimal diferencia_usd
     }
     FACTURA {
         int id PK
@@ -48,6 +80,12 @@ erDiagram
         decimal total_bs
     }
 ```
+
+## Migraciones y operación inicial
+
+Las migraciones Alembic son la fuente de verdad del esquema; la última incorpora códigos de retiro, solicitudes de mesa, egresos y arqueos por método de pago. En desarrollo, las mesas nuevas se inicializan libres y no se crean turnos ni ventas de demostración. La base queda sin pedidos personales, por lo que las estadísticas, los canales y las recomendaciones empiezan sin datos hasta registrar actividad real.
+
+El reinicio de una base local es destructivo. Antes de recrearla, copia los archivos SQLite existentes a una carpeta de respaldo fuera del repositorio y confirma que la aplicación esté detenida. No ejecutes un reinicio de bases en producción. No se integra una pasarela de pago de terceros en esta versión.
 
 ---
 
@@ -62,7 +100,7 @@ CREATE TABLE usuarios (
     email VARCHAR(255) UNIQUE NOT NULL,
     nombre_usuario VARCHAR(50) UNIQUE NOT NULL,
     contraseña_hash VARCHAR(255) NOT NULL,
-    rol ENUM('admin','supervisor','caja','cocina','cliente') NOT NULL,
+    rol ENUM('admin','supervisor','gerente','caja','cocina','cliente','mesero','repartidor') NOT NULL,
     activo BOOLEAN DEFAULT TRUE,
     fecha_creacion DATETIME DEFAULT CURRENT_TIMESTAMP
 );
@@ -88,6 +126,8 @@ CREATE TABLE productos (
     stock_minimo INT DEFAULT 5,
     imagen_url VARCHAR(255),
     tiempo_preparacion INT DEFAULT 15,
+    alergenos VARCHAR(500),
+    disponible BOOLEAN NOT NULL DEFAULT TRUE,
     activo BOOLEAN DEFAULT TRUE,
     categoria_id INT NOT NULL,
     FOREIGN KEY (categoria_id) REFERENCES categorias(id)
@@ -126,6 +166,7 @@ CREATE TABLE pedidos (
     total_bs DECIMAL(10,2) NOT NULL DEFAULT 0.00,
     tasa_cambio_aplicada DECIMAL(10,2),
     fecha_creacion DATETIME DEFAULT CURRENT_TIMESTAMP,
+    fecha_pago DATETIME NULL,
     usuario_id INT NOT NULL,
     turno_id INT,
     FOREIGN KEY (usuario_id) REFERENCES usuarios(id),

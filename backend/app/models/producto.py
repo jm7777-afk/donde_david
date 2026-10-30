@@ -17,6 +17,10 @@ class Producto(Base):
     tiempo_preparacion = Column(Integer, default=15)
     personalizable = Column(Boolean, default=True)
     ingredientes_json = Column(Text, nullable=True) # JSON list of customizable ingredients & extras
+    extras_json = Column(Text, nullable=True)
+    media_json = Column(Text, nullable=True)
+    alergenos = Column(String(500), nullable=True)
+    disponible = Column(Boolean, nullable=False, default=True)
     activo = Column(Boolean, default=True)
     categoria_id = Column(Integer, ForeignKey("categorias.id"), nullable=False)
 

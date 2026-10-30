@@ -1,14 +1,22 @@
 let meseroMesas = [];
 let meseroPedidos = [];
+let meseroSolicitudes = [];
 let selectedPedidoForSwap = null;
-let tasaCambioBs = 36.50;
+let tasaCambioBs = null;
+
+function escapeMeseroHtml(value) {
+  return String(value ?? "").replace(/[&<>"']/g, character => ({
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
+  })[character]);
+}
 
 document.addEventListener("DOMContentLoaded", () => {
   loadConfigPublica();
   loadMeseroData();
 
   new WSClient((event, data) => {
-    if (event === "NUEVO_PEDIDO" || event === "CAMBIO_ESTADO_PEDIDO" || event === "PAGO_CONFIRMADO") {
+    if (event === "NUEVO_PEDIDO" || event === "CAMBIO_ESTADO_PEDIDO" || event === "PAGO_CONFIRMADO"
+        || event === "SOLICITUD_MESA" || event === "SOLICITUD_MESA_ACTUALIZADA") {
       loadMeseroData();
     }
   });
@@ -17,32 +25,34 @@ document.addEventListener("DOMContentLoaded", () => {
 async function loadConfigPublica() {
   try {
     const res = await fetch("/api/v1/cliente/configuraciones-publicas");
-    if (res.ok) {
-      const cfg = await res.json();
-      if (cfg.tasa_cambio_bs) tasaCambioBs = parseFloat(cfg.tasa_cambio_bs);
-    }
-  } catch(e){}
+    if (!res.ok) throw new Error("No se pudo cargar la tasa de cambio.");
+    const cfg = await res.json();
+    const rate = Number(cfg.tasa_cambio_bs);
+    tasaCambioBs = Number.isFinite(rate) && rate > 0 ? rate : null;
+  } catch(error) {
+    console.error("No se pudo cargar la tasa de cambio:", error);
+  }
 }
 
 function formatPriceDual(usdAmount) {
+  if (!Number.isFinite(tasaCambioBs) || tasaCambioBs <= 0) return `$${usdAmount.toFixed(2)}`;
   const bsAmount = (usdAmount * tasaCambioBs).toFixed(2);
   return `$${usdAmount.toFixed(2)} (Bs. ${bsAmount})`;
 }
 
 async function loadMeseroData() {
-  await loadMesas();
-  await loadPedidosActivos();
+  await Promise.all([loadMesas(), loadPedidosActivos(), loadSolicitudesMesa()]);
 }
 
 async function loadMesas() {
   try {
     const res = await fetch("/api/v1/mesero/mesas", { headers: Auth.getHeaders() });
-    if (res.ok) {
-      meseroMesas = await res.json();
-      renderMesas();
-    }
+    if (!res.ok) throw new Error("No se pudieron cargar las mesas.");
+    meseroMesas = await res.json();
+    renderMesas();
   } catch (err) {
     console.error("Error al cargar mesas:", err);
+    showToast(err.message, "danger");
   }
 }
 
@@ -57,21 +67,74 @@ function renderMesas() {
         <span class="badge" style="background: ${m.estado === 'OCUPADA' ? 'var(--neon-red)' : 'var(--neon-green)'}; color: #fff; font-size: 0.7rem; padding: 0.2rem 0.5rem; border-radius: 6px;">
           ${m.estado}
         </span>
+        ${m.estado === 'OCUPADA' ? `
+          <div style="font-size: 0.78rem; color: var(--gold-accent); margin-top: 0.55rem;">
+            ${m.tiempo_ocupacion_min || 0} min · ${m.pedidos_activos || 0} pedido(s) activo(s)
+          </div>
+        ` : ''}
+        ${m.solicitudes_pendientes ? `<div style="margin-top:.55rem;color:var(--color-yellow);font-weight:800">${m.solicitudes_pendientes} solicitud(es) pendiente(s)</div>` : ''}
       </div>
     `;
   });
   container.innerHTML = html;
 }
 
+async function loadSolicitudesMesa() {
+  try {
+    const response = await fetch("/api/v1/mesero/solicitudes", { headers: Auth.getHeaders() });
+    if (!response.ok) throw new Error("No se pudieron cargar las solicitudes de mesa.");
+    meseroSolicitudes = await response.json();
+    renderSolicitudesMesa();
+  } catch (error) {
+    console.error("Error al cargar solicitudes de mesa:", error);
+    showToast(error.message, "danger");
+  }
+}
+
+function renderSolicitudesMesa() {
+  const container = document.getElementById("mesero-solicitudes-list");
+  if (!container) return;
+  if (meseroSolicitudes.length === 0) {
+    container.innerHTML = `<p style="color:var(--text-muted);margin:.25rem">No hay solicitudes pendientes.</p>`;
+    return;
+  }
+  container.innerHTML = meseroSolicitudes.map(item => {
+    const label = item.tipo === "SOLICITAR_CUENTA" ? "Solicita la cuenta" : "Llama al mesero";
+    const created = item.fecha_creacion ? new Date(item.fecha_creacion).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "";
+    return `<article style="border:1px solid var(--toon-border);border-radius:10px;padding:.85rem">
+      <strong>Mesa #${item.mesa} · ${label}</strong>
+      ${item.nota ? `<p>${escapeMeseroHtml(item.nota)}</p>` : ""}
+      <small style="display:block;color:var(--text-muted);margin:.35rem 0">${created}</small>
+      <button class="btn btn-cta" onclick="resolveTableRequest(${item.id}, 'ATENDIDA')">Marcar atendida</button>
+      <button class="btn btn-outline" onclick="resolveTableRequest(${item.id}, 'CANCELADA')">Descartar</button>
+    </article>`;
+  }).join("");
+}
+
+async function resolveTableRequest(requestId, estado) {
+  try {
+    const response = await fetch(`/api/v1/mesero/solicitudes/${requestId}/estado`, {
+      method: "PUT",
+      headers: Auth.getHeaders(),
+      body: JSON.stringify({ estado })
+    });
+    const body = await response.json();
+    if (!response.ok) throw new Error(body.detail || "No se pudo actualizar la solicitud.");
+    await loadMeseroData();
+  } catch (error) {
+    showToast(error.message, "danger");
+  }
+}
+
 async function loadPedidosActivos() {
   try {
     const res = await fetch("/api/v1/mesero/pedidos-activos", { headers: Auth.getHeaders() });
-    if (res.ok) {
-      meseroPedidos = await res.json();
-      renderPedidosActivos();
-    }
+    if (!res.ok) throw new Error("No se pudieron cargar los pedidos activos.");
+    meseroPedidos = await res.json();
+    renderPedidosActivos();
   } catch (err) {
     console.error("Error al cargar pedidos mesero:", err);
+    showToast(err.message, "danger");
   }
 }
 
@@ -100,6 +163,9 @@ function renderPedidosActivos() {
     });
 
     const isListo = p.estado === "LISTO";
+    const elapsedMinutes = p.fecha_creacion
+      ? Math.max(0, Math.floor((Date.now() - new Date(p.fecha_creacion).getTime()) / 60000))
+      : 0;
 
     html += `
       <div style="background: var(--toon-card); border: 1px solid ${isListo ? 'var(--neon-green)' : 'var(--toon-border)'}; border-radius: var(--radius-md); padding: 1.25rem; display: flex; flex-direction: column; justify-content: space-between;">
@@ -109,6 +175,9 @@ function renderPedidosActivos() {
             <span class="badge" style="background: ${isListo ? 'var(--neon-green)' : 'var(--gold-accent)'}; color: #000; font-size: 0.75rem; font-weight: 800; padding: 0.2rem 0.6rem; border-radius: 6px;">
               ${p.estado}
             </span>
+          </div>
+          <div style="font-size: 0.78rem; color: ${elapsedMinutes >= 15 ? 'var(--neon-red)' : 'var(--text-muted)'}; font-weight: 800; margin-top: 0.35rem;">
+            ${elapsedMinutes >= 15 ? 'Prioridad · ' : ''}${elapsedMinutes} min transcurridos
           </div>
           <div style="font-size: 0.85rem; color: #fff; margin-top: 0.3rem;">Cliente: <strong>${p.nombre_factura || p.nombre_cliente_delivery || 'Comensal'}</strong></div>
           <div style="font-size: 0.85rem; color: var(--gold-accent); font-weight: 800;">Total: ${formatPriceDual(p.total)}</div>
