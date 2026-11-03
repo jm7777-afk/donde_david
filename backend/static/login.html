@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>DONDE DAVID - Portal de Personal & Empleados</title>
   <link rel="stylesheet" href="/static/css/global.css?v=2.0">
-  <link rel="stylesheet" href="/static/css/toon-theme.css?v=2.4">
+  <link rel="stylesheet" href="/static/css/toon-theme.css?v=2.5">
   <link rel="stylesheet" href="/static/css/index.css?v=2.0">
   <style>
     body.login-portal-body {
@@ -60,7 +60,9 @@
   <div class="portal-card">
     
     <div style="text-align: center; margin-bottom: 2rem;">
-      <img src="/static/images/logo-donde-david.jpg" style="width: 84px; height: 84px; border-radius: 50%; border: 3px solid var(--color-yellow); box-shadow: var(--shadow-orange);" alt="Donde David Logo">
+      <a href="#" aria-label="Recargar página" onclick="window.location.reload(); return false;">
+        <img src="/static/images/logo-donde-david.jpg" style="width: 84px; height: 84px; border-radius: 50%; border: 3px solid var(--color-yellow); box-shadow: var(--shadow-orange);" alt="Donde David Logo">
+      </a>
       <h1 style="font-size: 1.6rem; font-weight: 900; font-family: var(--font-display); color: var(--color-yellow); margin-top: 0.75rem; margin-bottom: 0.2rem;">PORTAL DE PERSONAL</h1>
       <p style="color: var(--color-text-secondary); font-size: 0.85rem; margin: 0;">Ingreso Exclusivo para Empleados y Administradores - DONDE DAVID</p>
     </div>
@@ -85,9 +87,9 @@
       <div style="font-size: 0.8rem; color: var(--color-text-secondary); text-align: center; margin-bottom: 0.75rem; font-weight: 700;">ACCESOS DIRECTOS DEMO:</div>
       <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.5rem;">
         <button class="demo-role-btn" onclick="quickStaffLogin('admin', 'admin123', '/static/admin/index.html')">⚙️ Administrador</button>
-        <button class="demo-role-btn" onclick="quickStaffLogin('caja1', 'caja123', '/static/caja/panel.html')">💰 Caja POS</button>
+        <button class="demo-role-btn" onclick="quickStaffLogin('caja', 'caja123', '/static/caja/panel.html')">💰 Caja POS</button>
         <button class="demo-role-btn" onclick="quickStaffLogin('cocina1', 'cocina123', '/static/cocina/monitor.html')">👨‍🍳 Cocina KDS</button>
-        <button class="demo-role-btn" onclick="quickStaffLogin('delivery1', 'delivery123', '/static/mesero/panel.html')">🍽️ Mesero</button>
+        <button class="demo-role-btn" onclick="quickStaffLogin('delivery1', 'delivery123', '/static/delivery/panel.html')">🛵 Repartidor</button>
       </div>
     </div>
 
@@ -99,8 +101,7 @@
 
   <script src="/static/js/websocket.js?v=2.0"></script>
   <script src="/static/js/auth.js?v=2.0"></script>
-  <script src="/static/js/theme-toggle.js?v=2.1"></script>
-  <script src="/static/js/appShell.js?v=2.3"></script>
+  <script src="/static/js/appShell.js?v=2.4"></script>
   <script>
     document.getElementById("staff-portal-form").addEventListener("submit", async (e) => {
       e.preventDefault();

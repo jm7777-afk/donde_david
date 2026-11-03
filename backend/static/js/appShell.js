@@ -84,7 +84,6 @@ function renderUniversalHeader() {
     rightActions = `
       <a href="/static/cliente/app.html?mesa=5" class="btn btn-cta" style="padding: 0.4rem 0.9rem; font-size: 0.8rem;">🔥 PEDIR AHORA</a>
       <a href="/static/cliente/app.html?login=1" class="btn btn-outline" style="padding: 0.4rem 0.9rem; font-size: 0.8rem;">👤 CLIENTES</a>
-      <a href="/login" class="btn btn-outline" style="padding: 0.4rem 0.9rem; font-size: 0.8rem;">🔐 EMPLEADOS</a>
     `;
   }
 
@@ -92,8 +91,8 @@ function renderUniversalHeader() {
   let logoutBtn = "";
   if (role !== "landing" && role !== "cliente" && role !== "caja") {
     logoutBtn = `
-      <button class="btn btn-cta" style="padding: 0.35rem 0.75rem; font-size: 0.78rem; background: rgba(255,71,87,0.2); border: 1px solid var(--neon-red); color: var(--neon-red);" onclick="typeof Auth !== 'undefined' ? Auth.logout() : (window.location.href='/login')">
-        🚪 Salir
+      <button class="btn btn-cta universal-header-logout" type="button" aria-label="Cerrar sesión" title="Cerrar sesión" style="padding: 0.35rem 0.75rem; font-size: 0.78rem; background: rgba(255,71,87,0.2); border: 1px solid var(--neon-red); color: var(--neon-red);" onclick="typeof Auth !== 'undefined' ? Auth.logout() : (window.location.href='/login')">
+        🚪 <span>Salir</span>
       </button>
     `;
   }
@@ -102,15 +101,15 @@ function renderUniversalHeader() {
     <header class="universal-header">
       <div class="universal-header-inner">
         <!-- Izquierda: Marca Destacada Donde David con Logo Oficial 3D Extra Grande -->
-        <div style="display: flex; align-items: center;">
+        <div class="universal-header-brand-section" style="display: flex; align-items: center;">
           ${leftAction}
-          <a href="/" class="universal-brand" style="display: flex; align-items: center; gap: 0.85rem; text-decoration: none; padding: 0.2rem 0;">
+          <a href="#" class="universal-brand" aria-label="Recargar página" onclick="window.location.reload(); return false;" style="display: flex; align-items: center; gap: 0.85rem; text-decoration: none; padding: 0.2rem 0;">
             <img src="/static/img/logo.png" alt="Donde David" style="height: clamp(45px, 7vw, 85px); max-height: 85px; width: auto; object-fit: contain; filter: drop-shadow(0 6px 20px rgba(255, 183, 3, 0.65)); transition: transform 0.25s ease;" onmouseover="this.style.transform='scale(1.06)'" onmouseout="this.style.transform='scale(1)'">
           </a>
         </div>
 
         <!-- Centro: Rol, Tasa BCV y Conexión Realtime WebSocket -->
-        <div style="display: flex; align-items: center; gap: 0.6rem;">
+        <div class="universal-header-status-section" style="display: flex; align-items: center; gap: 0.6rem;">
           ${roleBadges[role] || roleBadges.landing}
           
           <div class="bcv-rate-badge" title="Tasa Oficial en Bolívares">
@@ -123,10 +122,9 @@ function renderUniversalHeader() {
           </div>
         </div>
 
-        <!-- Derecha: Acciones, Tema & Salir -->
-        <div style="display: flex; align-items: center; gap: 0.6rem;">
+        <!-- Derecha: Acciones y salir -->
+        <div class="universal-header-action-section" style="display: flex; align-items: center; gap: 0.6rem;">
           ${rightActions}
-          <button class="theme-toggle-btn" type="button" onclick="typeof toggleThemeMode === 'function' ? toggleThemeMode() : null" title="Cambiar a tema blanco" style="padding: 0.35rem 0.65rem; font-size: 0.78rem;"><span aria-hidden="true">☀️</span><span>BLANCO</span></button>
           ${logoutBtn}
         </div>
       </div>
@@ -273,8 +271,8 @@ function createUniversalMobileDrawerDOM() {
     roleItems = `
       <div class="drawer-nav-item" onclick="closeUniversalMobileDrawer(); if (typeof showScreen==='function') showScreen('screen-menu');">🍔 Menú Gourmet QR</div>
       <div class="drawer-nav-item" onclick="closeUniversalMobileDrawer(); if (typeof showScreen==='function') showScreen('screen-carrito');">🛒 Mi Carrito de Compras</div>
-      <div class="drawer-nav-item" onclick="closeUniversalMobileDrawer(); if (typeof showScreen==='function') showScreen('screen-pedidos');">📋 Mis Pedidos Activos</div>
-      <div class="drawer-nav-item" onclick="closeUniversalMobileDrawer(); if (typeof showScreen==='function') showScreen('screen-delivery');">📍 Seguimiento GPS Delivery</div>
+      <div class="drawer-nav-item" onclick="closeUniversalMobileDrawer(); if (typeof showScreen==='function') showScreen('screen-historial');">📋 Mis Pedidos Activos</div>
+      <div class="drawer-nav-item" onclick="closeUniversalMobileDrawer(); if (typeof showScreen==='function') showScreen('screen-tracking');">📍 Seguimiento de pedido</div>
       <div class="drawer-nav-item" onclick="closeUniversalMobileDrawer(); if (typeof openModal==='function') openModal('service-rating-modal');">⭐ Calificar Servicio</div>
     `;
   } else if (role === "cocina") {
@@ -302,7 +300,6 @@ function createUniversalMobileDrawerDOM() {
     roleItems = `
       <div class="drawer-nav-item" onclick="closeUniversalMobileDrawer(); window.location.href='/static/cliente/app.html?mesa=5';">🔥 Ver Menú y Pedir</div>
       <div class="drawer-nav-item" onclick="closeUniversalMobileDrawer(); window.location.href='/static/cliente/app.html?login=1';">👤 Acceso de Clientes</div>
-      <div class="drawer-nav-item" onclick="closeUniversalMobileDrawer(); window.location.href='/login';">🔐 Portal de Empleados</div>
     `;
   }
 
@@ -317,7 +314,9 @@ function createUniversalMobileDrawerDOM() {
   drawer.innerHTML = `
     <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 1.25rem; border-bottom: 1px solid var(--toon-border); padding-bottom: 0.85rem;">
       <div style="display: flex; align-items: center; gap: 0.6rem;">
-        <img src="/static/img/logo.png" alt="Donde David" style="height: 42px; width: auto; object-fit: contain;">
+        <a href="#" aria-label="Recargar página" onclick="window.location.reload(); return false;">
+          <img src="/static/img/logo.png" alt="Donde David" style="height: 42px; width: auto; object-fit: contain;">
+        </a>
         <span style="font-weight: 900; font-family: var(--font-display); color: var(--gold-accent); font-size: 0.95rem;">MENÚ MÓVIL</span>
       </div>
       <button onclick="closeUniversalMobileDrawer()" style="background: transparent; border: none; color: #fff; font-size: 1.6rem; cursor: pointer;">&times;</button>
@@ -329,14 +328,12 @@ function createUniversalMobileDrawerDOM() {
     </div>
 
     <div style="border-top: 1px solid var(--toon-border); padding-top: 1rem; margin-top: 1rem;">
-      <button type="button" class="drawer-nav-item theme-mode-drawer-toggle" onclick="closeUniversalMobileDrawer(); if (typeof toggleThemeMode==='function') toggleThemeMode();"><span aria-hidden="true">☀️</span><span>BLANCO</span></button>
       <div class="drawer-nav-item" style="color: var(--neon-red); border-color: rgba(255,71,87,0.3);" onclick="closeUniversalMobileDrawer(); if (typeof Auth!=='undefined') Auth.logout(); else window.location.href='/login';">🚪 Cerrar Sesión / Salir</div>
     </div>
   `;
 
   document.body.appendChild(backdrop);
   document.body.appendChild(drawer);
-  if (typeof syncThemeToggleButtons === "function") syncThemeToggleButtons();
 }
 
 function toggleUniversalMobileDrawer() {

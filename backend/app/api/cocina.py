@@ -7,9 +7,9 @@ from backend.app.core.security import require_roles
 from backend.app.models.pedido import Pedido
 from backend.app.models.detalle_pedido import DetallePedido
 from backend.app.models.producto import Producto
-from backend.app.models.mesa import Mesa
 from backend.app.models.movimiento_inventario import MovimientoInventario
 from backend.app.schemas.schemas import PedidoOut
+from backend.app.services.tables import parse_table_number, refresh_table_state
 from backend.app.websockets.manager import ws_manager
 
 router = APIRouter(prefix="/cocina", tags=["Cocina / KDS"])
@@ -71,25 +71,14 @@ async def actualizar_estado_pedido(
                 motivo=f"Cancelación de pedido #{pedido.id}",
                 usuario_id=user.id
             ))
-        if pedido.tipo == "mesa":
-            try:
-                mesa_numero = int(pedido.numero_mesa.lower().replace("mesa", "").strip())
-            except ValueError:
-                mesa_numero = None
-            if mesa_numero is not None:
-                mesa = db.query(Mesa).filter(Mesa.numero_mesa == mesa_numero).with_for_update().first()
-                other_open_order = db.query(Pedido.id).filter(
-                    Pedido.tipo == "mesa",
-                    Pedido.numero_mesa == pedido.numero_mesa,
-                    Pedido.id != pedido.id,
-                    Pedido.estado.notin_(["CANCELADO", "COBRADO", "ENTREGADO"]),
-                ).first()
-                if mesa and not other_open_order:
-                    mesa.estado = "LIBRE"
-                    mesa.cliente_actual = None
         pedido.estado_pago = "CANCELADO"
 
     pedido.estado = estado
+    if pedido.tipo == "mesa" and estado in {"CANCELADO", "ENTREGADO"}:
+        try:
+            refresh_table_state(db, parse_table_number(pedido.numero_mesa))
+        except ValueError as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
     if estado == "ENTREGADO" or estado == "LISTO":
         pedido.fecha_entrega = datetime.now(timezone.utc)
     

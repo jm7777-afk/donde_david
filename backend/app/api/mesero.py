@@ -1,13 +1,15 @@
 from typing import List
 from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy import and_, or_
 from sqlalchemy.orm import Session
 from backend.app.core.database import get_db
 from backend.app.core.security import require_roles
 from backend.app.models.pedido import Pedido
 from backend.app.models.mesa import Mesa
 from backend.app.models.solicitud_mesa import SolicitudMesa
-from backend.app.schemas.schemas import PedidoOut, CambiarMesaRequest, SolicitudMesaEstado
+from backend.app.schemas.schemas import PedidoOut, CambiarMesaRequest, SolicitudMesaEstado, MesaLimpiezaRequest
+from backend.app.services.tables import has_active_table_orders, parse_table_number, refresh_table_state
 from backend.app.websockets.manager import ws_manager
 
 router = APIRouter(prefix="/mesero", tags=["Panel de Meseros"])
@@ -20,7 +22,10 @@ def get_mesas_mesero(
     mesas = db.query(Mesa).order_by(Mesa.numero_mesa.asc()).all()
     active_orders = db.query(Pedido).filter(
         Pedido.tipo == "mesa",
-        Pedido.estado.in_(["PENDIENTE", "COBRADO", "EN_PREPARACION", "LISTO"]),
+        or_(
+            Pedido.estado.in_(["PENDIENTE", "COBRADO", "EN_PREPARACION", "LISTO"]),
+            and_(Pedido.estado == "ENTREGADO", Pedido.estado_pago != "PAGADO"),
+        ),
     ).all()
     pending_requests = db.query(SolicitudMesa).filter(SolicitudMesa.estado == "PENDIENTE").all()
     orders_by_table = {}
@@ -51,6 +56,43 @@ def get_mesas_mesero(
             "solicitudes_pendientes": sum(1 for item in pending_requests if item.mesa_id == mesa.id),
         })
     return summaries
+
+
+@router.put("/mesas/{mesa_id}/limpieza")
+async def actualizar_limpieza_mesa(
+    mesa_id: int,
+    data: MesaLimpiezaRequest,
+    db: Session = Depends(get_db),
+    user=Depends(require_roles(["admin", "supervisor", "mesero", "caja"])),
+):
+    mesa = db.query(Mesa).filter(Mesa.id == mesa_id).with_for_update().first()
+    if not mesa:
+        raise HTTPException(status_code=404, detail="Mesa no encontrada.")
+
+    if has_active_table_orders(db, mesa.numero_mesa):
+        raise HTTPException(status_code=409, detail="La mesa todavía tiene pedidos activos.")
+
+    if data.accion == "INICIAR":
+        if mesa.estado != "PENDIENTE_LIMPIEZA":
+            raise HTTPException(status_code=409, detail="La mesa no está pendiente de limpieza.")
+        mesa.estado = "EN_LIMPIEZA"
+    else:
+        if mesa.estado != "EN_LIMPIEZA":
+            raise HTTPException(status_code=409, detail="La mesa debe estar en limpieza para liberarla.")
+        mesa.estado = "LIBRE"
+        mesa.cliente_actual = None
+        mesa.pedido_activo_id = None
+        mesa.subtotal_acumulado = 0.0
+    mesa.fecha_actualizacion = datetime.now(timezone.utc)
+    db.commit()
+
+    await ws_manager.broadcast("MESA_ACTUALIZADA", {
+        "mesa_id": mesa.id,
+        "numero_mesa": mesa.numero_mesa,
+        "estado": mesa.estado,
+        "actualizado_por": user.nombre,
+    })
+    return {"mesa_id": mesa.id, "numero_mesa": mesa.numero_mesa, "estado": mesa.estado}
 
 
 @router.get("/solicitudes")
@@ -115,7 +157,8 @@ def get_pedidos_activos_mesero(
     user = Depends(require_roles(["admin", "supervisor", "mesero", "caja"]))
 ):
     return db.query(Pedido).filter(
-        Pedido.estado.in_(["PENDIENTE", "EN_PREPARACION", "LISTO"])
+        Pedido.tipo == "mesa",
+        Pedido.estado.in_(["PENDIENTE", "COBRADO", "EN_PREPARACION", "LISTO"])
     ).order_by(Pedido.fecha_creacion.asc()).all()
 
 @router.post("/pedidos/{pedido_id}/cambiar-mesa")
@@ -129,28 +172,27 @@ async def cambiar_mesa_pedido(
     if not pedido:
         raise HTTPException(status_code=404, detail="Pedido no encontrado")
 
+    if pedido.tipo != "mesa" or pedido.estado in {"CANCELADO", "ENTREGADO"}:
+        raise HTTPException(status_code=409, detail="Solo se pueden reasignar pedidos activos en mesa.")
+
     nueva_mesa_num = data.nueva_mesa
-    nueva_mesa_obj = db.query(Mesa).filter(Mesa.numero_mesa == nueva_mesa_num).first()
+    nueva_mesa_obj = db.query(Mesa).filter(Mesa.numero_mesa == nueva_mesa_num).with_for_update().first()
     if not nueva_mesa_obj:
         raise HTTPException(status_code=404, detail=f"La Mesa #{nueva_mesa_num} no existe")
-
-    # Liberar mesa anterior si estaba ocupada
-    mesa_anterior_str = pedido.numero_mesa
     try:
-        num_ant = int(mesa_anterior_str.lower().replace("mesa", "").strip())
-        mesa_ant_obj = db.query(Mesa).filter(Mesa.numero_mesa == num_ant).first()
-        if mesa_ant_obj and mesa_ant_obj.numero_mesa != nueva_mesa_num:
-            mesa_ant_obj.estado = "LIBRE"
-            mesa_ant_obj.cliente_actual = None
-    except Exception:
-        pass
+        mesa_anterior_num = parse_table_number(pedido.numero_mesa)
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail="El pedido tiene una mesa inválida y no puede reasignarse.") from exc
+    if nueva_mesa_num == mesa_anterior_num:
+        raise HTTPException(status_code=409, detail="El pedido ya está asignado a esa mesa.")
+    if nueva_mesa_obj.estado != "LIBRE":
+        raise HTTPException(status_code=409, detail="La nueva mesa no está disponible.")
 
-    # Ocupar nueva mesa
+    mesa_anterior_str = pedido.numero_mesa
     nueva_mesa_obj.estado = "OCUPADA"
     nueva_mesa_obj.cliente_actual = pedido.nombre_factura or f"Cliente Pedido #{pedido.id}"
-
-    # Actualizar pedido
     pedido.numero_mesa = f"Mesa {nueva_mesa_num}"
+    refresh_table_state(db, mesa_anterior_num)
     db.commit()
     db.refresh(pedido)
 
@@ -177,8 +219,15 @@ async def marcar_pedido_entregado(
     pedido = db.query(Pedido).filter(Pedido.id == pedido_id).first()
     if not pedido:
         raise HTTPException(status_code=404, detail="Pedido no encontrado")
-    
+    if pedido.tipo != "mesa" or pedido.estado != "LISTO":
+        raise HTTPException(status_code=409, detail="Solo se pueden entregar pedidos de mesa que estén listos.")
+
     pedido.estado = "ENTREGADO"
+    if pedido.tipo == "mesa":
+        try:
+            refresh_table_state(db, parse_table_number(pedido.numero_mesa))
+        except ValueError as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
     db.commit()
 
     await ws_manager.broadcast("CAMBIO_ESTADO_PEDIDO", {

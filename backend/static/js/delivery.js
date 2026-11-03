@@ -11,6 +11,11 @@ function getDeliveryStage(status) {
   return 0;
 }
 
+let courierLocationWatchId = null;
+let courierLocationOrderId = null;
+let lastCourierPositionSentAt = 0;
+let courierLocationWarningShown = false;
+
 document.addEventListener("DOMContentLoaded", () => {
   const user = Auth.getUser();
   if (!user || user.rol !== "repartidor") {
@@ -33,6 +38,12 @@ async function loadCourierOrders() {
       throw new Error(error.detail || "No se pudieron cargar los pedidos.");
     }
     const orders = await response.json();
+    const activeRoute = orders.find(order => order.estado_delivery === "EN_CAMINO");
+    if (activeRoute) {
+      startCourierLocationSharing(activeRoute.id);
+    } else {
+      stopCourierLocationSharing();
+    }
     const assigned = orders.filter(order => order.estado_delivery === "ASIGNADO").length;
     const route = orders.filter(order => ["RECOGIDO", "EN_CAMINO"].includes(order.estado_delivery)).length;
     const open = orders.filter(order => order.estado_delivery !== "ENTREGADO").length;
@@ -92,6 +103,69 @@ async function loadCourierOrders() {
     container.innerHTML = `<div class="delivery-empty" role="alert">${escapeDeliveryText(error.message)}</div>`;
   }
 }
+
+function stopCourierLocationSharing() {
+  if (courierLocationWatchId !== null && navigator.geolocation) {
+    navigator.geolocation.clearWatch(courierLocationWatchId);
+  }
+  courierLocationWatchId = null;
+  courierLocationOrderId = null;
+  const status = document.getElementById("courier-location-status");
+  if (status) status.textContent = "La ubicación en vivo se activa al iniciar una entrega.";
+}
+
+function startCourierLocationSharing(orderId) {
+  if (courierLocationWatchId !== null && courierLocationOrderId === orderId) return;
+  stopCourierLocationSharing();
+  const status = document.getElementById("courier-location-status");
+  if (!navigator.geolocation) {
+    if (status) status.textContent = "Este dispositivo no permite compartir ubicación. Mantén actualizada la dirección del cliente.";
+    return;
+  }
+
+  courierLocationOrderId = orderId;
+  courierLocationWarningShown = false;
+  if (status) status.textContent = "Solicitando ubicación del dispositivo para compartirla durante esta entrega…";
+  courierLocationWatchId = navigator.geolocation.watchPosition(async position => {
+    const now = Date.now();
+    if (now - lastCourierPositionSentAt < 10000) return;
+    lastCourierPositionSentAt = now;
+    try {
+      const response = await fetch(`/api/v1/delivery/pedidos/${orderId}/ubicacion`, {
+        method: "POST",
+        headers: Auth.getHeaders(),
+        body: JSON.stringify({
+          lat: position.coords.latitude,
+          lng: position.coords.longitude
+        })
+      });
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.detail || "No se pudo actualizar la ubicación.");
+      }
+      if (status) status.textContent = "🟢 Compartiendo tu ubicación con el cliente cada pocos segundos.";
+    } catch (error) {
+      console.error("No se pudo compartir la ubicación del repartidor:", error);
+      if (!courierLocationWarningShown) {
+        showToast(error.message, "warning");
+        courierLocationWarningShown = true;
+      }
+    }
+  }, error => {
+    console.warn("El navegador no pudo obtener la ubicación del repartidor:", error.message);
+    if (!courierLocationWarningShown) {
+      showToast("Activa el GPS y permite la ubicación para que el cliente pueda seguir la entrega.", "warning");
+      courierLocationWarningShown = true;
+    }
+    if (status) status.textContent = "Ubicación no disponible. Revisa el permiso de GPS del navegador.";
+  }, {
+    enableHighAccuracy: true,
+    maximumAge: 5000,
+    timeout: 15000
+  });
+}
+
+window.addEventListener("beforeunload", stopCourierLocationSharing);
 
 async function updateCourierStatus(orderId, estado) {
   try {

@@ -16,7 +16,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
   new WSClient((event, data) => {
     if (event === "NUEVO_PEDIDO" || event === "CAMBIO_ESTADO_PEDIDO" || event === "PAGO_CONFIRMADO"
-        || event === "SOLICITUD_MESA" || event === "SOLICITUD_MESA_ACTUALIZADA") {
+        || event === "SOLICITUD_MESA" || event === "SOLICITUD_MESA_ACTUALIZADA"
+        || event === "MESA_ACTUALIZADA") {
       loadMeseroData();
     }
   });
@@ -64,8 +65,8 @@ function renderMesas() {
       <div class="mesa-card-mesero ${m.estado}">
         <strong style="font-size: 1.2rem; color: #fff;">Mesa #${m.numero_mesa}</strong>
         <div style="font-size: 0.8rem; color: var(--text-muted); margin: 0.3rem 0;">${m.cliente_actual || 'Disponible'}</div>
-        <span class="badge" style="background: ${m.estado === 'OCUPADA' ? 'var(--neon-red)' : 'var(--neon-green)'}; color: #fff; font-size: 0.7rem; padding: 0.2rem 0.5rem; border-radius: 6px;">
-          ${m.estado}
+        <span class="badge" style="background: ${m.estado === 'OCUPADA' ? 'var(--neon-red)' : m.estado === 'LIBRE' ? 'var(--neon-green)' : 'var(--gold-accent)'}; color: ${m.estado === 'PENDIENTE_LIMPIEZA' || m.estado === 'EN_LIMPIEZA' ? '#000' : '#fff'}; font-size: 0.7rem; padding: 0.2rem 0.5rem; border-radius: 6px;">
+          ${escapeMeseroHtml(m.estado)}
         </span>
         ${m.estado === 'OCUPADA' ? `
           <div style="font-size: 0.78rem; color: var(--gold-accent); margin-top: 0.55rem;">
@@ -73,10 +74,28 @@ function renderMesas() {
           </div>
         ` : ''}
         ${m.solicitudes_pendientes ? `<div style="margin-top:.55rem;color:var(--color-yellow);font-weight:800">${m.solicitudes_pendientes} solicitud(es) pendiente(s)</div>` : ''}
+        ${m.estado === "PENDIENTE_LIMPIEZA" ? `<button class="btn btn-cta" style="width:100%;margin-top:.75rem" onclick="actualizarLimpiezaMesa(${m.id}, 'INICIAR')">🧹 Iniciar limpieza</button>` : ""}
+        ${m.estado === "EN_LIMPIEZA" ? `<button class="btn btn-success" style="width:100%;margin-top:.75rem" onclick="actualizarLimpiezaMesa(${m.id}, 'FINALIZAR')">✅ Marcar limpia y liberar</button>` : ""}
       </div>
     `;
   });
   container.innerHTML = html;
+}
+
+async function actualizarLimpiezaMesa(mesaId, accion) {
+  try {
+    const response = await fetch(`/api/v1/mesero/mesas/${mesaId}/limpieza`, {
+      method: "PUT",
+      headers: Auth.getHeaders(),
+      body: JSON.stringify({ accion })
+    });
+    const body = await response.json();
+    if (!response.ok) throw new Error(body.detail || "No se pudo actualizar la limpieza de la mesa.");
+    showToast(accion === "INICIAR" ? "Limpieza iniciada." : `Mesa #${body.numero_mesa} limpia y disponible.`, "success");
+    await loadMeseroData();
+  } catch (error) {
+    showToast(error.message, "danger");
+  }
 }
 
 async function loadSolicitudesMesa() {
@@ -141,7 +160,7 @@ async function loadPedidosActivos() {
 function renderPedidosActivos() {
   const container = document.getElementById("mesero-pedidos-list");
   if (meseroPedidos.length === 0) {
-    container.innerHTML = `<div style="color: var(--text-muted); text-align: center; padding: 2rem; background: var(--toon-card); border-radius: var(--radius-md); grid-column: span 3;">No hay pedidos pendientes de entrega en mesa.</div>`;
+    container.innerHTML = `<div style="color: var(--text-muted); text-align: center; padding: 2rem; background: var(--toon-card); border-radius: var(--radius-md); grid-column: 1 / -1;">No hay pedidos pendientes de entrega en mesa.</div>`;
     return;
   }
 
@@ -163,6 +182,7 @@ function renderPedidosActivos() {
     });
 
     const isListo = p.estado === "LISTO";
+    const hasFreeTable = meseroMesas.some(table => table.estado === "LIBRE");
     const elapsedMinutes = p.fecha_creacion
       ? Math.max(0, Math.floor((Date.now() - new Date(p.fecha_creacion).getTime()) / 60000))
       : 0;
@@ -171,9 +191,9 @@ function renderPedidosActivos() {
       <div style="background: var(--toon-card); border: 1px solid ${isListo ? 'var(--neon-green)' : 'var(--toon-border)'}; border-radius: var(--radius-md); padding: 1.25rem; display: flex; flex-direction: column; justify-content: space-between;">
         <div>
           <div style="display: flex; justify-content: space-between; align-items: center;">
-            <strong style="font-size: 1.2rem; color: #fff;">#${p.id} - ${p.numero_mesa}</strong>
+            <strong style="font-size: 1.2rem; color: #fff;">#${p.id} - ${escapeMeseroHtml(p.numero_mesa)}</strong>
             <span class="badge" style="background: ${isListo ? 'var(--neon-green)' : 'var(--gold-accent)'}; color: #000; font-size: 0.75rem; font-weight: 800; padding: 0.2rem 0.6rem; border-radius: 6px;">
-              ${p.estado}
+              ${escapeMeseroHtml(p.estado)}
             </span>
           </div>
           <div style="font-size: 0.78rem; color: ${elapsedMinutes >= 15 ? 'var(--neon-red)' : 'var(--text-muted)'}; font-weight: 800; margin-top: 0.35rem;">
@@ -193,9 +213,9 @@ function renderPedidosActivos() {
           <p style="font-size: 0.85rem; color: var(--text-muted); margin: 0.4rem 0;"><strong>🍽️ Platos:</strong> ${comidas.join(', ') || 'Sin comida'}</p>
         </div>
 
-        <div style="display: flex; gap: 0.5rem; margin-top: 1rem; border-top: 1px dashed var(--toon-border); padding-top: 0.75rem;">
-          <button class="btn-gold" style="flex: 1; padding: 0.4rem 0.6rem; font-size: 0.75rem; background: transparent; border: 1px solid var(--gold-accent); color: var(--gold-accent);" onclick="openCambiarMesaModal(${p.id}, '${p.numero_mesa}')">🔄 Cambiar Mesa</button>
-          <button class="btn-gold" style="flex: 1; padding: 0.4rem 0.6rem; font-size: 0.75rem;" onclick="marcarPedidoEntregado(${p.id})">✅ Entregado</button>
+        <div style="display: flex; flex-wrap:wrap; gap: 0.5rem; margin-top: 1rem; border-top: 1px dashed var(--toon-border); padding-top: 0.75rem;">
+          <button class="btn-gold" ${hasFreeTable ? "" : "disabled"} style="flex: 1; min-width:9rem; padding: 0.4rem 0.6rem; font-size: 0.75rem; background: transparent; border: 1px solid var(--gold-accent); color: var(--gold-accent);" onclick="openCambiarMesaModal(${p.id})">🔄 Cambiar Mesa</button>
+          ${isListo ? `<button class="btn-gold" style="flex: 1; min-width:9rem; padding: 0.4rem 0.6rem; font-size: 0.75rem;" onclick="marcarPedidoEntregado(${p.id})">✅ Entregado</button>` : `<span style="flex:1;align-self:center;color:var(--text-muted);font-size:.8rem">Esperando a que cocina termine</span>`}
         </div>
       </div>
     `;
@@ -204,16 +224,22 @@ function renderPedidosActivos() {
   container.innerHTML = html;
 }
 
-function openCambiarMesaModal(pedidoId, currentMesaStr) {
+function openCambiarMesaModal(pedidoId) {
   selectedPedidoForSwap = meseroPedidos.find(p => p.id === pedidoId);
   if (!selectedPedidoForSwap) return;
+  if (!meseroMesas.some(table => table.estado === "LIBRE")) {
+    showToast("No hay mesas libres para reasignar este pedido.", "warning");
+    return;
+  }
 
-  document.getElementById("swap-order-label").innerText = `Reasignar Pedido #${pedidoId} (Actualmente en ${currentMesaStr})`;
+  document.getElementById("swap-order-label").innerText = `Reasignar Pedido #${pedidoId} (Actualmente en ${selectedPedidoForSwap.numero_mesa})`;
   
   const select = document.getElementById("swap-nueva-mesa-select");
   let opts = "";
   meseroMesas.forEach(m => {
-    opts += `<option value="${m.numero_mesa}">Mesa #${m.numero_mesa} (${m.estado})</option>`;
+    if (m.estado === "LIBRE") {
+      opts += `<option value="${m.numero_mesa}">Mesa #${m.numero_mesa} (Disponible)</option>`;
+    }
   });
   select.innerHTML = opts;
 

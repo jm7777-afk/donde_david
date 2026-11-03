@@ -1,10 +1,11 @@
+import hashlib
 import json
 import logging
 import math
 import secrets
 import hmac
 from typing import List, Optional
-from fastapi import APIRouter, Depends, HTTPException, Request, Response, status, Query
+from fastapi import APIRouter, Depends, Header, HTTPException, Request, Response, status, Query
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 from backend.app.core.database import get_db
@@ -28,6 +29,7 @@ from backend.app.models.movimiento_inventario import MovimientoInventario
 from backend.app.schemas.schemas import CategoriaOut, ProductoOut, PedidoCreate, PedidoCreadoOut, OTPVerifyRequest, ResenaCreate, ResenaOut, PublicacionOut, CambiarMesaRequest, SolicitudMesaCreate
 from backend.app.models.solicitud_mesa import SolicitudMesa
 from backend.app.websockets.manager import ws_manager
+from backend.app.services.tables import parse_table_number, refresh_table_state
 
 router = APIRouter(prefix="/cliente", tags=["Cliente QR / App"])
 logger = logging.getLogger(__name__)
@@ -73,7 +75,12 @@ def get_publicaciones_publicas(db: Session = Depends(get_db)):
 
 @router.get("/promociones")
 def get_promociones(db: Session = Depends(get_db)):
-    return db.query(Promocion).filter(Promocion.activo == True).all()
+    return (
+        db.query(Promocion)
+        .filter(Promocion.activo == True)
+        .order_by(Promocion.id.asc())
+        .all()
+    )
 
 @router.get("/resenas", response_model=List[ResenaOut])
 def get_resenas_publicas(db: Session = Depends(get_db)):
@@ -182,6 +189,8 @@ async def crear_pedido(
         mesa_obj = db.query(Mesa).filter(Mesa.numero_mesa == mesa_num_val).with_for_update().first()
         if not mesa_obj:
             raise HTTPException(status_code=404, detail=f"La Mesa #{mesa_num_val} no existe.")
+        if mesa_obj.estado in {"PENDIENTE_LIMPIEZA", "EN_LIMPIEZA"}:
+            raise HTTPException(status_code=409, detail="La mesa debe quedar limpia antes de recibir otro pedido.")
         mesa_obj.estado = "OCUPADA"
         mesa_obj.cliente_actual = current_user.nombre if current_user else f"Cliente Mesa {mesa_num_val}"
 
@@ -257,6 +266,7 @@ async def crear_pedido(
             cantidad=item.cantidad,
             precio_unitario=unit_price,
             subtotal=subtotal_item,
+            puntos_fidelidad_unitarios=max(0, int(producto.puntos_fidelidad or 0)),
             personalizaciones=personalizaciones_str,
             observaciones=item.observaciones,
             estado="PENDIENTE"
@@ -272,6 +282,7 @@ async def crear_pedido(
 
     # Generar código OTP de 6 dígitos
     otp_code = f"{secrets.randbelow(900000) + 100000:06d}"
+    tracking_token = secrets.token_urlsafe(32)
 
     is_mobile_payment = metodo_pago == "Pago Móvil"
     nuevo_pedido = Pedido(
@@ -281,6 +292,7 @@ async def crear_pedido(
             else f"Delivery #{db.query(Pedido).count() + 101}"
         ),
         codigo_qr=pedido_in.codigo_qr,
+        token_seguimiento_hash=hashlib.sha256(tracking_token.encode("utf-8")).hexdigest(),
         tipo=pedido_in.tipo or "mesa",
         modo_pago=pedido_in.modo_pago or "PAGAR_ANTES",
         estado="PAGO_PENDIENTE" if is_mobile_payment else "PENDIENTE",
@@ -324,20 +336,6 @@ async def crear_pedido(
             motivo=f"Pedido #{nuevo_pedido.id}",
             usuario_id=current_user.id if current_user else None
         ))
-    if current_user:
-        user_db = db.query(Usuario).filter(Usuario.id == current_user.id).first()
-        if user_db:
-            pts_earned = int(total_final)
-            user_db.puntos_fidelidad += pts_earned
-            user_db.pedidos_count += 1
-            user_db.total_gastado = round(float(user_db.total_gastado or 0.0) + float(total_final), 2)
-            db.add(PuntosLog(
-                usuario_id=user_db.id,
-                puntos=pts_earned,
-                concepto=f"Pedido #{nuevo_pedido.id}",
-                pedido_id=nuevo_pedido.id
-            ))
-
     db.commit()
     db.refresh(nuevo_pedido)
 
@@ -353,7 +351,78 @@ async def crear_pedido(
             "fecha": str(nuevo_pedido.fecha_creacion)
         })
 
-    return nuevo_pedido
+    response_order = PedidoCreadoOut.model_validate(nuevo_pedido)
+    response_order.codigo_otp = None
+    response_order.token_seguimiento = tracking_token
+    return response_order
+
+
+@router.get("/pedidos/{pedido_id}/seguimiento")
+@limiter.limit("30/minute")
+def obtener_seguimiento_pedido(
+    request: Request,
+    response: Response,
+    pedido_id: int,
+    db: Session = Depends(get_db),
+    tracking_token: Optional[str] = Header(default=None, alias="X-Order-Tracking-Token"),
+    current_user: Optional[Usuario] = Depends(get_current_user_optional),
+):
+    pedido = db.query(Pedido).filter(Pedido.id == pedido_id).first()
+    if not pedido:
+        raise HTTPException(status_code=404, detail="Pedido no encontrado.")
+
+    owns_order = (
+        current_user is not None
+        and current_user.rol == "cliente"
+        and pedido.usuario_id == current_user.id
+    )
+    has_valid_tracking_token = False
+    if tracking_token and pedido.token_seguimiento_hash:
+        token_digest = hashlib.sha256(tracking_token.encode("utf-8")).hexdigest()
+        has_valid_tracking_token = hmac.compare_digest(token_digest, pedido.token_seguimiento_hash)
+    if not owns_order and not has_valid_tracking_token:
+        raise HTTPException(status_code=404, detail="Pedido no encontrado.")
+
+    return {
+        "id": pedido.id,
+        "tipo": pedido.tipo,
+        "numero_mesa": pedido.numero_mesa,
+        "estado": pedido.estado,
+        "estado_pago": pedido.estado_pago,
+        "estado_delivery": pedido.estado_delivery,
+        "estado_pago": pedido.estado_pago,
+        "estado_retiro": pedido.estado_retiro,
+        "total": float(pedido.total or 0),
+        "subtotal": float(pedido.subtotal or 0),
+        "impuesto": float(pedido.impuesto or 0),
+        "costo_empaque": float(pedido.costo_empaque or 0),
+        "moneda_pago": pedido.moneda_pago,
+        "monto_pago": float(pedido.monto_pago) if pedido.monto_pago is not None else None,
+        "tasa_cambio_pago": float(pedido.tasa_cambio_pago) if pedido.tasa_cambio_pago is not None else None,
+        "metodo_pago": pedido.metodo_pago,
+        "fecha_creacion": pedido.fecha_creacion,
+        "fecha_pago": pedido.fecha_pago,
+        "fecha_entrega": pedido.fecha_entrega,
+        "fecha_retiro": pedido.fecha_retiro,
+        "direccion_delivery": pedido.direccion_delivery,
+        "delivery_lat": float(pedido.delivery_lat) if pedido.delivery_lat is not None else None,
+        "delivery_lng": float(pedido.delivery_lng) if pedido.delivery_lng is not None else None,
+        "repartidor_lat": float(pedido.repartidor_lat) if pedido.repartidor_lat is not None else None,
+        "repartidor_lng": float(pedido.repartidor_lng) if pedido.repartidor_lng is not None else None,
+        "ubicacion_repartidor_actualizada_at": pedido.ubicacion_repartidor_actualizada_at,
+        "repartidor_nombre": (
+            f"{pedido.repartidor.nombre} {pedido.repartidor.apellido}"
+            if pedido.repartidor else None
+        ),
+        "repartidor_telefono": pedido.repartidor.telefono if pedido.repartidor else None,
+        "codigo_otp": (
+            pedido.codigo_otp
+            if pedido.tipo == "delivery"
+            and pedido.estado != "CANCELADO"
+            and pedido.estado_delivery == "EN_CAMINO"
+            else None
+        ),
+    }
 
 @router.post("/pedidos/{pedido_id}/cambiar-mesa")
 @limiter.limit("10/minute")
@@ -379,27 +448,20 @@ async def cliente_cambiar_mesa(
     ).with_for_update().first()
     if not nueva_mesa_obj:
         raise HTTPException(status_code=404, detail=f"La Mesa #{nueva_mesa_num} no existe")
-
-    # Liberate the previous table only when no other active order still uses it.
     try:
-        num_ant = int(pedido.numero_mesa.lower().replace("mesa", "").strip())
-        mesa_ant_obj = db.query(Mesa).filter(Mesa.numero_mesa == num_ant).first()
-        other_active_orders = db.query(Pedido).filter(
-            Pedido.numero_mesa == pedido.numero_mesa,
-            Pedido.id != pedido.id,
-            Pedido.estado.notin_(["ENTREGADO", "CANCELADO"])
-        ).count()
-        if mesa_ant_obj and mesa_ant_obj.numero_mesa != nueva_mesa_num and not other_active_orders:
-            mesa_ant_obj.estado = "LIBRE"
-            mesa_ant_obj.cliente_actual = None
+        mesa_anterior_num = parse_table_number(pedido.numero_mesa)
     except ValueError as exc:
         raise HTTPException(status_code=409, detail="No se pudo determinar la mesa actual del pedido.") from exc
+    if mesa_anterior_num == nueva_mesa_num:
+        raise HTTPException(status_code=409, detail="El pedido ya está asignado a esa mesa.")
+    if nueva_mesa_obj.estado != "LIBRE":
+        raise HTTPException(status_code=409, detail="La nueva mesa no está disponible.")
 
-    # Ocupar nueva mesa
     nueva_mesa_obj.estado = "OCUPADA"
     nueva_mesa_obj.cliente_actual = pedido.nombre_factura or f"Cliente Mesa #{nueva_mesa_num}"
 
     pedido.numero_mesa = f"Mesa {nueva_mesa_num}"
+    refresh_table_state(db, mesa_anterior_num)
     db.commit()
 
     await ws_manager.broadcast("CAMBIO_ESTADO_PEDIDO", {
@@ -443,14 +505,18 @@ def get_personalizacion_cliente(
 ):
     orders = (
         db.query(Pedido)
-        .filter(Pedido.usuario_id == current_user.id)
+        .filter(
+            Pedido.usuario_id == current_user.id,
+            Pedido.estado_pago == "PAGADO",
+            Pedido.estado != "CANCELADO",
+        )
         .order_by(Pedido.fecha_creacion.desc())
         .limit(40)
         .all()
     )
     valid_orders = [
         order for order in orders
-        if order.estado != "CANCELADO" and order.estado_pago != "CANCELADO" and order.detalles
+        if order.detalles
     ]
     latest = valid_orders[0] if valid_orders else None
     bought_counts = {}
@@ -534,6 +600,7 @@ def get_personalizacion_cliente(
                 "precio": float(product.precio_promocion or product.precio or 0),
                 "imagen_url": product.imagen_url,
                 "stock": product.stock,
+                "puntos_fidelidad": int(product.puntos_fidelidad or 0),
                 "unidades_vendidas": popular_counts.get(product.id, 0),
                 "motivo": (
                     "Combinación basada en tus pedidos" if pair_score

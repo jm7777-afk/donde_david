@@ -67,7 +67,7 @@ def seed():
             ("María", "García", "caja2@dondedavid.com", "099333444", "caja", "caja123", "caja", 0),
             ("Ana", "López", "caja@dondedavid.com", "099555777", "caja_user", "caja123", "caja", 0),
             ("Juan", "Pérez", "cocina@dondedavid.com", "099555666", "cocina1", "cocina123", "cocina", 0),
-            ("Pedro", "Rojas", "delivery@dondedavid.com", "099777888", "delivery1", "delivery123", "mesero", 0)
+            ("Pedro", "Rojas", "delivery@dondedavid.com", "099777888", "delivery1", "delivery123", "repartidor", 0)
         ]
         if os.getenv("ENVIRONMENT", "development").lower() != "production":
             for nom, ape, email, tel, user, pwd, rol, pts in usuarios:
@@ -83,6 +83,8 @@ def seed():
                         rol=rol,
                         puntos_fidelidad=pts
                     ))
+                elif user == "delivery1" and u.rol != "repartidor":
+                    u.rol = "repartidor"
             db.commit()
 
         # 3. Mesas 1 a 20 con soporte para QR exclusivo

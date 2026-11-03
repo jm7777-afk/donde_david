@@ -12,6 +12,7 @@ class DetallePedido(Base):
     cantidad = Column(Integer, nullable=False, default=1)
     precio_unitario = Column(Numeric(12, 2), nullable=False, default=0.00)
     subtotal = Column(Numeric(12, 2), nullable=False, default=0.00)
+    puntos_fidelidad_unitarios = Column(Integer, nullable=False, default=0)
     personalizaciones = Column(Text, nullable=True) # JSON string of custom options (e.g. extra cheese)
     estado = Column(String(30), default="PENDIENTE") # PENDIENTE, EN_PREPARACION, LISTO
     observaciones = Column(String(255), nullable=True)

@@ -6,8 +6,8 @@
   <title>DONDE DAVID - Fresh & Tasty!</title>
   <link rel="manifest" href="/static/manifest.json">
   <meta name="theme-color" content="#FFBC0D">
-  <link rel="stylesheet" href="/static/css/global.css?v=2.0">
-  <link rel="stylesheet" href="/static/css/toon-theme.css?v=2.4">
+  <link rel="stylesheet" href="/static/css/global.css?v=2.1">
+  <link rel="stylesheet" href="/static/css/toon-theme.css?v=2.6">
   <link rel="stylesheet" href="/static/css/index.css?v=2.0">
   
   <!-- Leaflet Maps CSS & JS para Ubicación Exacta de Delivery -->
@@ -36,6 +36,39 @@
     }
     .screen.active {
       display: block;
+    }
+    @media (max-width: 600px) {
+      .points-welcome-card {
+        align-items: flex-start;
+        flex-direction: column;
+        gap: 0.75rem;
+      }
+      #home-welcome-actions {
+        width: 100%;
+      }
+      #home-welcome-actions button {
+        flex: 1 1 auto;
+      }
+      #btn-client-tour {
+        min-width: 100%;
+      }
+    }
+    .client-network-status {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      z-index: 1035;
+      padding: 0.65rem 1rem;
+      text-align: center;
+      font-size: 0.85rem;
+      font-weight: 700;
+      color: #fff;
+      background: #8a4b00;
+      border-bottom: 1px solid rgba(255,255,255,.2);
+    }
+    .client-network-status[data-state="online"] {
+      background: #176b3a;
     }
     @keyframes fadeIn {
       from { opacity: 0; transform: translateY(6px); }
@@ -153,11 +186,14 @@
   <div class="app-container">
 
 <header id="app-header"></header>
+<div id="client-network-status" class="client-network-status" role="status" aria-live="polite" hidden></div>
 
     <!-- 1. SPLASH SCREEN -->
     <div id="screen-splash" class="screen" style="text-align: center; padding: 3rem 1.5rem;">
       <div style="margin-top: 1rem;">
-        <img src="/static/img/logo.png" style="max-width: 440px; width: 100%; height: auto; object-fit: contain; filter: drop-shadow(0 0 35px rgba(255,188,13,0.85)); margin-bottom: 0.75rem;" alt="Donde David Logo Oficial">
+        <a href="#" aria-label="Recargar página" onclick="window.location.reload(); return false;">
+          <img src="/static/img/logo.png" style="max-width: 440px; width: 100%; height: auto; object-fit: contain; filter: drop-shadow(0 0 35px rgba(255,188,13,0.85)); margin-bottom: 0.75rem;" alt="Donde David Logo Oficial">
+        </a>
         <p style="font-size: 0.95rem; color: var(--gold-accent); font-weight: 800; text-transform: uppercase; letter-spacing: 2px;">Fresh & Tasty!</p>
         <p style="font-size: 0.8rem; color: var(--text-muted); margin-top: 0.2rem;">SISTEMA DIGITAL DE PEDIDOS QR & DELIVERY</p>
       </div>
@@ -177,13 +213,10 @@
           <div style="font-size: 0.78rem; color: var(--gold-accent); font-weight: 800; text-transform: uppercase;">¡BIENVENIDO A DONDE DAVID!</div>
           <div style="font-size: 0.92rem; font-weight: 900; color: #fff; margin-top: 0.15rem;" id="home-welcome-subtitle">🎁 Pide como invitado o inicia sesión para ganar puntos</div>
         </div>
-        <div style="display: flex; gap: 0.4rem;">
-          <button style="background: rgba(255,255,255,0.08); border: 1px solid var(--gold-accent); color: #fff; font-weight: 800; padding: 0.4rem 0.7rem; border-radius: 20px; font-size: 0.75rem; cursor: pointer;" onclick="openModal('client-login-modal')">
-            🔑 INICIAR SESIÓN
-          </button>
-          <button style="background: var(--gold-gradient); border: none; color: #000; font-weight: 900; padding: 0.4rem 0.75rem; border-radius: 20px; font-size: 0.75rem; cursor: pointer; box-shadow: 0 4px 15px rgba(255,188,13,0.3);" onclick="openModal('client-register-modal')">
-            +50 PTS 🎁
-          </button>
+        <div id="home-welcome-actions" style="display: flex; gap: 0.4rem; flex-wrap: wrap;">
+          <button id="home-login-action" style="background: rgba(255,255,255,0.08); border: 1px solid var(--gold-accent); color: #fff; font-weight: 800; padding: 0.4rem 0.7rem; border-radius: 20px; font-size: 0.75rem; cursor: pointer;" onclick="openModal('client-login-modal')">🔑 INICIAR SESIÓN</button>
+          <button id="home-register-action" style="background: var(--gold-gradient); border: none; color: #000; font-weight: 900; padding: 0.4rem 0.75rem; border-radius: 20px; font-size: 0.75rem; cursor: pointer; box-shadow: 0 4px 15px rgba(255,188,13,0.3);" onclick="openModal('client-register-modal')">+50 PTS 🎁</button>
+          <button id="btn-client-tour" class="btn btn-outline" style="padding: 0.4rem 0.7rem; border-radius: 20px; font-size: 0.75rem;" onclick="startClientTour(true)">❓ Guía</button>
         </div>
       </div>
 
@@ -341,6 +374,18 @@
         <div id="gps-status-badge" style="font-size: 0.82rem; color: var(--cyan-accent); font-weight: 800; display: none; margin-top: 0.6rem; text-align: center;"></div>
       </div>
 
+      <section id="checkout-order-summary" aria-live="polite" style="background:var(--toon-card);border:1px solid var(--toon-border);border-radius:14px;padding:1rem;margin-bottom:1rem">
+        <h3 style="margin:0 0 .65rem;color:var(--gold-accent)">Resumen de pago</h3>
+        <div style="display:grid;gap:.45rem">
+          <div style="display:flex;justify-content:space-between;gap:.75rem"><span>Productos</span><strong id="checkout-summary-subtotal">$0.00</strong></div>
+          <div style="display:flex;justify-content:space-between;gap:.75rem"><span>Impuesto</span><strong id="checkout-summary-tax">$0.00</strong></div>
+          <div id="checkout-summary-delivery-row" style="display:none;justify-content:space-between;gap:.75rem"><span>Delivery</span><strong id="checkout-summary-delivery">$0.00</strong></div>
+          <div id="checkout-summary-package-row" style="display:none;justify-content:space-between;gap:.75rem"><span>Empaque</span><strong id="checkout-summary-package">$0.00</strong></div>
+          <div style="display:flex;justify-content:space-between;gap:.75rem;border-top:1px solid var(--toon-border);padding-top:.6rem;font-size:1.05rem"><span>Total</span><strong id="checkout-summary-total" style="color:var(--gold-accent)">$0.00</strong></div>
+          <small id="checkout-summary-points" style="color:var(--cyan-accent)">Puntos estimados al pagar: 0</small>
+        </div>
+      </section>
+
       <div class="form-group">
         <label>FORMA DE PAGO SELECCIONADA</label>
         <select id="checkout-payment" class="form-control" onchange="updateCheckoutPaymentFields()">
@@ -374,6 +419,14 @@
         <h2 style="font-size: 1.5rem; font-weight: 900; color: var(--gold-accent); margin-top: 0.5rem;" id="track-order-num">PEDIDO #1092</h2>
         <div style="font-size: 1.2rem; font-weight: 800; margin-bottom: 0.5rem;" id="track-order-status">EN PREPARACIÓN</div>
         <p style="color: var(--text-muted); font-size: 0.85rem;" id="track-order-info">Tu pedido ya está siendo preparado por nuestros cocineros.</p>
+        <div id="track-order-progress" role="status" aria-live="polite" style="text-align:left;background:rgba(255,255,255,.03);border:1px solid var(--toon-border);border-radius:12px;padding:1rem;margin-top:1rem;"></div>
+        <div id="track-delivery-code" hidden style="margin-top:1rem;padding:1rem;border:1px solid var(--gold-accent);border-radius:12px;background:rgba(255,183,3,.1)">
+          <strong>🔐 Código de entrega</strong>
+          <p style="margin:.4rem 0 0">Comparte este código con el repartidor solo cuando recibas tu pedido.</p>
+          <strong id="track-delivery-code-value" style="display:block;font-size:1.6rem;letter-spacing:.2rem;color:var(--gold-accent);margin-top:.4rem"></strong>
+        </div>
+        <div id="track-order-map" style="margin-top:1rem"></div>
+        <button class="btn-outline" style="width:100%;margin-top:.75rem" onclick="refreshTrackedOrder()">🔄 Actualizar estado</button>
 
         <button class="btn-gold" style="width: 100%; margin-top: 1.25rem; background: linear-gradient(135deg, #00f5d4, #00b4d8); color: #000; font-weight: 900;" onclick="openServiceRatingModal()">⭐ DEJAR MI CALIFICACIÓN DEL SERVICIO</button>
         <button class="btn-gold" style="width: 100%; margin-top: 0.75rem;" onclick="showScreen('screen-home')">VER MÁS PRODUCTOS O CONTINUAR</button>
@@ -400,7 +453,7 @@
       <div style="background: linear-gradient(135deg, rgba(255,183,3,0.18), rgba(0,245,212,0.12)); border: 1.5px solid var(--gold-accent); border-radius: 16px; padding: 1.1rem; margin-bottom: 1.25rem; text-align: center; box-shadow: 0 8px 20px rgba(0,0,0,0.3);">
         <span style="font-size: 0.78rem; color: var(--gold-accent); font-weight: 800; text-transform: uppercase;">MIS PUNTOS DE FIDELIDAD:</span>
         <div style="font-size: 2.2rem; font-weight: 900; color: #fff; margin-top: 0.15rem;" id="profile-points-display">0 Puntos 🏆</div>
-        <small style="color: var(--cyan-accent); font-size: 0.75rem; font-weight: 700;">Gana +1 punto por cada $1 gastado en Donde David</small>
+        <small style="color: var(--cyan-accent); font-size: 0.75rem; font-weight: 700;">Los puntos varían por plato y se acreditan al confirmar el pago.</small>
       </div>
       <section id="profile-loyalty-panel" style="background:var(--toon-card);border:1px solid var(--toon-border);border-radius:16px;padding:1rem;margin-bottom:1.25rem" aria-labelledby="loyalty-title">
         <h3 id="loyalty-title" style="margin:0 0 .5rem;color:var(--gold-accent)">🎁 Recompensas y movimientos</h3>
@@ -632,7 +685,7 @@
 
       <div style="display: flex; flex-direction: column; gap: 0.85rem;">
         <button class="btn-gold" style="padding: 1rem; font-size: 1rem;" onclick="chooseMesaPaymentMode('PAGAR_ANTES')">
-          ⚡ PAGAR AHORA (PASARELA DIGITAL)
+          ⚡ CONTINUAR AL PAGO
         </button>
         <button class="btn-gold" style="padding: 1rem; font-size: 1rem; background: rgba(255,255,255,0.08); border: 1px solid var(--gold-accent); color: #fff;" onclick="chooseMesaPaymentMode('PAGAR_DESPUES')">
           🧾 CUENTA ABIERTA (PAGAR AL SALIR)
@@ -698,6 +751,7 @@
           <span id="modal-product-price" style="font-size: 1.4rem; font-weight: 900; color: var(--gold-accent);">$0.00</span>
         </div>
         <p id="modal-product-desc" style="color: var(--text-muted); font-size: 0.88rem; line-height: 1.4; margin-bottom: 1.25rem;">Descripción detallada.</p>
+        <small id="modal-product-loyalty" style="display:block;color:var(--cyan-accent);margin:-.75rem 0 1rem"></small>
         <div id="modal-product-media" hidden aria-label="Galería multimedia del plato"></div>
         <div id="modal-product-allergens" role="note" style="display:none; margin-bottom:1rem; padding:.7rem; border:1px solid var(--gold-accent); border-radius:8px; color:var(--gold-accent); font-size:.82rem;"></div>
 
@@ -764,11 +818,16 @@
   <!-- Driver.js Library script para Tour Interactivo de Clientes -->
   <script src="https://cdn.jsdelivr.net/npm/driver.js@1.3.1/dist/driver.js.iife.js"></script>
 
-  <script src="/static/js/theme-toggle.js?v=2.1"></script>
   <script src="/static/js/auth.js?v=2.0"></script>
   <script src="/static/js/websocket.js?v=2.0"></script>
-  <script src="/static/js/cliente-toon.js?v=2.1"></script>
-  <script src="/static/js/appShell.js?v=2.3"></script>
+  <script src="/static/js/cliente-toon.js?v=2.3"></script>
+  <script src="/static/js/appShell.js?v=2.4"></script>
+  <script>
+    if ("serviceWorker" in navigator && (location.protocol === "https:" || location.hostname === "localhost" || location.hostname === "127.0.0.1")) {
+      navigator.serviceWorker.register("/static/sw.js", { scope: "/static/" })
+        .catch(error => console.error("No se pudo habilitar el modo sin conexión.", error));
+    }
+  </script>
 
   <!-- Script para Cámara QR Scanner & Modal (Requerimientos #1, #2, #3) -->
   <script>
@@ -881,85 +940,104 @@
       closeQrScannerModal();
     }
 
-    function startClientTour(force = false) {
-      if (!window.driver || !window.driver.js) return;
+    const clientTourSteps = {
+      "screen-home": [
+        ["#home-welcome-points-card", "Tu cuenta y puntos", "Consulta tus puntos y accede a tu cuenta; al iniciar sesión verás aquí tu saldo."],
+        ["#home-promo-banner-container", "Promociones", "Las promociones activas se administran desde el panel y aparecen aquí y en la portada."],
+        ["#home-categories-grid", "Categorías", "Explora el menú por categorías."],
+        ["#home-featured-grid", "Productos", "Abre un producto para elegir cantidad, ingredientes y extras."],
+        ["#floating-cart-btn", "Tu carrito", "Consulta los artículos y continúa al pago."]
+      ],
+      "screen-splash": [
+        ["#screen-splash img", "Bienvenido", "Desde aquí puedes entrar al menú y comenzar tu pedido."],
+        ["#screen-splash .btn-gold", "Explorar el menú", "Toca este botón para comenzar."]
+      ],
+      "screen-categorias": [
+        ["#screen-categorias h2", "Categorías del menú", "Encuentra rápidamente el tipo de comida que buscas."],
+        ["#full-categories-grid", "Elige una categoría", "Toca una categoría para ver sus productos."]
+      ],
+      "screen-menu": [
+        ["#menu-search-input", "Busca en el menú", "Filtra los productos por nombre o ingrediente."],
+        ["#menu-products-grid", "Productos disponibles", "Abre un producto para personalizarlo antes de agregarlo."]
+      ],
+      "screen-carrito": [
+        ["#toon-cart-items", "Revisa tu pedido", "Aquí puedes comprobar, ajustar o quitar artículos."],
+        ["#cart-total", "Total del pedido", "El total considera impuestos y cargos aplicables a la modalidad elegida."],
+        ["#screen-carrito > button", "Continúa al checkout", "Elige si tu pedido será en mesa, para llevar o delivery."]
+      ],
+      "screen-checkout": [
+        ["#checkout-type", "Modalidad", "Selecciona mesa, delivery o para llevar para ver los datos requeridos."],
+        ["#section-checkout-mesa", "Pedido en mesa", "La mesa se valida con el QR y puedes elegir cuándo pagar."],
+        ["#section-checkout-delivery", "Datos de entrega", "Para delivery, confirma los datos y la dirección de quien recibe."]
+      ],
+      "screen-tracking": [
+        ["#track-order-status", "Estado del pedido", "Consulta aquí el estado más reciente de preparación y entrega."],
+        ["#track-order-progress", "Progreso", "El progreso se actualiza al recibir cambios del restaurante."],
+        ["#track-order-map", "Entrega", "Cuando esté disponible, aquí verás la información de seguimiento."]
+      ],
+      "screen-historial": [
+        ["#screen-historial h2", "Historial", "Revisa el estado y los detalles de tus pedidos anteriores."],
+        ["#historial-orders-list", "Tus pedidos", "Selecciona un pedido para consultar su información."]
+      ],
+      "screen-perfil": [
+        ["#profile-info-card", "Tu perfil", "Consulta tus datos de cliente."],
+        ["#profile-loyalty-panel", "Fidelización", "Revisa recompensas y movimientos de puntos."],
+        ["#profile-smart-recommendations-container", "Recomendaciones", "Las sugerencias se basan en tu historial de compras y disponibilidad actual."]
+      ]
+    };
+    let clientTourStartTimer = null;
 
-      const driverObj = window.driver.js.driver({
-        showProgress: true,
-        animate: true,
-        allowClose: true,
-        doneBtnText: '¡Entendido y Comenzar! 🍔',
-        nextBtnText: 'Siguiente →',
-        prevBtnText: '← Anterior',
-        onDestroyed: () => {
-          localStorage.setItem("client_tour_seen", "true");
-        },
-        steps: [
-          {
-            element: '#current-table-indicator',
-            popover: {
-              title: '📱 Código QR y Mesa Asignada',
-              description: 'Muestra tu número de mesa escaneado por QR. Toca aquí en cualquier momento para escanear de nuevo o cambiarte de mesa.',
-              side: 'bottom',
-              align: 'end'
-            }
-          },
-          {
-            element: '#home-promo-banner-container',
-            popover: {
-              title: '🔥 Promoción del Día (BOOM!)',
-              description: 'Aprovecha las ofertas del día y combos promocionales exclusivos con descuentos especiales.',
-              side: 'bottom',
-              align: 'center'
-            }
-          },
-          {
-            element: '#home-categories-grid',
-            popover: {
-              title: '📂 Categorías del Menú',
-              description: 'Explora nuestros platillos categorizados con iconos vectoriales limpios (Hamburguesas, Perros, Papas, Bebidas y Postres).',
-              side: 'bottom',
-              align: 'center'
-            }
-          },
-          {
-            element: '#home-featured-grid',
-            popover: {
-              title: '🍔 Platillos e Ingredientes Editables',
-              description: 'Toca cualquier producto para abrir el modal de personalización, remover ingredientes y añadir extras recomendados por categoría.',
-              side: 'top',
-              align: 'center'
-            }
-          },
-          {
-            element: '#floating-cart-btn',
-            popover: {
-              title: '🛒 Carrito Flotante Siempre Visible',
-              description: 'Visualiza la cantidad de platillos seleccionados y el monto total en tiempo real. Toca para revisar tu comanda y enviar a cocina.',
-              side: 'top',
-              align: 'center'
-            }
-          },
-          {
-            element: '#btn-client-tour',
-            popover: {
-              title: '❓ Tour Interactivo de Ayuda',
-              description: 'Si tienes dudas de cómo realizar tu pedido en mesa o delivery, presiona este botón para volver a ver esta guía.',
-              side: 'bottom',
-              align: 'start'
-            }
+    function scheduleClientTour(screenId, force = false, attempt = 0) {
+      clearTimeout(clientTourStartTimer);
+      clientTourStartTimer = setTimeout(() => {
+        const storageKey = `client_tour_seen_${screenId}`;
+        if (!force && localStorage.getItem(storageKey) === "true") return;
+        if (!force && screenId === "screen-home"
+          && localStorage.getItem("client_tour_seen") === "true") {
+          localStorage.setItem(storageKey, "true");
+          return;
+        }
+        if (!window.driver || !window.driver.js) {
+          if (attempt < 10) scheduleClientTour(screenId, force, attempt + 1);
+          return;
+        }
+
+        const steps = (clientTourSteps[screenId] || []).filter(([selector]) => {
+          const element = document.querySelector(selector);
+          return element && element.getClientRects().length > 0;
+        }).map(([element, title, description]) => ({
+          element,
+          popover: { title, description, side: "bottom", align: "center" }
+        }));
+        if (!steps.length) {
+          if (attempt < 4) scheduleClientTour(screenId, force, attempt + 1);
+          return;
+        }
+
+        const driverObj = window.driver.js.driver({
+          showProgress: true,
+          animate: true,
+          allowClose: true,
+          doneBtnText: "¡Entendido!",
+          nextBtnText: "Siguiente →",
+          prevBtnText: "← Anterior",
+          steps,
+          onDestroyed: () => {
+            localStorage.setItem(storageKey, "true");
           }
-        ]
-      });
-
-      driverObj.drive();
+        });
+        driverObj.drive();
+      }, 650);
     }
 
-    // Disparar tour automáticamente en la primera visita del cliente
+    function startClientTour(force = true) {
+      const activeScreen = document.querySelector(".screen.active");
+      if (activeScreen) scheduleClientTour(activeScreen.id, force);
+    }
+
     document.addEventListener("DOMContentLoaded", () => {
-      if (localStorage.getItem("client_tour_seen") !== "true") {
-        setTimeout(() => startClientTour(false), 900);
-      }
+      const activeScreen = document.querySelector(".screen.active");
+      if (activeScreen) scheduleClientTour(activeScreen.id);
     });
   </script>
 </body>

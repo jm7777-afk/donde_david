@@ -13,6 +13,7 @@ class Producto(Base):
     precio_promocion = Column(Numeric(12, 2), nullable=True)
     stock = Column(Integer, default=50)
     stock_minimo = Column(Integer, default=5)
+    puntos_fidelidad = Column(Integer, nullable=False, default=0)
     imagen_url = Column(String(500), nullable=True)
     tiempo_preparacion = Column(Integer, default=15)
     personalizable = Column(Boolean, default=True)

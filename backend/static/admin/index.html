@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Donde David - Panel de Administración General</title>
   <link rel="stylesheet" href="/static/css/global.css?v=2.0">
-  <link rel="stylesheet" href="/static/css/toon-theme.css?v=2.4">
+  <link rel="stylesheet" href="/static/css/toon-theme.css?v=2.5">
   <link rel="stylesheet" href="/static/css/index.css">
   
   <!-- Driver.js CSS para Onboarding Tour Interactivo -->
@@ -79,12 +79,14 @@
       display: flex;
     }
     .admin-sidebar-layout {
-      display: block !important;
+      display: flex !important;
       width: 100%;
       max-width: none;
-      min-height: calc(100vh - 70px);
+      min-height: 0 !important;
       margin: 0;
       padding: 0;
+      flex-direction: column !important;
+      align-items: stretch !important;
     }
     .admin-sidebar {
       position: fixed !important;
@@ -201,6 +203,63 @@
       .tab-nav {
         padding-bottom: .35rem;
         -webkit-overflow-scrolling: touch;
+      }
+    }
+    .admin-sidebar-layout {
+      display: flex !important;
+      align-items: flex-start !important;
+      justify-content: flex-start !important;
+      min-height: 0 !important;
+      height: auto !important;
+      margin-top: 0 !important;
+      padding-top: 0 !important;
+    }
+    .admin-main-content {
+      align-self: flex-start !important;
+      margin-top: 0 !important;
+    }
+    #tab-mesas > div:first-child {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 0.75rem;
+      margin-bottom: 1.25rem;
+    }
+    #tab-mesas > div:first-child h2 {
+      min-width: 0;
+      margin: 0;
+    }
+    #tab-mesas .mesas-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(min(100%, 190px), 1fr)) !important;
+      align-items: start;
+      gap: 1rem;
+    }
+    @media (max-width: 992px) {
+      .admin-sidebar-layout {
+        flex-direction: column !important;
+        align-items: stretch !important;
+        min-height: 0 !important;
+      }
+      .admin-main-content {
+        align-self: stretch !important;
+        margin: 0 !important;
+        padding-top: 1rem !important;
+      }
+      #tab-mesas > div:first-child {
+        flex-direction: column;
+        align-items: stretch;
+      }
+      #tab-mesas > div:first-child h2 {
+        font-size: clamp(1.15rem, 4vw, 1.5rem);
+      }
+      #tab-mesas > div:first-child .btn-gold {
+        width: 100%;
+        justify-content: center;
+      }
+      #tab-mesas .mesas-grid {
+        grid-template-columns: repeat(auto-fit, minmax(min(100%, 150px), 1fr)) !important;
       }
     }
   </style>
@@ -408,6 +467,7 @@
               <th style="padding: 0.75rem;">Precio ($ / Bs)</th>
               <th style="padding: 0.75rem;">Ingredientes / Opciones</th>
               <th style="padding: 0.75rem;">Alérgenos declarados</th>
+              <th style="padding: 0.75rem;">Puntos / unidad</th>
               <th style="padding: 0.75rem;">Disponibilidad</th>
               <th style="padding: 0.75rem;">Stock</th>
               <th style="padding: 0.75rem;">Acciones</th>
@@ -443,10 +503,11 @@
 
     <!-- TAB 4: PROMOCIONES ("BOOM! PROMO DEL DIA") -->
     <div id="tab-promociones" class="tab-content">
-      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.25rem;">
-        <h2>🔥 PROMOCIONES EDITABLES (BOOM! PROMO DEL DÍA)</h2>
-        <button class="btn-gold" onclick="openModal('promo-modal')">➕ Nueva Promoción</button>
+      <div style="display: flex; justify-content: space-between; align-items: center; gap: .75rem; flex-wrap: wrap; margin-bottom: .5rem;">
+        <h2>🔥 PROMOCIONES DE CARRUSELES</h2>
+        <button class="btn-gold" onclick="openNewPromoModal()">➕ Nueva promoción</button>
       </div>
+      <p style="color: var(--text-muted); margin: 0 0 1.25rem;">Las promociones activas se muestran en ambos carruseles: inicio del cliente (<code>home-promo-banner-container</code>) y portada web (<code>landing-hero-carousel-container</code>). Editar o desactivar aquí actualiza los dos.</p>
 
       <div style="background: var(--toon-card); border: 1px solid var(--toon-border); border-radius: var(--radius-md); overflow-x: auto;">
         <table style="width: 100%; border-collapse: collapse; text-align: left;">
@@ -711,6 +772,7 @@
       <div class="form-group"><label>Descripción</label><input type="text" id="edit-prod-desc" class="form-control"></div>
       <div class="form-group"><label>Precio Regular ($ USD)</label><input type="number" step="0.01" id="edit-prod-price" class="form-control" required></div>
       <div class="form-group"><label>Precio Promoción ($ USD) (opcional)</label><input type="number" step="0.01" id="edit-prod-price-promo" class="form-control"></div>
+      <div class="form-group"><label>Puntos de fidelización por unidad vendida</label><input type="number" min="0" max="100000" step="1" id="edit-prod-points" class="form-control" value="0"><small>Se acreditan en la cuenta del cliente cuando Caja confirma el pago.</small></div>
       <div class="form-group"><label>Preparación estimada (minutos)</label><input type="number" min="1" max="240" id="edit-prod-tiempo-preparacion" class="form-control" required></div>
       <div class="form-group"><label>Ingredientes (separados por coma)</label><input type="text" id="edit-prod-ingredientes" class="form-control" placeholder="Ej. Carne 150g, Queso Cheddar, Tomate, Cebolla"></div>
       <div class="form-group">
@@ -736,17 +798,18 @@
   <div class="product-modal-backdrop" id="promo-modal">
     <div class="product-modal-card" style="max-width: 450px; padding: 1.5rem;">
       <button class="modal-close-btn" onclick="closeModal('promo-modal')">&times;</button>
-      <h3 style="color: var(--gold-accent); margin-top: 0;">🔥 PROMOCIÓN DÍA (BOOM!)</h3>
-      <div class="form-group"><label>Título Promocional</label><input type="text" id="promo-titulo" class="form-control" placeholder="Ej. COMBO EXPLOSIVO TOON" required></div>
-      <div class="form-group"><label>Descripción</label><input type="text" id="promo-desc" class="form-control" placeholder="2 Hamburguesas + Papas + 2 Refrescos"></div>
+      <h3 id="promo-modal-title" style="color: var(--gold-accent); margin-top: 0;">🔥 NUEVA PROMOCIÓN</h3>
+      <div class="form-group"><label>Título Promocional</label><input type="text" id="promo-titulo" class="form-control" maxlength="150" placeholder="Ej. COMBO EXPLOSIVO TOON" required></div>
+      <div class="form-group"><label>Descripción</label><input type="text" id="promo-desc" class="form-control" maxlength="255" placeholder="2 Hamburguesas + Papas + 2 Refrescos"></div>
       <div class="form-group"><label>Porcentaje Descuento (%)</label><input type="number" id="promo-pct" class="form-control" value="20"></div>
       <div class="form-group"><label>Código Cupon</label><input type="text" id="promo-codigo" class="form-control" value="COMBO20"></div>
       <div class="form-group">
         <label>Subir Imagen Banner</label>
         <input type="file" accept="image/*" class="form-control" onchange="uploadLocalFile(event, 'promo-img')">
       </div>
-      <div class="form-group"><label>Ruta Imagen</label><input type="text" id="promo-img" class="form-control"></div>
-      <button class="btn-gold" style="width: 100%; margin-top: 1rem;" onclick="submitCreatePromo()">GUARDAR PROMOCIÓN</button>
+      <div class="form-group"><label>Ruta Imagen</label><input type="text" id="promo-img" class="form-control" maxlength="500" placeholder="/static/uploads/banner.jpg"></div>
+      <label style="display:flex;align-items:center;gap:.5rem;"><input type="checkbox" id="promo-activo" checked> Visible en ambos carruseles</label>
+      <button id="promo-submit-btn" class="btn-gold" style="width: 100%; margin-top: 1rem;" onclick="submitCreatePromo()">GUARDAR PROMOCIÓN</button>
     </div>
   </div>
 
@@ -864,6 +927,7 @@
       <div class="form-group"><label>Categoría</label><select id="prod-cat-select" class="form-control" required></select></div>
       <div class="form-group"><label>Descripción</label><input type="text" id="prod-desc" class="form-control"></div>
       <div class="form-group"><label>Precio ($ USD)</label><input type="number" step="0.01" id="prod-price" class="form-control" required></div>
+      <div class="form-group"><label>Puntos de fidelización por unidad vendida</label><input type="number" min="0" max="100000" step="1" id="prod-points" class="form-control" value="0"><small>Se acreditan en la cuenta del cliente cuando Caja confirma el pago.</small></div>
       <div class="form-group"><label>Preparación estimada (minutos)</label><input type="number" min="1" max="240" id="prod-tiempo-preparacion" class="form-control" value="15" required></div>
       <div class="form-group"><label>Ingredientes (separados por coma)</label><input type="text" id="prod-ingredientes" class="form-control" placeholder="Ej. Carne 150g, Queso Cheddar, Tomate, Cebolla"></div>
       <div class="form-group">
@@ -915,11 +979,10 @@
 
   <!-- Driver.js Library script -->
   <script src="https://cdn.jsdelivr.net/npm/driver.js@1.3.1/dist/driver.js.iife.js"></script>
-  <script src="/static/js/theme-toggle.js?v=2.1"></script>
   <script src="/static/js/auth.js?v=2.0"></script>
-  <script src="/static/js/appShell.js?v=2.3"></script>
+  <script src="/static/js/appShell.js?v=2.4"></script>
   <script src="/static/js/websocket.js?v=2.0"></script>
-  <script src="/static/js/admin-toon.js?v=2.2"></script>
+  <script src="/static/js/admin-toon.js?v=2.3"></script>
 
   <!-- Script para Autodisparo del Tour Interactivo Driver.js -->
   <script>

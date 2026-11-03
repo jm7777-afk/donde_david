@@ -9,6 +9,7 @@ class Pedido(Base):
     id = Column(Integer, primary_key=True, index=True)
     numero_mesa = Column(String(50), nullable=False) # e.g. "Mesa 5" or "Delivery #105"
     codigo_qr = Column(String(100), nullable=True)
+    token_seguimiento_hash = Column(String(64), nullable=True)
     tipo = Column(String(30), default="mesa") # mesa, llevar, delivery
     modo_pago = Column(String(30), default="PAGAR_ANTES") # PAGAR_ANTES, PAGAR_DESPUES (Cuenta Abierta)
     estado = Column(String(30), default="PENDIENTE") # PENDIENTE, EN_PREPARACION, LISTO, COBRADO, ENTREGADO, CANCELADO
@@ -17,6 +18,7 @@ class Pedido(Base):
     costo_empaque = Column(Numeric(12, 2), default=0.00)
     descuento = Column(Numeric(12, 2), default=0.00)
     total = Column(Numeric(12, 2), nullable=False, default=0.00)
+    puntos_otorgados = Column(Integer, nullable=True, default=None)
     observaciones = Column(Text, nullable=True)
     
     # Campos exclusivos para Delivery & OTP
@@ -45,6 +47,9 @@ class Pedido(Base):
     estado_delivery = Column(String(30), nullable=True)
     fecha_retiro = Column(DateTime, nullable=True)
     fecha_en_camino = Column(DateTime, nullable=True)
+    repartidor_lat = Column(Numeric(10, 7), nullable=True)
+    repartidor_lng = Column(Numeric(10, 7), nullable=True)
+    ubicacion_repartidor_actualizada_at = Column(DateTime, nullable=True)
     factura_numero = Column(String(50), nullable=True)
     nit_cliente = Column(String(50), default="CF")
     nombre_factura = Column(String(100), default="Consumidor Final")

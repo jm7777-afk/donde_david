@@ -5,6 +5,7 @@ let adminProducts = [];
 let adminCategories = [];
 let adminGuiaItems = [];
 let adminPromos = [];
+let editingPromoId = null;
 let adminResenas = [];
 let adminPublicaciones = [];
 let selectedInsumoForIngreso = null;
@@ -423,7 +424,7 @@ function renderProducts() {
     return categorySort || left.nombre.localeCompare(right.nombre, "es", { sensitivity: "base" });
   });
   if (!products.length) {
-    tbody.innerHTML = '<tr><td colspan="9" style="padding:1rem;text-align:center;color:var(--text-muted)">No hay productos que coincidan con la búsqueda.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="10" style="padding:1rem;text-align:center;color:var(--text-muted)">No hay productos que coincidan con la búsqueda.</td></tr>';
     return;
   }
 
@@ -451,6 +452,7 @@ function renderProducts() {
         <td style="padding: 0.75rem; font-weight: 900;">${formatPriceDual(p.precio)}</td>
         <td style="padding: 0.75rem; font-size: 0.8rem; color: var(--text-muted);">${escapeAdminHtml(ingsStr)}</td>
         <td style="padding: 0.75rem; font-size: 0.8rem;">${escapeAdminHtml(p.alergenos || "Sin declarar")}</td>
+        <td style="padding: 0.75rem;">🎁 ${Number(p.puntos_fidelidad) || 0}</td>
         <td style="padding: 0.75rem;">${p.disponible ? "Disponible" : "No disponible"}</td>
         <td style="padding: 0.75rem;">${p.stock}</td>
         <td style="padding: 0.75rem; display: flex; gap: 0.4rem;">
@@ -471,6 +473,7 @@ function openEditProductModal(prodId) {
   document.getElementById("edit-prod-desc").value = p.descripcion || '';
   document.getElementById("edit-prod-price").value = p.precio;
   document.getElementById("edit-prod-price-promo").value = p.precio_promocion || '';
+  document.getElementById("edit-prod-points").value = Number(p.puntos_fidelidad) || 0;
   document.getElementById("edit-prod-tiempo-preparacion").value = p.tiempo_preparacion || 15;
   document.getElementById("edit-prod-img").value = p.imagen_url || '';
   document.getElementById("edit-prod-alergenos").value = p.alergenos || '';
@@ -516,6 +519,7 @@ async function submitUpdateProduct() {
     descripcion: document.getElementById("edit-prod-desc").value,
     precio: parseFloat(document.getElementById("edit-prod-price").value),
     precio_promocion: parseFloat(document.getElementById("edit-prod-price-promo").value) || null,
+    puntos_fidelidad: parseInt(document.getElementById("edit-prod-points").value, 10) || 0,
     tiempo_preparacion: parseInt(document.getElementById("edit-prod-tiempo-preparacion").value, 10),
     categoria_id: parseInt(document.getElementById("edit-prod-cat-select").value),
     imagen_url: document.getElementById("edit-prod-img").value,
@@ -548,12 +552,15 @@ async function submitUpdateProduct() {
 async function loadPromosAdmin() {
   try {
     const res = await fetch("/api/v1/admin/promociones", { headers: Auth.getHeaders() });
-    if (res.ok) {
-      adminPromos = await res.json();
-      renderPromosAdmin();
+    if (!res.ok) {
+      const error = await res.json();
+      throw new Error(error.detail || "No se pudieron cargar las promociones.");
     }
+    adminPromos = await res.json();
+    renderPromosAdmin();
   } catch (err) {
-    console.error(err);
+    console.error("Error al cargar las promociones:", err);
+    showToast(err.message || "No se pudieron cargar las promociones.", "danger");
   }
 }
 
@@ -563,41 +570,91 @@ function renderPromosAdmin() {
 
   let html = "";
   adminPromos.forEach(p => {
-    const img = p.banner_url || "https://images.unsplash.com/photo-1561758033-d89a9ad46330?w=500";
+    const rawImage = String(p.banner_url || "");
+    const img = /^(https:\/\/|\/static\/)/i.test(rawImage) ? rawImage : "/static/img/logo.png";
     html += `
       <tr style="border-bottom: 1px solid var(--toon-border);">
-        <td style="padding: 0.75rem;"><img src="${img}" style="width: 60px; height: 40px; border-radius: 6px; object-fit: cover;"></td>
-        <td style="padding: 0.75rem; font-weight: 800; color: #fff;">${p.titulo}</td>
-        <td style="padding: 0.75rem; color: var(--text-muted); font-size: 0.85rem;">${p.descripcion || ''}</td>
-        <td style="padding: 0.75rem; font-weight: 900; color: var(--gold-accent);">${p.descuento_pct}% OFF</td>
-        <td style="padding: 0.75rem;"><span class="badge" style="background: var(--cyan-accent); color: #000; font-weight: 800;">${p.codigo_cupon}</span></td>
-        <td style="padding: 0.75rem;"><button class="btn-gold" style="padding: 0.3rem 0.6rem; font-size: 0.75rem; background: var(--neon-red); color: #fff;" onclick="deletePromo(${p.id})">🗑️ Eliminar</button></td>
+        <td style="padding: 0.75rem;"><img src="${escapeAdminHtml(img)}" alt="${escapeAdminHtml(p.titulo)}" style="width: 60px; height: 40px; border-radius: 6px; object-fit: cover;"></td>
+        <td style="padding: 0.75rem; font-weight: 800; color: #fff;">${escapeAdminHtml(p.titulo)}</td>
+        <td style="padding: 0.75rem; color: var(--text-muted); font-size: 0.85rem;">${escapeAdminHtml(p.descripcion || "")}</td>
+        <td style="padding: 0.75rem; font-weight: 900; color: var(--gold-accent);">${Number(p.descuento_pct) || 0}% OFF</td>
+        <td style="padding: 0.75rem;"><span class="badge" style="background: var(--cyan-accent); color: #000; font-weight: 800;">${escapeAdminHtml(p.codigo_cupon || "Sin código")}</span></td>
+        <td style="padding: 0.75rem; white-space:nowrap;">
+          <span class="badge" style="background:${p.activo ? "var(--neon-green)" : "var(--text-muted)"};color:#000">${p.activo ? "Activa" : "Oculta"}</span>
+          <button class="btn btn-outline" style="padding: 0.3rem 0.6rem; font-size: 0.75rem;" onclick="openEditPromo(${Number(p.id)})">✏️ Editar</button>
+          <button class="btn-gold" style="padding: 0.3rem 0.6rem; font-size: 0.75rem; background: var(--neon-red); color: #fff;" onclick="deletePromo(${Number(p.id)})">🗑️ Eliminar</button>
+        </td>
       </tr>
     `;
   });
-  tbody.innerHTML = html;
+  tbody.innerHTML = html || `<tr><td colspan="6" style="padding:1rem;text-align:center;color:var(--text-muted)">No hay promociones. Crea una para publicarla en ambos carruseles.</td></tr>`;
+}
+
+function openNewPromoModal() {
+  editingPromoId = null;
+  document.getElementById("promo-modal-title").textContent = "🔥 NUEVA PROMOCIÓN";
+  document.getElementById("promo-submit-btn").textContent = "GUARDAR PROMOCIÓN";
+  document.getElementById("promo-titulo").value = "";
+  document.getElementById("promo-desc").value = "";
+  document.getElementById("promo-pct").value = "0";
+  document.getElementById("promo-codigo").value = "";
+  document.getElementById("promo-img").value = "";
+  document.getElementById("promo-activo").checked = true;
+  openModal("promo-modal");
+}
+
+function openEditPromo(id) {
+  const promo = adminPromos.find(item => Number(item.id) === Number(id));
+  if (!promo) {
+    showToast("No se encontró la promoción que deseas editar.", "danger");
+    return;
+  }
+  editingPromoId = Number(promo.id);
+  document.getElementById("promo-modal-title").textContent = `✏️ EDITAR PROMOCIÓN #${promo.id}`;
+  document.getElementById("promo-submit-btn").textContent = "GUARDAR CAMBIOS";
+  document.getElementById("promo-titulo").value = promo.titulo || "";
+  document.getElementById("promo-desc").value = promo.descripcion || "";
+  document.getElementById("promo-pct").value = String(Number(promo.descuento_pct) || 0);
+  document.getElementById("promo-codigo").value = promo.codigo_cupon || "";
+  document.getElementById("promo-img").value = promo.banner_url || "";
+  document.getElementById("promo-activo").checked = Boolean(promo.activo);
+  openModal("promo-modal");
 }
 
 async function submitCreatePromo() {
+  const title = document.getElementById("promo-titulo").value.trim();
+  const discount = Number(document.getElementById("promo-pct").value);
+  if (!title || !Number.isFinite(discount) || discount < 0 || discount > 100) {
+    showToast("Indica un título y un descuento válido entre 0 y 100%.", "warning");
+    return;
+  }
   const payload = {
-    titulo: document.getElementById("promo-titulo").value,
-    descripcion: document.getElementById("promo-desc").value,
-    descuento_pct: parseFloat(document.getElementById("promo-pct").value) || 0.0,
-    codigo_cupon: document.getElementById("promo-codigo").value,
-    banner_url: document.getElementById("promo-img").value || "https://images.unsplash.com/photo-1561758033-d89a9ad46330?w=500",
-    activo: true
+    titulo: title,
+    descripcion: document.getElementById("promo-desc").value.trim(),
+    descuento_pct: discount,
+    codigo_cupon: document.getElementById("promo-codigo").value.trim(),
+    banner_url: document.getElementById("promo-img").value.trim(),
+    activo: document.getElementById("promo-activo").checked
   };
 
   try {
-    const res = await fetch("/api/v1/admin/promociones", {
-      method: "POST",
+    const isEditing = editingPromoId !== null;
+    const endpoint = isEditing
+      ? `/api/v1/admin/promociones/${editingPromoId}`
+      : "/api/v1/admin/promociones";
+    const res = await fetch(endpoint, {
+      method: isEditing ? "PUT" : "POST",
       headers: Auth.getHeaders(),
       body: JSON.stringify(payload)
     });
-    if (!res.ok) throw new Error("Error al guardar promoción");
-    showToast("Promoción guardada en el carrusel BOOM! PROMO DEL DÍA", "success");
+    if (!res.ok) {
+      const error = await res.json();
+      throw new Error(error.detail || "Error al guardar promoción.");
+    }
+    editingPromoId = null;
+    showToast("Promoción guardada y sincronizada en los carruseles Home y Landing.", "success");
     closeModal("promo-modal");
-    loadPromosAdmin();
+    await loadPromosAdmin();
   } catch (err) {
     showToast(err.message, "danger");
   }
@@ -1040,6 +1097,7 @@ function openProductModal() {
   select.innerHTML = opts;
   document.getElementById("prod-extras").value = "";
   document.getElementById("prod-media").value = "";
+  document.getElementById("prod-points").value = "0";
   openModal("product-modal");
 }
 
@@ -1061,6 +1119,7 @@ async function submitCreateProduct() {
     categoria_id: parseInt(document.getElementById("prod-cat-select").value),
     descripcion: document.getElementById("prod-desc").value,
     precio: parseFloat(document.getElementById("prod-price").value),
+    puntos_fidelidad: parseInt(document.getElementById("prod-points").value, 10) || 0,
     tiempo_preparacion: parseInt(document.getElementById("prod-tiempo-preparacion").value, 10),
     imagen_url: document.getElementById("prod-img").value || "https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=500",
     ingredientes_json: JSON.stringify(ingsArr),

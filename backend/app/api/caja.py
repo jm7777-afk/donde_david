@@ -1,9 +1,12 @@
-from typing import List, Optional
+import json
+import math
+import secrets
+from typing import List, Literal, Optional
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 import hmac
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import func
+from sqlalchemy import and_, func, or_
 from sqlalchemy.orm import Session
 from pydantic import BaseModel, Field
 from backend.app.core.database import get_db
@@ -21,6 +24,8 @@ from backend.app.models.arqueo_turno import ArqueoTurno
 from backend.app.schemas.schemas import PedidoOut, TurnoApertura, TurnoCierre, TurnoOut, CobrarPedidoRequest, DetallePedidoItem, MovimientoCajaCreate, MovimientoCajaOut, ConfirmarRetiroRequest
 from backend.app.schemas.schemas import ConfirmarPagoRequest
 from backend.app.services.exchange_rate import get_bcv_rate
+from backend.app.services.tables import parse_table_number, refresh_table_state
+from backend.app.services.loyalty import award_order_loyalty_points
 from backend.app.websockets.manager import ws_manager
 
 router = APIRouter(
@@ -30,12 +35,17 @@ router = APIRouter(
 )
 
 class PedidoRapidoPOSCreate(BaseModel):
-    numero_mesa: str # e.g. "Mesa 5", "Mostrador"
-    tipo: Optional[str] = "llevar"
-    metodo_pago: str = Field(min_length=1, max_length=50)
+    numero_mesa: str = Field(min_length=1, max_length=50)
+    tipo: Literal["mesa", "llevar", "delivery"] = "llevar"
+    metodo_pago: Literal["Efectivo", "Pago Móvil", "Punto de Venta"]
     monto_recibido: float = Field(ge=0, allow_inf_nan=False)
-    nit_cliente: Optional[str] = "CF"
-    nombre_factura: Optional[str] = "Consumidor Final"
+    moneda_pago: Literal["USD", "VES"] = "USD"
+    cliente_id: Optional[int] = Field(default=None, gt=0)
+    nit_cliente: Optional[str] = Field(default="CF", max_length=50)
+    nombre_factura: Optional[str] = Field(default="Consumidor Final", max_length=100)
+    nombre_cliente_delivery: Optional[str] = Field(default=None, max_length=150)
+    telefono_delivery: Optional[str] = Field(default=None, max_length=50)
+    direccion_delivery: Optional[str] = Field(default=None, max_length=500)
     detalles: List[DetallePedidoItem] = Field(min_length=1, max_length=50)
 
 
@@ -257,7 +267,10 @@ def get_pedidos_pendientes_cobro(
     db: Session = Depends(get_db)
 ):
     return db.query(Pedido).filter(
-        Pedido.estado.in_(["PAGO_PENDIENTE", "PENDIENTE", "EN_PREPARACION", "LISTO"])
+        or_(
+            Pedido.estado.in_(["PAGO_PENDIENTE", "PENDIENTE", "EN_PREPARACION", "LISTO"]),
+            and_(Pedido.estado == "ENTREGADO", Pedido.estado_pago != "PAGADO"),
+        )
     ).order_by(Pedido.fecha_creacion.asc()).all()
 
 @router.get("/pedidos-cobrados", response_model=List[PedidoOut])
@@ -333,6 +346,7 @@ async def confirmar_pago_pedido(
         pedido.cambio = 0
         pedido.factura_numero = f"FAC-DD-{pedido.id:06d}"
         pedido.turno_id = turno.id
+        award_order_loyalty_points(db, pedido)
         turno.total_ventas = round(float(turno.total_ventas or 0) + float(pedido.total or 0), 2)
         turno.total_pedidos = int(turno.total_pedidos or 0) + 1
         message = "Pago Móvil validado y pedido liberado a cocina."
@@ -355,20 +369,9 @@ async def confirmar_pago_pedido(
                 ))
         if pedido.tipo == "mesa":
             try:
-                mesa_numero = int(pedido.numero_mesa.lower().replace("mesa", "").strip())
-            except ValueError:
-                mesa_numero = None
-            if mesa_numero is not None:
-                mesa = db.query(Mesa).filter(Mesa.numero_mesa == mesa_numero).with_for_update().first()
-                pedidos_abiertos = db.query(Pedido.id).filter(
-                    Pedido.tipo == "mesa",
-                    Pedido.numero_mesa == pedido.numero_mesa,
-                    Pedido.id != pedido.id,
-                    Pedido.estado.notin_(["CANCELADO", "COBRADO", "ENTREGADO"]),
-                ).first()
-                if mesa and not pedidos_abiertos:
-                    mesa.estado = "LIBRE"
-                    mesa.cliente_actual = None
+                refresh_table_state(db, parse_table_number(pedido.numero_mesa))
+            except ValueError as exc:
+                raise HTTPException(status_code=409, detail=str(exc)) from exc
         message = "Pago rechazado y pedido cancelado."
 
     db.commit()
@@ -399,13 +402,52 @@ async def crear_y_cobrar_rapido(
     db: Session = Depends(get_db),
     current_user = Depends(require_roles(["admin", "supervisor", "caja"]))
 ):
+    if data.metodo_pago == "Pago Móvil" and data.moneda_pago != "VES":
+        raise HTTPException(status_code=422, detail="Pago Móvil debe cobrarse en bolívares.")
+
     tax_config = db.query(Configuracion).filter(Configuracion.clave == "impuesto_porcentaje").first()
     tax_rate = float(tax_config.valor) if tax_config else 16.0
+    delivery_config = db.query(Configuracion).filter(Configuracion.clave == "costo_delivery").first()
+    package_config = db.query(Configuracion).filter(Configuracion.clave == "costo_empaque").first()
+    delivery_fee = float(delivery_config.valor) if delivery_config else 5.0
+    package_fee = float(package_config.valor) if package_config else 3.0
+
+    if data.tipo == "delivery" and not all([
+        data.nombre_cliente_delivery and data.nombre_cliente_delivery.strip(),
+        data.telefono_delivery and data.telefono_delivery.strip(),
+        data.direccion_delivery and data.direccion_delivery.strip(),
+    ]):
+        raise HTTPException(status_code=422, detail="El delivery requiere nombre, teléfono y dirección.")
+    cliente_pos = None
+    if data.cliente_id is not None:
+        cliente_pos = db.query(Usuario).filter(
+            Usuario.id == data.cliente_id,
+            Usuario.rol == "cliente",
+            Usuario.activo == True,
+        ).with_for_update().first()
+        if not cliente_pos:
+            raise HTTPException(status_code=404, detail="El cliente seleccionado no existe o está inactivo.")
 
     turno_activo = db.query(Turno).filter(Turno.activo == True).with_for_update().first()
     if not turno_activo:
         raise HTTPException(status_code=409, detail="Debe abrir un turno de caja antes de cobrar.")
     turno_id = turno_activo.id
+
+    mesa = None
+    numero_mesa = data.numero_mesa.strip()
+    if data.tipo == "mesa":
+        try:
+            mesa_number = int(numero_mesa.lower().replace("mesa", "").strip())
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail="El número de mesa no es válido.") from exc
+        mesa = db.query(Mesa).filter(Mesa.numero_mesa == mesa_number).with_for_update().first()
+        if not mesa:
+            raise HTTPException(status_code=404, detail=f"La Mesa #{mesa_number} no existe.")
+        if mesa.estado in {"PENDIENTE_LIMPIEZA", "EN_LIMPIEZA"}:
+            raise HTTPException(status_code=409, detail="La mesa debe quedar limpia antes de recibir otro pedido.")
+        numero_mesa = f"Mesa {mesa_number}"
+        mesa.estado = "OCUPADA"
+        mesa.cliente_actual = data.nombre_factura or f"Cliente Mesa {mesa_number}"
 
     requested_quantities: dict[int, int] = {}
     for item in data.detalles:
@@ -436,54 +478,106 @@ async def crear_y_cobrar_rapido(
     for item in data.detalles:
         producto = products[item.producto_id]
         precio_num = float(producto.precio_promocion) if (producto.precio_promocion and float(producto.precio_promocion) > 0) else float(producto.precio)
-        subtotal_item = round(precio_num * item.cantidad, 2)
+        customizations = item.personalizaciones or {}
+        extras_requested = customizations.get("extras", [])
+        if not isinstance(extras_requested, list):
+            raise HTTPException(status_code=422, detail="La lista de extras no es válida.")
+        try:
+            configured_extras = json.loads(producto.extras_json or "[]")
+        except json.JSONDecodeError as exc:
+            raise HTTPException(status_code=500, detail="La configuración de extras de un producto es inválida.") from exc
+        if not isinstance(configured_extras, list):
+            raise HTTPException(status_code=500, detail="La configuración de extras de un producto es inválida.")
+        configured_by_name = {
+            entry["nombre"]: float(entry["precio"])
+            for entry in configured_extras
+            if isinstance(entry, dict)
+            and isinstance(entry.get("nombre"), str)
+            and isinstance(entry.get("precio"), (int, float))
+            and not isinstance(entry.get("precio"), bool)
+            and math.isfinite(entry["precio"])
+            and entry["precio"] >= 0
+        }
+        selected_names = []
+        extra_total = 0.0
+        for extra in extras_requested:
+            if not isinstance(extra, str) or extra not in configured_by_name or extra in selected_names:
+                raise HTTPException(status_code=422, detail=f"El extra solicitado no está disponible para {producto.nombre}.")
+            selected_names.append(extra)
+            extra_total += configured_by_name[extra]
+        unit_price = round(precio_num + extra_total, 2)
+        subtotal_item = round(unit_price * item.cantidad, 2)
         subtotal_acumulado += subtotal_item
 
         detalle = DetallePedido(
             producto_id=producto.id,
             cantidad=item.cantidad,
-            precio_unitario=precio_num,
+            precio_unitario=unit_price,
             subtotal=subtotal_item,
+            puntos_fidelidad_unitarios=max(0, int(producto.puntos_fidelidad or 0)),
+            personalizaciones=json.dumps({**customizations, "extras": selected_names}) if customizations else None,
+            observaciones=item.observaciones,
             estado="PENDIENTE"
         )
         detalles_db.append(detalle)
 
     subtotal_final = round(subtotal_acumulado, 2)
     impuesto_monto = round(subtotal_final * (tax_rate / 100.0), 2)
-    total_final = round(subtotal_final + impuesto_monto, 2)
+    costo_extra = delivery_fee if data.tipo == "delivery" else package_fee if data.tipo == "llevar" else 0.0
+    total_final = round(subtotal_final + impuesto_monto + costo_extra, 2)
 
-    if data.monto_recibido < total_final:
-        raise HTTPException(status_code=400, detail=f"Monto recibido (${data.monto_recibido:.2f}) insuficiente. Total: ${total_final:.2f}")
+    rate_status = get_bcv_rate(db) if data.moneda_pago == "VES" else None
+    exchange_rate = rate_status["tasa_cambio_bs"] if rate_status else None
+    if data.moneda_pago == "VES" and exchange_rate is None:
+        raise HTTPException(status_code=503, detail="No hay una tasa BCV válida para cobrar en bolívares.")
+    total_exigible = round(total_final * exchange_rate, 2) if exchange_rate else total_final
+    if data.monto_recibido < total_exigible:
+        currency_mark = "Bs. " if data.moneda_pago == "VES" else "$"
+        raise HTTPException(
+            status_code=400,
+            detail=f"Monto recibido ({currency_mark}{data.monto_recibido:.2f}) insuficiente. Total: {currency_mark}{total_exigible:.2f}",
+        )
 
-    cambio_calculado = round(data.monto_recibido - total_final, 2)
+    cambio_calculado = round(data.monto_recibido - total_exigible, 2)
     for product_id, quantity in requested_quantities.items():
         products[product_id].stock -= quantity
 
     nuevo_pedido = Pedido(
-        numero_mesa=data.numero_mesa or "Mostrador",
-        tipo=data.tipo or "llevar",
+        numero_mesa=numero_mesa if data.tipo == "mesa" else "Mostrador" if data.tipo == "llevar" else f"Delivery #{db.query(Pedido).count() + 101}",
+        tipo=data.tipo,
         modo_pago="PAGAR_ANTES",
         estado="COBRADO",
         subtotal=subtotal_final,
         impuesto=impuesto_monto,
+        costo_empaque=package_fee if data.tipo == "llevar" else 0.0,
         descuento=0.0,
         total=total_final,
         metodo_pago=data.metodo_pago,
         monto_recibido=data.monto_recibido,
         cambio=cambio_calculado,
         estado_pago="PAGADO",
-        moneda_pago="USD",
-        monto_pago=total_final,
+        moneda_pago=data.moneda_pago,
+        monto_pago=total_exigible,
+        tasa_cambio_pago=exchange_rate,
         fecha_pago=datetime.now(timezone.utc),
         nit_cliente=data.nit_cliente or "CF",
         nombre_factura=data.nombre_factura or "Consumidor Final",
+        nombre_cliente_delivery=data.nombre_cliente_delivery,
+        telefono_delivery=data.telefono_delivery,
+        direccion_delivery=data.direccion_delivery,
+        estado_delivery="PENDIENTE" if data.tipo == "delivery" else None,
+        codigo_otp=f"{secrets.randbelow(900000) + 100000:06d}" if data.tipo == "delivery" else None,
+        otp_verificado=False,
+        codigo_retiro=f"{secrets.randbelow(900000) + 100000:06d}" if data.tipo == "llevar" else None,
+        estado_retiro="PENDIENTE" if data.tipo == "llevar" else None,
         turno_id=turno_id,
-        usuario_id=current_user.id,
+        usuario_id=cliente_pos.id if cliente_pos else current_user.id,
         detalles=detalles_db
     )
 
     db.add(nuevo_pedido)
     db.flush()
+    award_order_loyalty_points(db, nuevo_pedido)
     for product_id, quantity in requested_quantities.items():
         db.add(MovimientoInventario(
             producto_id=product_id,
@@ -517,7 +611,12 @@ async def crear_y_cobrar_rapido(
         "total": total_final,
         "monto_recibido": data.monto_recibido,
         "cambio": cambio_calculado,
-        "metodo_pago": data.metodo_pago
+        "metodo_pago": data.metodo_pago,
+        "moneda_pago": data.moneda_pago,
+        "monto_pago": total_exigible,
+        "tasa_cambio_pago": exchange_rate,
+        "codigo_retiro": nuevo_pedido.codigo_retiro,
+        "codigo_otp": nuevo_pedido.codigo_otp,
     }
 
 @router.post("/pedidos/{pedido_id}/cobrar")
@@ -534,8 +633,8 @@ async def cobrar_pedido(
 
     if pedido.estado_pago == "PENDIENTE_VALIDACION":
         raise HTTPException(status_code=409, detail="El pago móvil debe validarse desde la cola de pagos antes de cobrar.")
-    if pedido.estado_pago == "PAGADO" or pedido.factura_numero or pedido.estado in ["COBRADO", "CANCELADO", "ENTREGADO"]:
-        raise HTTPException(status_code=400, detail="El pedido ya ha sido cobrado previamente.")
+    if pedido.estado_pago == "PAGADO" or pedido.factura_numero or pedido.estado == "CANCELADO":
+        raise HTTPException(status_code=400, detail="El pedido no puede cobrarse en su estado actual.")
 
     turno_activo = db.query(Turno).filter(Turno.activo == True).with_for_update().first()
     if not turno_activo:
@@ -568,22 +667,19 @@ async def cobrar_pedido(
     pedido.nit_cliente = data.nit_cliente or "CF"
     pedido.nombre_factura = data.nombre_factura or "Consumidor Final"
     pedido.factura_numero = factura_num
-    pedido.estado = "COBRADO"
-
-    if pedido.tipo == "mesa" and pedido.numero_mesa:
+    was_delivered = pedido.estado == "ENTREGADO"
+    pedido.estado = "ENTREGADO" if was_delivered else "COBRADO"
+    if pedido.tipo == "mesa":
         try:
-            mesa_num = int(pedido.numero_mesa.lower().replace("mesa", "").strip())
-            mesa_obj = db.query(Mesa).filter(Mesa.numero_mesa == mesa_num).first()
-            if mesa_obj:
-                mesa_obj.estado = "LIBRE"
-                mesa_obj.cliente_actual = None
-        except Exception:
-            pass
+            refresh_table_state(db, parse_table_number(pedido.numero_mesa))
+        except ValueError as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
 
     pedido.turno_id = turno_activo.id
     current_ventas = float(turno_activo.total_ventas or 0.0)
     turno_activo.total_ventas = round(current_ventas + ped_total, 2)
     turno_activo.total_pedidos += 1
+    award_order_loyalty_points(db, pedido)
 
     db.commit()
 

@@ -28,6 +28,10 @@ let tasaCambioBs = null;
 let tasaFuente = "";
 let tasaActualizadaAt = null;
 let deliveryCouriers = [];
+let posTaxRate = 16;
+let posDeliveryFee = 5;
+let posPackageFee = 3;
+let resumePaymentAfterShiftOpen = false;
 
 let currentOrderType = 'llevar'; // llevar, mesa, delivery
 let currentPaymentMethod = 'Efectivo';
@@ -68,11 +72,27 @@ async function loadPosConfig() {
   const cfg = await res.json();
   const rate = Number(cfg.tasa_cambio_bs);
   tasaCambioBs = Number.isFinite(rate) && rate > 0 ? rate : null;
+  posTaxRate = Number.isFinite(Number(cfg.impuesto_porcentaje)) ? Number(cfg.impuesto_porcentaje) : 16;
+  posDeliveryFee = Number.isFinite(Number(cfg.costo_delivery)) ? Number(cfg.costo_delivery) : 5;
+  posPackageFee = Number.isFinite(Number(cfg.costo_empaque)) ? Number(cfg.costo_empaque) : 3;
   tasaFuente = cfg.tasa_fuente || "";
   tasaActualizadaAt = cfg.tasa_actualizada_at || null;
   const vesOption = document.querySelector('#pay-currency-select option[value="VES"]');
   if (vesOption) vesOption.disabled = tasaCambioBs === null;
   const rateInfo = document.getElementById("pay-rate-info");
+  const posRateInfo = document.getElementById("pos-rate-info");
+  const posCurrencySelect = document.getElementById("pos-currency-select");
+  const posVesOption = posCurrencySelect?.querySelector('option[value="VES"]');
+  if (posVesOption) posVesOption.disabled = tasaCambioBs === null;
+  const mobilePaymentButton = document.getElementById("pay-btn-Pago Móvil");
+  if (mobilePaymentButton) mobilePaymentButton.disabled = tasaCambioBs === null;
+  if (posRateInfo) {
+    posRateInfo.textContent = tasaCambioBs
+      ? `Tasa BCV ${tasaCambioBs.toFixed(4)} Bs./USD · ${tasaFuente || "fuente no identificada"}`
+      : "Tasa no disponible; solo se permiten cobros en USD.";
+  }
+  const taxLabel = document.getElementById("pos-tax-label");
+  if (taxLabel) taxLabel.textContent = `IVA (${posTaxRate}%):`;
   if (rateInfo) {
     if (tasaCambioBs === null) {
       rateInfo.textContent = "Tasa no disponible; solo se permiten cobros en USD.";
@@ -83,61 +103,59 @@ async function loadPosConfig() {
     }
   }
 
-  function openCashExpenseModal() {
-    openModal("cash-expense-modal");
-    loadCashMovements();
-  }
+}
 
-  async function loadCashMovements() {
-    const container = document.getElementById("cash-movements-list");
-    if (!container) return;
-    try {
-      const response = await fetch("/api/v1/caja/movimientos", { headers: Auth.getHeaders() });
-      if (response.status === 404) {
-        container.innerHTML = `<p style="color:var(--text-muted)">No hay turno activo.</p>`;
-        return;
-      }
-      const movements = await response.json();
-      if (!response.ok) throw new Error(movements.detail || "No se pudieron cargar los egresos.");
-      container.innerHTML = `<h4>Egresos de este turno</h4>${movements.length
-        ? movements.map(item => `<div style="display:flex;justify-content:space-between;gap:.5rem;padding:.4rem 0;border-top:1px solid var(--toon-border)">
-            <span>${escapeCajaHtml(item.concepto)} · ${escapeCajaHtml(item.metodo_pago)}${item.observacion ? `<small style="display:block;color:var(--text-muted)">${escapeCajaHtml(item.observacion)}</small>` : ""}</span>
-            <strong>-$${Number(item.monto_usd).toFixed(2)}</strong>
-          </div>`).join("")
-        : `<p style="color:var(--text-muted)">Sin egresos registrados.</p>`}`;
-    } catch (error) {
-      console.error("Error al consultar egresos de caja:", error);
-      container.innerHTML = `<p role="alert" style="color:var(--mc-red)">No se pudo cargar el historial de egresos.</p>`;
-    }
-  }
+function openCashExpenseModal() {
+  openModal("cash-expense-modal");
+  loadCashMovements();
+}
 
-  async function submitCashExpense() {
-    const concepto = document.getElementById("cash-expense-concept").value.trim();
-    const monto = Number(document.getElementById("cash-expense-amount").value);
-    const metodo = document.getElementById("cash-expense-method").value;
-    const observacion = document.getElementById("cash-expense-note").value.trim();
-    if (concepto.length < 3 || !Number.isFinite(monto) || monto <= 0) {
-      showToast("Indica un concepto y un monto de egreso válido.", "warning");
-      return;
+async function loadCashMovements() {
+  const container = document.getElementById("cash-movements-list");
+  if (!container) return;
+  try {
+    const response = await fetch("/api/v1/caja/movimientos", { headers: Auth.getHeaders() });
+    const movements = response.status === 404 ? [] : await response.json();
+    if (!response.ok && response.status !== 404) {
+      throw new Error(movements.detail || "No se pudieron cargar los egresos.");
     }
-    try {
-      const response = await fetch("/api/v1/caja/movimientos", {
-        method: "POST",
-        headers: Auth.getHeaders(),
-        body: JSON.stringify({ concepto, monto_usd: monto, metodo_pago: metodo, observacion })
-      });
-      const body = await response.json();
-      if (!response.ok) throw new Error(body.detail || "No se pudo registrar el egreso.");
-      showToast("Egreso registrado en el turno actual.", "success");
-      closeModal("cash-expense-modal");
-      document.getElementById("cash-expense-concept").value = "";
-      document.getElementById("cash-expense-amount").value = "";
-      document.getElementById("cash-expense-note").value = "";
-      await loadShiftStatus();
-      await loadCashMovements();
-    } catch (error) {
-      showToast(error.message, "danger");
-    }
+    container.innerHTML = `<h4>Egresos de este turno</h4>${movements.length
+      ? movements.map(item => `<div style="display:flex;justify-content:space-between;gap:.5rem;padding:.4rem 0;border-top:1px solid var(--toon-border)">
+          <span>${escapeCajaHtml(item.concepto)} · ${escapeCajaHtml(item.metodo_pago)}${item.observacion ? `<small style="display:block;color:var(--text-muted)">${escapeCajaHtml(item.observacion)}</small>` : ""}</span>
+          <strong>-$${Number(item.monto_usd).toFixed(2)}</strong>
+        </div>`).join("")
+      : `<p style="color:var(--text-muted)">${response.status === 404 ? "No hay turno activo." : "Sin egresos registrados."}</p>`}`;
+  } catch (error) {
+    console.error("Error al consultar egresos de caja:", error);
+    container.innerHTML = `<p role="alert" style="color:var(--mc-red)">${escapeCajaHtml(error.message)}</p>`;
+  }
+}
+
+async function submitCashExpense() {
+  const concepto = document.getElementById("cash-expense-concept").value.trim();
+  const monto = Number(document.getElementById("cash-expense-amount").value);
+  const metodo = document.getElementById("cash-expense-method").value;
+  const observacion = document.getElementById("cash-expense-note").value.trim();
+  if (concepto.length < 3 || !Number.isFinite(monto) || monto <= 0) {
+    showToast("Indica un concepto y un monto de egreso válido.", "warning");
+    return;
+  }
+  try {
+    const response = await fetch("/api/v1/caja/movimientos", {
+      method: "POST",
+      headers: Auth.getHeaders(),
+      body: JSON.stringify({ concepto, monto_usd: monto, metodo_pago: metodo, observacion })
+    });
+    const body = await response.json();
+    if (!response.ok) throw new Error(body.detail || "No se pudo registrar el egreso.");
+    showToast("Egreso registrado en el turno actual.", "success");
+    closeModal("cash-expense-modal");
+    document.getElementById("cash-expense-concept").value = "";
+    document.getElementById("cash-expense-amount").value = "";
+    document.getElementById("cash-expense-note").value = "";
+    await loadShiftStatus();
+  } catch (error) {
+    showToast(error.message, "danger");
   }
 }
 
@@ -189,6 +207,20 @@ function switchPosMainView(viewName) {
   } else if (viewName === 'pickup') {
     loadPickupOrders();
   }
+}
+
+function switchTab(tabName) {
+  const viewByTab = {
+    pos: "pos",
+    pendientes: "queue",
+    postres: "postres",
+    deliverys: "deliverys",
+    facturas: "history",
+    retiros: "pickup",
+    pagos: "app-payments",
+  };
+  const view = viewByTab[tabName];
+  if (view) switchPosMainView(view);
 }
 
 async function loadPickupOrders() {
@@ -419,7 +451,7 @@ async function renderDeliverysQueue() {
               ? assignedCourier
                 ? `<span class="badge">Repartidor en ruta: ${escapeCajaHtml(o.estado_delivery)}</span>`
                 : `<a class="btn btn-outline" href="/static/admin/index.html#tab-usuarios">Crear usuario con rol Repartidor</a>`
-              : `<button class="btn btn-outline" onclick="openPaymentModal(${o.id})">Cobrar antes de asignar</button>`}
+              : `<button class="btn btn-outline" onclick="openPayModal(${o.id})">Cobrar antes de asignar</button>`}
         </div>
       </div>
     `;
@@ -641,18 +673,29 @@ function renderPosTouchProducts(query = "") {
     const img = p.imagen_url || "https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=500";
     const price = p.precio_promocion || p.precio;
     html += `
-      <div class="mc-product-touch-card" onclick="addPosItemDirect(${p.id})" style="position: relative; cursor: pointer;">
+      <div class="mc-product-touch-card" data-product-id="${p.id}" style="position: relative; cursor: pointer;">
         <img src="${img}" alt="${p.nombre}">
         <div class="mc-product-title">${p.nombre}</div>
         <div class="mc-product-price">${formatPriceDual(price)}</div>
-        <div onclick="event.stopPropagation(); addPosItem(${p.id})" style="position: absolute; top: 6px; right: 6px; background: var(--gold-accent); color: #000; border-radius: 12px; font-size: 0.72rem; padding: 0.2rem 0.5rem; font-weight: 900; z-index: 2; cursor: pointer; box-shadow: 0 2px 8px rgba(0,0,0,0.5);" title="Personalizar Ingredientes">
+        <button type="button" data-customize-product="${p.id}" aria-label="Personalizar ${escapeCajaHtml(p.nombre)}" style="position: absolute; top: 6px; right: 6px; background: var(--gold-accent); color: #000; border: 0; border-radius: 12px; font-size: 0.72rem; padding: 0.2rem 0.5rem; font-weight: 900; z-index: 2; cursor: pointer; box-shadow: 0 2px 8px rgba(0,0,0,0.5);" title="Personalizar Ingredientes">
           ⚙️ Personalizar
-        </div>
+        </button>
       </div>
     `;
   });
 
   container.innerHTML = html || `<p style="grid-column:1/-1;color:var(--text-muted)">No hay productos disponibles para vender.</p>`;
+  container.querySelectorAll(".mc-product-touch-card").forEach(card => {
+    const productId = card.dataset.productId;
+    card.addEventListener("click", () => addPosItemDirect(productId));
+    const customizeButton = card.querySelector("[data-customize-product]");
+    if (customizeButton) {
+      customizeButton.addEventListener("click", event => {
+        event.stopPropagation();
+        addPosItem(productId);
+      });
+    }
+  });
 }
 
 async function loadFrequentPosProducts() {
@@ -715,104 +758,86 @@ function addPosItemDirect(prodId) {
 let editingPosItemIndex = null;
 
 function addPosItem(prodId) {
-  openModal("pos-customization-modal");
-
-  let p = allProductsPos.find(item => String(item.id) === String(prodId) || item.id == prodId);
+  const p = allProductsPos.find(item => String(item.id) === String(prodId));
   if (!p) {
-    p = {
-      id: prodId,
-      nombre: "Producto Seleccionado",
-      precio: 5.0,
-      descripcion: "Personalización de ingredientes y observaciones para la cocina",
-      ingredientes_json: JSON.stringify(["Carne 150g", "Queso Cheddar", "Tomate", "Cebolla Morada"])
-    };
+    showToast("No se pudo cargar el producto para personalizarlo.", "danger");
+    return;
   }
 
   editingPosItemIndex = null;
   currentCustomizingProduct = p;
   currentCustomizingQty = 1;
-
-  if (document.getElementById("pos-cust-title")) document.getElementById("pos-cust-title").innerText = `🛠️ PERSONALIZAR: ${p.nombre}`;
-  if (document.getElementById("pos-cust-desc")) document.getElementById("pos-cust-desc").innerText = p.descripcion || '';
-  if (document.getElementById("pos-cust-img")) document.getElementById("pos-cust-img").src = p.imagen_url || "https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=500";
-  if (document.getElementById("pos-cust-price")) document.getElementById("pos-cust-price").innerHTML = formatPriceDual(p.precio_promocion || p.precio || 0);
-  if (document.getElementById("pos-cust-qty")) document.getElementById("pos-cust-qty").innerText = "1";
-  if (document.getElementById("pos-cust-notes")) document.getElementById("pos-cust-notes").value = "";
-
-  let ings = ["Carne 150g", "Queso Cheddar", "Tomate", "Cebolla Morada"];
-  if (p.ingredientes_json) {
-    try { 
-      ings = typeof p.ingredientes_json === 'string' ? JSON.parse(p.ingredientes_json) : p.ingredientes_json; 
-    } catch(e){}
-  }
-
-  let html = `<div style="font-weight: 800; color: var(--gold-accent); font-size: 0.85rem; margin-bottom: 0.4rem;">❌ REMOVER INGREDIENTES</div>`;
-  ings.forEach(ing => {
-    html += `
-      <label style="display: flex; align-items: center; justify-content: space-between; font-size: 0.8rem; margin-bottom: 0.4rem; cursor: pointer; color: #fff;">
-        <span>Sin ${ing}</span>
-        <input type="checkbox" class="pos-dyn-ing-no" value="Sin ${ing}">
-      </label>
-    `;
-  });
-
-  html += `<div style="font-weight: 800; color: var(--gold-accent); font-size: 0.85rem; margin-top: 0.8rem; margin-bottom: 0.4rem;">🧀 EXTRAS OPCIONALES</div>
-    <label style="display: flex; align-items: center; justify-content: space-between; font-size: 0.8rem; margin-bottom: 0.4rem; cursor: pointer; color: #fff;"><span>Extra Queso (${formatPriceDual(1.0)})</span><input type="checkbox" id="pos-extra-queso" value="1.0"></label>
-    <label style="display: flex; align-items: center; justify-content: space-between; font-size: 0.8rem; margin-bottom: 0.4rem; cursor: pointer; color: #fff;"><span>Extra Tocino (${formatPriceDual(1.5)})</span><input type="checkbox" id="pos-extra-tocino" value="1.5"></label>
-    <label style="display: flex; align-items: center; justify-content: space-between; font-size: 0.8rem; margin-bottom: 0.4rem; cursor: pointer; color: #fff;"><span>Extra Carne (${formatPriceDual(2.5)})</span><input type="checkbox" id="pos-extra-carne" value="2.5"></label>
-  `;
-
-  if (document.getElementById("pos-cust-ingredients-container")) {
-    document.getElementById("pos-cust-ingredients-container").innerHTML = html;
-  }
+  renderPosCustomization(p, [], [], "");
   openModal("pos-customization-modal");
+}
+
+function parsePosProductList(value) {
+  if (!value) return [];
+  try {
+    const parsed = typeof value === "string" ? JSON.parse(value) : value;
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (error) {
+    console.error("La configuración de personalización del producto no es válida.", error);
+    return [];
+  }
+}
+
+function renderPosCustomization(product, selectedOptions, selectedExtras, notes) {
+  document.getElementById("pos-cust-title").textContent = `🛠️ PERSONALIZAR: ${product.nombre}`;
+  document.getElementById("pos-cust-desc").textContent = product.descripcion || "";
+  document.getElementById("pos-cust-img").src = product.imagen_url || "";
+  document.getElementById("pos-cust-price").innerHTML = formatPriceDual(product.precio_promocion || product.precio || 0);
+  document.getElementById("pos-cust-qty").textContent = String(currentCustomizingQty);
+  document.getElementById("pos-cust-notes").value = notes || "";
+
+  const ingredients = parsePosProductList(product.ingredientes_json)
+    .filter(ingredient => typeof ingredient === "string");
+  let html = "";
+  if (ingredients.length) {
+    html += `<div style="font-weight:800;color:var(--gold-accent);font-size:.85rem;margin-bottom:.4rem">❌ REMOVER INGREDIENTES</div>`;
+    html += ingredients.map(ingredient => {
+      const option = `Sin ${ingredient}`;
+      const checked = selectedOptions.includes(option) ? "checked" : "";
+      return `<label style="display:flex;align-items:center;justify-content:space-between;font-size:.8rem;margin-bottom:.4rem;cursor:pointer;color:#fff">
+        <span>${escapeCajaHtml(option)}</span><input type="checkbox" class="pos-dyn-ing-no" value="${escapeCajaHtml(option)}" ${checked}>
+      </label>`;
+    }).join("");
+  }
+
+  const extras = parsePosProductList(product.extras_json).filter(extra =>
+    extra && typeof extra.nombre === "string" && Number.isFinite(Number(extra.precio)) && Number(extra.precio) >= 0
+  );
+  if (extras.length) {
+    html += `<div style="font-weight:800;color:var(--gold-accent);font-size:.85rem;margin:.8rem 0 .4rem">🧀 EXTRAS OPCIONALES</div>`;
+    html += extras.map(extra => {
+      const checked = selectedExtras.includes(extra.nombre) ? "checked" : "";
+      return `<label style="display:flex;align-items:center;justify-content:space-between;font-size:.8rem;margin-bottom:.4rem;cursor:pointer;color:#fff">
+        <span>${escapeCajaHtml(extra.nombre)} (+${formatPriceDual(Number(extra.precio))})</span>
+        <input type="checkbox" class="pos-dyn-extra" value="${escapeCajaHtml(extra.nombre)}" ${checked}>
+      </label>`;
+    }).join("");
+  } else {
+    html += `<p style="color:var(--text-muted);font-size:.8rem">Este producto no tiene extras configurados.</p>`;
+  }
+  document.getElementById("pos-cust-ingredients-container").innerHTML = html;
 }
 
 function openEditTicketItemModal(idx) {
   const item = posCart[idx];
-  if (!item) return;
-
-  openModal("pos-customization-modal");
-
-  editingPosItemIndex = idx;
-  const p = allProductsPos.find(prod => prod.id === item.producto_id) || { id: item.producto_id, nombre: item.nombre, precio: item.precio_unitario };
-  currentCustomizingProduct = p;
-  currentCustomizingQty = item.cantidad;
-
-  document.getElementById("pos-cust-title").innerText = `🛠️ PERSONALIZAR: ${item.nombre}`;
-  document.getElementById("pos-cust-desc").innerText = p.descripcion || '';
-  document.getElementById("pos-cust-img").src = p.imagen_url || "https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=500";
-  document.getElementById("pos-cust-price").innerHTML = formatPriceDual(item.precio_unitario);
-  document.getElementById("pos-cust-qty").innerText = item.cantidad;
-  document.getElementById("pos-cust-notes").value = item.observaciones || "";
-
-  let ings = ["Carne 150g", "Queso Cheddar", "Tomate", "Cebolla Morada"];
-  if (p.ingredientes_json) {
-    try { ings = JSON.parse(p.ingredientes_json); } catch(e){}
+  if (!item) {
+    showToast("El producto ya no está en el ticket. Actualiza el pedido e inténtalo de nuevo.", "warning");
+    return;
   }
 
-  let html = `<div style="font-weight: 800; color: var(--gold-accent); font-size: 0.85rem; margin-bottom: 0.4rem;">❌ REMOVER INGREDIENTES</div>`;
-  ings.forEach(ing => {
-    const isChecked = item.opciones && item.opciones.includes(`Sin ${ing}`);
-    html += `
-      <label style="display: flex; align-items: center; justify-content: space-between; font-size: 0.8rem; margin-bottom: 0.4rem; cursor: pointer; color: #fff;">
-        <span>Sin ${ing}</span>
-        <input type="checkbox" class="pos-dyn-ing-no" value="Sin ${ing}" ${isChecked ? 'checked' : ''}>
-      </label>
-    `;
-  });
-
-  const hasExtraQueso = item.opciones && item.opciones.includes("Extra Queso");
-  const hasExtraTocino = item.opciones && item.opciones.includes("Extra Tocino");
-  const hasExtraCarne = item.opciones && item.opciones.includes("Extra Carne");
-
-  html += `<div style="font-weight: 800; color: var(--gold-accent); font-size: 0.85rem; margin-top: 0.8rem; margin-bottom: 0.4rem;">🧀 EXTRAS OPCIONALES</div>
-    <label style="display: flex; align-items: center; justify-content: space-between; font-size: 0.8rem; margin-bottom: 0.4rem; cursor: pointer; color: #fff;"><span>Extra Queso (+$1.00)</span><input type="checkbox" id="pos-extra-queso" value="1.0" ${hasExtraQueso ? 'checked' : ''}></label>
-    <label style="display: flex; align-items: center; justify-content: space-between; font-size: 0.8rem; margin-bottom: 0.4rem; cursor: pointer; color: #fff;"><span>Extra Tocino (+$1.50)</span><input type="checkbox" id="pos-extra-tocino" value="1.5" ${hasExtraTocino ? 'checked' : ''}></label>
-    <label style="display: flex; align-items: center; justify-content: space-between; font-size: 0.8rem; margin-bottom: 0.4rem; cursor: pointer; color: #fff;"><span>Extra Carne (+$2.50)</span><input type="checkbox" id="pos-extra-carne" value="2.5" ${hasExtraCarne ? 'checked' : ''}></label>
-  `;
-
-  document.getElementById("pos-cust-ingredients-container").innerHTML = html;
+  editingPosItemIndex = idx;
+  const p = allProductsPos.find(prod => String(prod.id) === String(item.producto_id));
+  if (!p) {
+    showToast("No se pudo cargar la configuración actual del producto.", "danger");
+    return;
+  }
+  currentCustomizingProduct = p;
+  currentCustomizingQty = item.cantidad;
+  renderPosCustomization(p, item.opciones || [], item.extras || [], item.observaciones || "");
   openModal("pos-customization-modal");
 }
 
@@ -824,21 +849,23 @@ function adjustPosCustQty(delta) {
 function confirmAddPosCustomizedItem() {
   if (!currentCustomizingProduct) return;
 
-  const basePrice = currentCustomizingProduct.precio_promocion || currentCustomizingProduct.precio || 5.0;
-  let extraPrice = 0.0;
+  const basePrice = currentCustomizingProduct.precio_promocion || currentCustomizingProduct.precio || 0;
   let opts = [];
+  const selectedExtras = [];
 
   document.querySelectorAll(".pos-dyn-ing-no:checked").forEach(cb => {
     opts.push(cb.value);
   });
-
-  if (document.getElementById("pos-extra-queso")?.checked) { opts.push("Extra Queso"); extraPrice += 1.0; }
-  if (document.getElementById("pos-extra-tocino")?.checked) { opts.push("Extra Tocino"); extraPrice += 1.5; }
-  if (document.getElementById("pos-extra-carne")?.checked) { opts.push("Extra Carne"); extraPrice += 2.5; }
+  document.querySelectorAll(".pos-dyn-extra:checked").forEach(input => selectedExtras.push(input.value));
+  const configuredExtras = parsePosProductList(currentCustomizingProduct.extras_json);
+    const configuredPrices = new Map(configuredExtras.map(extra => [extra.nombre, Number(extra.precio)]));
+  if (selectedExtras.some(name => !configuredPrices.has(name))) {
+    showToast("Uno de los extras ya no está disponible. Actualiza el menú e inténtalo de nuevo.", "danger");
+    return;
+  }
+  const extraPrice = selectedExtras.reduce((sum, name) => sum + configuredPrices.get(name), 0);
 
   const notes = document.getElementById("pos-cust-notes")?.value.trim();
-  if (notes) opts.push(`Nota: ${notes}`);
-
   const unitPrice = basePrice + extraPrice;
 
   if (editingPosItemIndex !== null && posCart[editingPosItemIndex]) {
@@ -846,6 +873,7 @@ function confirmAddPosCustomizedItem() {
     posCart[editingPosItemIndex].precio_unitario = unitPrice;
     posCart[editingPosItemIndex].subtotal = unitPrice * currentCustomizingQty;
     posCart[editingPosItemIndex].opciones = opts;
+    posCart[editingPosItemIndex].extras = selectedExtras;
     posCart[editingPosItemIndex].observaciones = notes;
     editingPosItemIndex = null;
   } else {
@@ -856,6 +884,7 @@ function confirmAddPosCustomizedItem() {
       cantidad: currentCustomizingQty,
       subtotal: unitPrice * currentCustomizingQty,
       opciones: opts,
+      extras: selectedExtras,
       observaciones: notes
     });
   }
@@ -880,15 +909,24 @@ function setPosOrderType(type) {
   if (type === 'llevar') mesaInput.value = "Mostrador";
   else if (type === 'delivery') mesaInput.value = "Delivery A Domicilio";
   else mesaInput.value = "Mesa 1";
+  document.getElementById("pos-delivery-details").hidden = type !== "delivery";
 
   renderPosTicket();
 }
 
 function setPosPaymentMethod(method) {
-  currentPaymentMethod = method;
+  if (method === "Pago Móvil" && tasaCambioBs === null) {
+    showToast("Pago Móvil requiere una tasa BCV válida para cobrar en bolívares.", "warning");
+    return;
+  }
+  currentPaymentMethod = method === "Tarjeta" ? "Punto de Venta" : method;
   document.getElementById("pay-btn-Efectivo").classList.toggle("active", method === 'Efectivo');
-  document.getElementById("pay-btn-Tarjeta").classList.toggle("active", method === 'Tarjeta');
+  document.getElementById("pay-btn-Tarjeta").classList.toggle("active", method === 'Tarjeta' || method === "Punto de Venta");
   document.getElementById("pay-btn-Pago Móvil").classList.toggle("active", method === 'Pago Móvil');
+  if (method === "Pago Móvil" && tasaCambioBs !== null) {
+    document.getElementById("pos-currency-select").value = "VES";
+  }
+  calcPosChange();
 }
 
 function updatePosItemQty(idx, delta) {
@@ -919,6 +957,8 @@ function renderPosTicket() {
     if (document.getElementById("pos-tax")) document.getElementById("pos-tax").innerHTML = "$0.00";
     if (document.getElementById("pos-extra")) document.getElementById("pos-extra").innerHTML = "$0.00";
     if (document.getElementById("pos-total")) document.getElementById("pos-total").innerHTML = "$0.00";
+    if (document.getElementById("pos-received-input")) document.getElementById("pos-received-input").value = "";
+    if (document.getElementById("pos-change-lbl")) document.getElementById("pos-change-lbl").textContent = "Cambio: $0.00";
     return;
   }
 
@@ -944,8 +984,8 @@ function renderPosTicket() {
     `;
   });
 
-  const tax = subtotal * 0.16;
-  const extraFee = currentOrderType === 'llevar' ? 1.0 : (currentOrderType === 'delivery' ? 5.0 : 0.0);
+  const tax = subtotal * (posTaxRate / 100);
+  const extraFee = getPosExtraFee();
   const total = subtotal + tax + extraFee;
 
   if (container) container.innerHTML = html;
@@ -959,16 +999,31 @@ function renderPosTicket() {
 
 function calcPosChange() {
   const subtotal = posCart.reduce((sum, item) => sum + item.subtotal, 0);
-  const tax = subtotal * 0.16;
-  const extraFee = currentOrderType === 'llevar' ? 1.0 : (currentOrderType === 'delivery' ? 5.0 : 0.0);
+  const tax = subtotal * (posTaxRate / 100);
+  const extraFee = getPosExtraFee();
   const total = subtotal + tax + extraFee;
 
-  const rec = parseFloat(document.getElementById("pos-received-input").value) || 0;
-  const changeUsd = Math.max(0, rec - total);
-  const changeLabel = !Number.isFinite(tasaCambioBs) || tasaCambioBs <= 0
-    ? `$${changeUsd.toFixed(2)}`
-    : `$${changeUsd.toFixed(2)} (Bs. ${(changeUsd * tasaCambioBs).toFixed(2)})`;
-  document.getElementById("pos-change-lbl").innerHTML = `Cambio: ${changeLabel}`;
+  const currency = document.getElementById("pos-currency-select")?.value || "USD";
+  const received = Number.parseFloat(document.getElementById("pos-received-input")?.value || "0");
+  const receivedLabel = document.getElementById("pos-received-label");
+  const changeLabel = document.getElementById("pos-change-lbl");
+  if (receivedLabel) receivedLabel.textContent = `Monto recibido (${currency === "VES" ? "Bs." : "USD"}):`;
+  if (currency === "VES" && (!Number.isFinite(tasaCambioBs) || tasaCambioBs <= 0)) {
+    if (changeLabel) changeLabel.textContent = "Tasa BCV no disponible";
+    return;
+  }
+  const totalDue = currency === "VES" ? total * tasaCambioBs : total;
+  const change = Math.max(0, (Number.isFinite(received) ? received : 0) - totalDue);
+  const changeText = currency === "VES"
+    ? `Bs. ${change.toFixed(2)} ($${(change / tasaCambioBs).toFixed(2)})`
+    : `$${change.toFixed(2)}${tasaCambioBs ? ` (Bs. ${(change * tasaCambioBs).toFixed(2)})` : ""}`;
+  if (changeLabel) changeLabel.textContent = `Cambio: ${changeText}`;
+}
+
+function getPosExtraFee() {
+  if (currentOrderType === "llevar") return posPackageFee;
+  if (currentOrderType === "delivery") return posDeliveryFee;
+  return 0;
 }
 
 async function submitPosOrderFast() {
@@ -978,42 +1033,84 @@ async function submitPosOrderFast() {
   }
 
   const subtotal = posCart.reduce((sum, item) => sum + item.subtotal, 0);
-  const tax = subtotal * 0.16;
-  const extraFee = currentOrderType === 'llevar' ? 1.0 : (currentOrderType === 'delivery' ? 5.0 : 0.0);
+  const tax = subtotal * (posTaxRate / 100);
+  const extraFee = getPosExtraFee();
   const total = subtotal + tax + extraFee;
+  const currency = document.getElementById("pos-currency-select")?.value || "USD";
+  if (currentPaymentMethod === "Pago Móvil" && currency !== "VES") {
+    showToast("Pago Móvil debe cobrarse en bolívares.", "warning");
+    return;
+  }
+  if (currency === "VES" && tasaCambioBs === null) {
+    showToast("No hay una tasa BCV válida para cobrar en bolívares.", "warning");
+    return;
+  }
+  const totalDue = currency === "VES" ? total * tasaCambioBs : total;
   const mesa = document.getElementById("pos-mesa-input")?.value || "Mostrador";
+  const deliveryName = document.getElementById("pos-delivery-name")?.value.trim()
+    || (selectedCustomerPos ? selectedCustomerPos.nombre : "");
+  const deliveryAddress = document.getElementById("pos-delivery-address")?.value.trim() || "";
+  const deliveryPhone = document.getElementById("pos-delivery-phone")?.value.trim() || "";
+  const received = Number.parseFloat(document.getElementById("pos-received-input")?.value || "0");
+  if (currentOrderType === "delivery" && (!deliveryName || !deliveryAddress || !deliveryPhone)) {
+    showToast("Para crear un delivery indica nombre, dirección y teléfono de contacto.", "warning");
+    return;
+  }
+  if (!Number.isFinite(received) || received < totalDue) {
+    showToast(`El monto recibido debe ser al menos ${currency === "VES" ? "Bs. " : "$"}${totalDue.toFixed(2)}.`, "warning");
+    return;
+  }
 
   const payload = {
     numero_mesa: mesa,
     tipo: currentOrderType,
-    modo_pago: "PAGAR_ANTES",
-    nombre_cliente_delivery: selectedCustomerPos ? selectedCustomerPos.nombre : "Cliente Presencial",
-    telefono_delivery: selectedCustomerPos ? selectedCustomerPos.telefono : null,
-    direccion_delivery: null,
+    metodo_pago: currentPaymentMethod,
+    moneda_pago: currency,
+    cliente_id: selectedCustomerPos ? Number(selectedCustomerPos.id) : null,
+    monto_recibido: received,
+    nit_cliente: document.getElementById("pay-nit-input")?.value.trim() || "CF",
+    nombre_factura: currentOrderType === "delivery"
+      ? deliveryName
+      : document.getElementById("pay-nombre-input")?.value.trim()
+        || (selectedCustomerPos ? selectedCustomerPos.nombre : "Consumidor Final"),
+    nombre_cliente_delivery: currentOrderType === "delivery"
+      ? deliveryName
+      : selectedCustomerPos ? selectedCustomerPos.nombre : "Cliente Presencial",
+    telefono_delivery: currentOrderType === "delivery"
+      ? deliveryPhone
+      : (selectedCustomerPos ? selectedCustomerPos.telefono : null),
+    direccion_delivery: currentOrderType === "delivery" ? deliveryAddress : null,
     detalles: posCart.map(item => ({
       producto_id: item.producto_id,
       cantidad: item.cantidad,
-      personalizaciones: { opciones: item.opciones }
+      personalizaciones: {
+        opciones: item.opciones.filter(option => !String(option).startsWith("Nota: ")),
+        extras: item.extras || [],
+      },
+      observaciones: item.observaciones || null,
     }))
   };
 
   try {
-    const res = await fetch("/api/v1/cliente/pedidos", {
+    const res = await fetch("/api/v1/caja/crear-y-cobrar-rapido", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: Auth.getHeaders(),
       body: JSON.stringify(payload)
     });
 
-    if (!res.ok) throw new Error("Error al registrar comanda en caja");
-    const order = await res.json();
-    
+    if (!res.ok) {
+      const error = await res.json();
+      throw new Error(error.detail || "Error al registrar comanda en caja");
+    }
+    const result = await res.json();
     posCart = [];
     renderPosTicket();
-    if (order.tipo === "llevar" && order.codigo_retiro) {
-      showToast(`Código de retiro para entregar al cliente: ${order.codigo_retiro}`, "warning");
-    }
-    // 🔒 ABRIR SIEMPRE LA PASARELA DIGITAL DE PAGO EN CAJA CON EL PEDIDO CREADO
-    openPaymentModal(order);
+    const changeCurrency = result.moneda_pago === "VES" ? "Bs. " : "$";
+    const deliveryCode = result.codigo_otp ? ` Código de entrega: ${result.codigo_otp}.` : "";
+    const pickupCode = result.codigo_retiro ? ` Código de retiro: ${result.codigo_retiro}.` : "";
+    showToast(`Factura ${result.factura_numero} emitida. Cambio: ${changeCurrency}${Number(result.cambio).toFixed(2)}.${deliveryCode}${pickupCode}`, "success");
+    await Promise.all([loadShiftStatus(), loadPendingOrders(), loadPaidOrders(), loadPickupOrders()]);
+    viewReceipt(result.pedido_id);
   } catch (err) {
     showToast(err.message, "danger");
   }
@@ -1184,7 +1281,7 @@ function renderPendingOrders() {
           </div>
           ${o.estado_pago === "PENDIENTE_VALIDACION"
             ? `<button class="btn btn-outline" style="padding: 0.6rem 1.1rem; font-size: 0.88rem; font-weight: 900;" onclick="switchPosMainView('app-payments')">📱 Validar Pago Móvil</button>`
-            : `<button class="btn btn-cta" style="padding: 0.6rem 1.1rem; font-size: 0.88rem; font-weight: 900;" onclick="openPaymentModal(${o.id})">💳 COBRAR #${o.id}</button>`}
+            : `<button class="btn btn-cta" style="padding: 0.6rem 1.1rem; font-size: 0.88rem; font-weight: 900;" onclick="openPayModal(${o.id})">💳 COBRAR #${o.id}</button>`}
         </div>
       </div>
     `;
@@ -1270,7 +1367,11 @@ async function submitAbrirTurno() {
     }
     showToast("🟢 Turno de caja abierto correctamente", "success");
     closeModal("open-shift-modal");
-    loadShiftStatus();
+    await loadShiftStatus();
+    if (resumePaymentAfterShiftOpen && selectedOrderForPayment) {
+      resumePaymentAfterShiftOpen = false;
+      openPayModal(selectedOrderForPayment.id);
+    }
   } catch (err) {
     showToast(err.message, "danger");
   }
@@ -1325,7 +1426,7 @@ async function confirmarCerrarTurno() {
   }
 }
 
-function openPaymentModal(orderId) {
+function openPayModal(orderId) {
   closeModal("pos-customization-modal");
 
   if (typeof orderId === "object" && orderId !== null) {
@@ -1355,6 +1456,10 @@ function openPaymentModal(orderId) {
   if (currencySelect) currencySelect.value = "USD";
   updatePaymentCurrencyAmount();
   openModal("payment-modal");
+}
+
+function openPaymentModal(orderId) {
+  openPayModal(orderId);
 }
 
 function updatePaymentCurrencyAmount() {
@@ -1431,7 +1536,18 @@ async function submitPayment() {
 
     if (!res.ok) {
       const err = await res.json();
-      throw new Error(err.detail || "Error al procesar el cobro");
+      const detail = typeof err.detail === "string" ? err.detail : "Error al procesar el cobro.";
+      if (res.status === 403) {
+        throw new Error("Tu sesión no tiene permiso para cobrar. Inicia sesión con una cuenta de Caja, supervisor o administrador.");
+      }
+      if (res.status === 409 && detail.toLowerCase().includes("turno de caja")) {
+        resumePaymentAfterShiftOpen = true;
+        closeModal("payment-modal");
+        openModal("open-shift-modal");
+        showToast("La caja no tiene un turno abierto. Abre el turno para continuar con este cobro.", "warning");
+        return;
+      }
+      throw new Error(detail);
     }
 
     const data = await res.json();

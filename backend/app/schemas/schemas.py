@@ -56,6 +56,7 @@ class ProductoBase(BaseModel):
     precio_promocion: Optional[float] = Field(default=None, ge=0, allow_inf_nan=False)
     stock: Optional[int] = Field(default=50, ge=0)
     stock_minimo: Optional[int] = Field(default=5, ge=0)
+    puntos_fidelidad: int = Field(default=0, ge=0, le=100000)
     imagen_url: Optional[str] = None
     tiempo_preparacion: Optional[int] = 15
     personalizable: Optional[bool] = True
@@ -76,6 +77,7 @@ class ProductoUpdate(BaseModel):
     precio: Optional[float] = Field(default=None, ge=0, allow_inf_nan=False)
     precio_promocion: Optional[float] = Field(default=None, ge=0, allow_inf_nan=False)
     stock: Optional[int] = Field(default=None, ge=0)
+    puntos_fidelidad: Optional[int] = Field(default=None, ge=0, le=100000)
     imagen_url: Optional[str] = None
     categoria_id: Optional[int] = None
     ingredientes_json: Optional[str] = None
@@ -154,6 +156,7 @@ class DetallePedidoOut(BaseModel):
     cantidad: int
     precio_unitario: float
     subtotal: float
+    puntos_fidelidad_unitarios: int = 0
     personalizaciones: Optional[str] = None
     estado: str
     observaciones: Optional[str] = None
@@ -195,6 +198,9 @@ class SolicitudMesaCreate(BaseModel):
 class SolicitudMesaEstado(BaseModel):
     estado: Literal["ATENDIDA", "CANCELADA"]
 
+class MesaLimpiezaRequest(BaseModel):
+    accion: Literal["INICIAR", "FINALIZAR"]
+
 class MovimientoCajaCreate(BaseModel):
     concepto: str = Field(min_length=3, max_length=150)
     monto_usd: float = Field(gt=0, allow_inf_nan=False)
@@ -226,7 +232,7 @@ class ArqueoTurnoOut(BaseModel):
 
     model_config = ConfigDict(from_attributes=True)
 
-class PedidoOut(BaseModel):
+class PedidoBaseOut(BaseModel):
     id: int
     numero_mesa: str
     codigo_qr: Optional[str] = None
@@ -244,7 +250,6 @@ class PedidoOut(BaseModel):
     direccion_delivery: Optional[str] = None
     delivery_lat: Optional[float] = None
     delivery_lng: Optional[float] = None
-    codigo_otp: Optional[str] = None
     otp_verificado: Optional[bool] = False
     estado_retiro: Optional[str] = None
     fecha_creacion: Optional[datetime] = None
@@ -268,8 +273,12 @@ class PedidoOut(BaseModel):
 
     model_config = ConfigDict(from_attributes=True)
 
+class PedidoOut(PedidoBaseOut):
+    codigo_otp: Optional[str] = None
+
 class PedidoCreadoOut(PedidoOut):
     codigo_retiro: Optional[str] = None
+    token_seguimiento: Optional[str] = None
 
 class ConfirmarRetiroRequest(BaseModel):
     codigo_retiro: str = Field(min_length=6, max_length=6, pattern="^[0-9]{6}$")
@@ -291,6 +300,10 @@ class AsignarRepartidorRequest(BaseModel):
 
 class EstadoDeliveryRequest(BaseModel):
     estado: str = Field(pattern="^(RECOGIDO|EN_CAMINO)$")
+
+class UbicacionRepartidorRequest(BaseModel):
+    lat: float = Field(ge=-90, le=90, allow_inf_nan=False)
+    lng: float = Field(ge=-180, le=180, allow_inf_nan=False)
 
 class EntregaDeliveryRequest(BaseModel):
     codigo_otp: str = Field(min_length=6, max_length=6, pattern="^[0-9]{6}$")

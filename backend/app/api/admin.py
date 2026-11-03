@@ -69,6 +69,7 @@ class ProductoCreate(BaseModel):
     categoria_id: int = Field(gt=0)
     imagen_url: Optional[str] = None
     stock: Optional[int] = Field(default=50, ge=0)
+    puntos_fidelidad: int = Field(default=0, ge=0, le=100000)
     tiempo_preparacion: int = Field(default=15, ge=1, le=240)
     ingredientes_json: Optional[str] = None
     extras_json: Optional[str] = None
@@ -82,6 +83,7 @@ class ProductoUpdate(BaseModel):
     precio: Optional[float] = Field(default=None, ge=0, allow_inf_nan=False)
     precio_promocion: Optional[float] = Field(default=None, ge=0, allow_inf_nan=False)
     stock: Optional[int] = Field(default=None, ge=0)
+    puntos_fidelidad: Optional[int] = Field(default=None, ge=0, le=100000)
     tiempo_preparacion: Optional[int] = Field(default=None, ge=1, le=240)
     imagen_url: Optional[str] = None
     categoria_id: Optional[int] = None
@@ -403,7 +405,7 @@ def delete_publicacion_admin(pub_id: int, db: Session = Depends(get_db)):
 # ==================== PROMOCIONES CRUD (BOOM! PROMO DEL DIA) ====================
 @router.get("/promociones")
 def list_promociones(db: Session = Depends(get_db)):
-    return db.query(Promocion).all()
+    return db.query(Promocion).order_by(Promocion.id.asc()).all()
 
 @router.post("/promociones")
 def create_promocion(data: PromocionCreateAdmin, db: Session = Depends(get_db)):
@@ -430,7 +432,7 @@ def update_promocion(promo_id: int, data: PromocionCreateAdmin, db: Session = De
     p.descripcion = data.descripcion
     p.descuento_pct = data.descuento_pct or 0.0
     p.codigo_cupon = data.codigo_cupon
-    if data.banner_url: p.banner_url = data.banner_url
+    p.banner_url = data.banner_url
     p.activo = data.activo if data.activo is not None else True
     
     db.commit()
@@ -709,6 +711,7 @@ async def create_producto_admin(data: ProductoCreate, db: Session = Depends(get_
         categoria_id=data.categoria_id,
         imagen_url=data.imagen_url or "https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=500",
         stock=data.stock if data.stock is not None else 50,
+        puntos_fidelidad=data.puntos_fidelidad,
         tiempo_preparacion=data.tiempo_preparacion,
         ingredientes_json=data.ingredientes_json,
         extras_json=data.extras_json,
@@ -752,6 +755,7 @@ async def update_producto_admin(
                 motivo="Ajuste manual de stock",
                 usuario_id=current_user.id
             ))
+    if data.puntos_fidelidad is not None: p.puntos_fidelidad = data.puntos_fidelidad
     if data.tiempo_preparacion is not None: p.tiempo_preparacion = data.tiempo_preparacion
     if data.imagen_url is not None: p.imagen_url = data.imagen_url
     if data.categoria_id is not None: p.categoria_id = data.categoria_id
