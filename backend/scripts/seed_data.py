@@ -42,7 +42,7 @@ def seed():
 
         # 1. Configuración por defecto "Donde David"
         configs = [
-            ("nombre_restaurante", "Donde David Fresh & Tasty!", "Nombre del negocio"),
+            ("nombre_restaurante", "DONDE DAVID | FAST FOOD", "Nombre del negocio"),
             ("impuesto_porcentaje", "16.0", "Porcentaje IVA"),
             ("costo_delivery", "10.00", "Costo estándar de envío a domicilio"),
             ("costo_empaque", "3.00", "Costo adicional por empaque para llevar"),
@@ -52,7 +52,18 @@ def seed():
             ("instagram_link", "https://instagram.com/dondedavid", "Enlace a Instagram"),
             ("tiktok_link", "https://tiktok.com/@dondedavid", "Enlace a TikTok"),
             ("tasa_cambio_bs", "36.50", "Tasa de cambio estándar en Bolívares"),
-            ("historia_restaurante", "Donde David nació de la pasión por crear hamburguesas artesanales gigantes y perros estilo Toon gourmet. ¡Combinamos ingredientes premium de primera calidad con una experiencia interactiva digital única en cada mesa!", "Historia del restaurante")
+            ("historia_restaurante", "Las mejores hamburguesas artesanales de res 100% preparadas al instante.", "Descripción pública del restaurante"),
+            ("direccion_restaurante", "📍 Valencia • Sede Principal", "Ubicación que se muestra en el portal"),
+            ("footer_enlaces_titulo", "ENLACES RÁPIDOS", "Título de los enlaces del pie de página"),
+            ("footer_inicio_texto", "🏠 Inicio", "Texto del enlace de inicio"),
+            ("footer_menu_texto", "🍔 Menú Interactivo", "Texto del enlace al menú"),
+            ("footer_puntos_texto", "🎁 Puntos de Fidelidad", "Texto del enlace de fidelidad"),
+            ("footer_atencion_titulo", "HORARIO & ATENCIÓN", "Título de horario y atención"),
+            ("horario_atencion", "Todos los días: 11:00 AM - 11:00 PM", "Horario público"),
+            ("servicio_restaurante", "Delivery directo & Pedidos QR en mesa", "Canales de atención"),
+            ("medios_pago_texto", "Pago Móvil • Zelle • Tarjetas • Efectivo", "Medios de pago mostrados al público"),
+            ("landing_titulo", "¡BUEN SABOR, RÁPIDO Y RECIÉN HECHO!", "Título de portada"),
+            ("landing_descripcion", "Hamburguesas artesanales de carne 100% res, perros calientes con toppings crocantes y malteadas heladas. Pide por QR en mesa o solicita delivery.", "Descripción de portada"),
         ]
         for clave, valor, desc in configs:
             c = db.query(Configuracion).filter(Configuracion.clave == clave).first()
@@ -104,18 +115,18 @@ def seed():
 
         # 4. Insumos e Inventario de Ingredientes de Productos
         insumos_data = [
-            ("Carne de res gourmet 150g", 35.0, 10.0, "kg", "NORMAL"),
+            ("Carne de res 150g", 35.0, 10.0, "kg", "NORMAL"),
             ("Pan de hamburguesa brioche", 18.0, 25.0, "un", "CRITICO"),
             ("Queso Cheddar fundido", 6.0, 10.0, "kg", "CRITICO"),
             ("Tocino ahumado crujiente", 3.0, 8.0, "kg", "CRITICO"),
-            ("Salchicha Gourmet Jumbo", 45.0, 15.0, "un", "NORMAL"),
+            ("Salchicha Jumbo", 45.0, 15.0, "un", "NORMAL"),
             ("Papas amarillas rústicas", 40.0, 15.0, "kg", "NORMAL"),
             ("Tomate fresco", 12.0, 5.0, "kg", "NORMAL"),
             ("Cebolla morada", 8.0, 4.0, "kg", "NORMAL"),
             ("Pepinillos agridulces", 5.0, 3.0, "kg", "NORMAL"),
             ("Salsa BBQ de la casa", 10.0, 3.0, "lt", "NORMAL"),
             ("Salsa especial de la casa", 8.0, 2.0, "lt", "NORMAL"),
-            ("Maíz dulce gourmet", 6.0, 2.0, "kg", "NORMAL"),
+            ("Maíz dulce", 6.0, 2.0, "kg", "NORMAL"),
             ("Alitas de pollo frescas", 20.0, 8.0, "kg", "NORMAL"),
             ("Helado de Vainilla", 15.0, 5.0, "lt", "NORMAL"),
             ("Galletas Oreo paquetes", 30.0, 10.0, "un", "NORMAL"),
@@ -134,7 +145,7 @@ def seed():
 
         # 5. Categorías Toon con FOTOS reales apetitosas
         categorias_data = [
-            ("Hamburguesas", "Las más jugosas estilo Toon gourmet", "https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=500", 1),
+            ("Hamburguesas", "Las más jugosas, preparadas al momento", "https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=500", 1),
             ("Hot Dogs", "Perros estilo americano con toppings crujientes", "https://images.unsplash.com/photo-1619740455993-9e612b1af08a?w=500", 2),
             ("Papas", "Papas fritas sazonadas corte especial", "https://images.unsplash.com/photo-1573080496219-bb080dd4f877?w=500", 3),
             ("Bebidas", "Refrescos helados y malteadas cremosas", "https://images.unsplash.com/photo-1572490122747-3968b75cc699?w=500", 4),
@@ -160,7 +171,7 @@ def seed():
             ("Hamburguesa BBQ", "Carne 150g, BBQ, aros de cebolla, queso fundido.", 49.00, None, cat_map["Hamburguesas"], "https://images.unsplash.com/photo-1550547660-d9450f859349?w=500", ["Carne 150g", "Salsa BBQ", "Aros de Cebolla"]),
             ("Hamburguesa Picante", "Carne 150g, jalapeños frescos, salsa picante habanero.", 45.00, None, cat_map["Hamburguesas"], "https://images.unsplash.com/photo-1603064752734-4c48fea5ba57?w=500", ["Carne 150g", "Jalapeños", "Salsa Habanero"]),
             ("Perro Caliente Clásico", "Salchicha premium, papitas picadas y salsas especiales.", 25.00, None, cat_map["Hot Dogs"], "https://images.unsplash.com/photo-1619740455993-9e612b1af08a?w=500", ["Salchicha Premium", "Papitas", "Salsas"]),
-            ("Perro Especial Toon", "Salchicha gourmet, tocino, queso cheddar y maíz dulce.", 32.00, None, cat_map["Hot Dogs"], "https://images.unsplash.com/photo-1627054247567-8898950d8a43?w=500", ["Salchicha Gourmet", "Tocino", "Queso Cheddar", "Maíz dulce"]),
+            ("Perro Especial Toon", "Salchicha, tocino, queso cheddar y maíz dulce.", 32.00, None, cat_map["Hot Dogs"], "https://images.unsplash.com/photo-1627054247567-8898950d8a43?w=500", ["Salchicha", "Tocino", "Queso Cheddar", "Maíz dulce"]),
             ("Papas Fritas Grandes", "Porción gigante de papas doradas con sazón de la casa.", 18.00, None, cat_map["Papas"], "https://images.unsplash.com/photo-1573080496219-bb080dd4f877?w=500", ["Papas Amarillas", "Sazón Especial"]),
             ("Papas con Queso y Tocino", "Papas rústicas bañadas en cheddar y tocino troceado.", 28.00, None, cat_map["Papas"], "https://images.unsplash.com/photo-1576107232684-1279f3908594?w=500", ["Papas Rústicas", "Cheddar Derretido", "Tocino"]),
             ("Malteada de Oreo", "Cremosa malteada helada con trozos de galleta Oreo.", 20.00, None, cat_map["Bebidas"], "https://images.unsplash.com/photo-1572490122747-3968b75cc699?w=500", ["Helado de Vainilla", "Galleta Oreo", "Crema Batida"]),

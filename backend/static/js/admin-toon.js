@@ -683,7 +683,19 @@ async function loadPortalConfigsAdmin() {
       if (document.getElementById("cfg-tasa-cambio")) {
         document.getElementById("cfg-tasa-cambio").value = tasaCambioBs === null ? "" : tasaCambioBs;
       }
+      if (document.getElementById("cfg-nombre-restaurante")) document.getElementById("cfg-nombre-restaurante").value = cfg.nombre_restaurante || "DONDE DAVID | FAST FOOD";
+      if (document.getElementById("cfg-direccion-restaurante")) document.getElementById("cfg-direccion-restaurante").value = cfg.direccion_restaurante || "";
+      if (document.getElementById("cfg-landing-titulo")) document.getElementById("cfg-landing-titulo").value = cfg.landing_titulo || "";
+      if (document.getElementById("cfg-landing-descripcion")) document.getElementById("cfg-landing-descripcion").value = cfg.landing_descripcion || "";
       if (document.getElementById("cfg-historia")) document.getElementById("cfg-historia").value = cfg.historia_restaurante || '';
+      if (document.getElementById("cfg-footer-enlaces-titulo")) document.getElementById("cfg-footer-enlaces-titulo").value = cfg.footer_enlaces_titulo || "";
+      if (document.getElementById("cfg-footer-inicio-texto")) document.getElementById("cfg-footer-inicio-texto").value = cfg.footer_inicio_texto || "";
+      if (document.getElementById("cfg-footer-menu-texto")) document.getElementById("cfg-footer-menu-texto").value = cfg.footer_menu_texto || "";
+      if (document.getElementById("cfg-footer-puntos-texto")) document.getElementById("cfg-footer-puntos-texto").value = cfg.footer_puntos_texto || "";
+      if (document.getElementById("cfg-footer-atencion-titulo")) document.getElementById("cfg-footer-atencion-titulo").value = cfg.footer_atencion_titulo || "";
+      if (document.getElementById("cfg-horario-atencion")) document.getElementById("cfg-horario-atencion").value = cfg.horario_atencion || "";
+      if (document.getElementById("cfg-servicio-restaurante")) document.getElementById("cfg-servicio-restaurante").value = cfg.servicio_restaurante || "";
+      if (document.getElementById("cfg-medios-pago-texto")) document.getElementById("cfg-medios-pago-texto").value = cfg.medios_pago_texto || "";
       if (document.getElementById("cfg-whatsapp")) document.getElementById("cfg-whatsapp").value = cfg.whatsapp_contacto || '';
       if (document.getElementById("cfg-instagram")) document.getElementById("cfg-instagram").value = cfg.instagram_link || '';
       if (document.getElementById("cfg-tiktok")) document.getElementById("cfg-tiktok").value = cfg.tiktok_link || '';
@@ -714,7 +726,19 @@ async function submitSavePortalConfigs() {
   }
 
   const items = [
+    { clave: "nombre_restaurante", valor: document.getElementById("cfg-nombre-restaurante").value.trim() },
+    { clave: "direccion_restaurante", valor: document.getElementById("cfg-direccion-restaurante").value.trim() },
+    { clave: "landing_titulo", valor: document.getElementById("cfg-landing-titulo").value.trim() },
+    { clave: "landing_descripcion", valor: document.getElementById("cfg-landing-descripcion").value.trim() },
     { clave: "historia_restaurante", valor: document.getElementById("cfg-historia").value },
+    { clave: "footer_enlaces_titulo", valor: document.getElementById("cfg-footer-enlaces-titulo").value.trim() },
+    { clave: "footer_inicio_texto", valor: document.getElementById("cfg-footer-inicio-texto").value.trim() },
+    { clave: "footer_menu_texto", valor: document.getElementById("cfg-footer-menu-texto").value.trim() },
+    { clave: "footer_puntos_texto", valor: document.getElementById("cfg-footer-puntos-texto").value.trim() },
+    { clave: "footer_atencion_titulo", valor: document.getElementById("cfg-footer-atencion-titulo").value.trim() },
+    { clave: "horario_atencion", valor: document.getElementById("cfg-horario-atencion").value.trim() },
+    { clave: "servicio_restaurante", valor: document.getElementById("cfg-servicio-restaurante").value.trim() },
+    { clave: "medios_pago_texto", valor: document.getElementById("cfg-medios-pago-texto").value.trim() },
     { clave: "whatsapp_contacto", valor: document.getElementById("cfg-whatsapp").value },
     { clave: "instagram_link", valor: document.getElementById("cfg-instagram").value },
     { clave: "tiktok_link", valor: document.getElementById("cfg-tiktok").value },

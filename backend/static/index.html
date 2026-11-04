@@ -3,11 +3,11 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>DONDE DAVID - Hamburguesas Gourmet & Fast Food Tech</title>
+  <title>DONDE DAVID | FAST FOOD</title>
   
   <!-- SEO & Open Graph Meta Tags -->
-  <meta name="description" content="Donde David: Las mejores hamburguesas artesanales de res 100% gourmet, perros calientes crocantes, combos y malteadas. Pide por QR en mesa o solicita delivery directo a tu puerta.">
-  <meta property="og:title" content="DONDE DAVID - Hamburguesas Gourmet & Fast Food Tech">
+  <meta name="description" content="Donde David | Fast Food: hamburguesas de res preparadas al instante, pedidos por QR y delivery en Valencia.">
+  <meta property="og:title" content="DONDE DAVID | FAST FOOD">
   <meta property="og:description" content="¡Sabor que se siente! Pide online o escanea tu QR en mesa.">
   <meta property="og:type" content="website">
   <meta property="og:image" content="https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=800">
@@ -15,7 +15,7 @@
   <meta name="theme-color" content="#071A3D">
 
   <link rel="stylesheet" href="/static/css/global.css?v=2.0">
-  <link rel="stylesheet" href="/static/css/toon-theme.css?v=2.5">
+  <link rel="stylesheet" href="/static/css/toon-theme.css?v=2.7">
 
   <style>
     /* Estilos Específicos para la Landing Page Donde David */
@@ -87,6 +87,85 @@
     .standard-footer-links a:hover {
       color: var(--gold-accent);
     }
+    .landing-footer {
+      background: linear-gradient(160deg, #0d1421, #060910 75%);
+      border-top: 2px solid var(--gold-accent);
+      padding: 3rem 1.25rem 1.5rem;
+      color: var(--text-dim);
+      font-size: 0.9rem;
+    }
+    .landing-footer-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1.35fr) repeat(2, minmax(0, 1fr));
+      gap: clamp(1.25rem, 3vw, 2.5rem);
+      margin-bottom: 2.25rem;
+    }
+    .landing-footer-column {
+      min-width: 0;
+      padding: clamp(1rem, 2vw, 1.4rem);
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 18px;
+      background: rgba(255,255,255,0.025);
+    }
+    .landing-footer-brand {
+      color: var(--gold-accent);
+      font-family: var(--font-display);
+      font-size: clamp(1.1rem, 2vw, 1.4rem);
+      font-weight: 900;
+      line-height: 1.25;
+      margin-bottom: 0.8rem;
+      overflow-wrap: anywhere;
+    }
+    .landing-footer-title {
+      display: block;
+      color: #fff;
+      font-size: 0.88rem;
+      letter-spacing: 0.08em;
+      margin-bottom: 1rem;
+    }
+    .landing-footer-copy {
+      line-height: 1.7;
+      margin: 0 0 0.85rem;
+      overflow-wrap: anywhere;
+    }
+    .landing-footer-detail {
+      margin: 0 0 0.65rem;
+      line-height: 1.6;
+      overflow-wrap: anywhere;
+    }
+    .landing-footer-payments {
+      color: var(--gold-accent);
+      font-size: 0.82rem;
+      font-weight: 800;
+      line-height: 1.6;
+      overflow-wrap: anywhere;
+    }
+    .landing-footer-copyright {
+      border-top: 1px solid rgba(255,255,255,0.1);
+      padding-top: 1.25rem;
+      text-align: center;
+      font-size: 0.78rem;
+      line-height: 1.6;
+    }
+    @media (max-width: 760px) {
+      .landing-footer-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+      .landing-footer-brand-column {
+        grid-column: 1 / -1;
+      }
+    }
+    @media (max-width: 520px) {
+      .landing-footer-grid {
+        grid-template-columns: minmax(0, 1fr);
+      }
+      .landing-footer-brand-column {
+        grid-column: auto;
+      }
+      .landing-footer-column {
+        padding: 1rem;
+      }
+    }
   </style>
 </head>
 <body class="toon-theme">
@@ -115,15 +194,13 @@
           <div>
             <div class="landing-badge-trust">
               <span>⭐⭐⭐⭐⭐</span>
-              <strong style="font-size: 0.85rem; color: #ffffff;">4.9/5 (+1,420 Reseñas Reales)</strong>
+              <strong style="font-size: 0.85rem; color: #ffffff;">Preparado al momento • Pedidos por QR</strong>
             </div>
 
-            <h1 class="landing-hero-title">
-              ¡SABOR GOURMET QUE SE <span>SIENTE!</span>
-            </h1>
+            <h1 class="landing-hero-title" id="landing-title">¡BUEN SABOR, RÁPIDO Y RECIÉN HECHO!</h1>
 
-            <p style="font-size: clamp(1rem, 2vw, 1.15rem); color: var(--text-dim); line-height: 1.6; margin-bottom: 1.75rem; font-weight: 500;">
-              Hamburguesas artesanales de carne 100% res, perros calientes con toppings crocantes y malteadas heladas. Pide escaneando el código QR en tu mesa o solicita delivery a tu casa.
+            <p id="landing-description" style="font-size: clamp(1rem, 2vw, 1.15rem); color: var(--text-dim); line-height: 1.7; margin-bottom: 1.75rem; font-weight: 500; max-width: 60ch;">
+              Hamburguesas artesanales de carne 100% res, perros calientes con toppings crocantes y malteadas heladas. Pide por QR en mesa o solicita delivery.
             </p>
 
             <div style="display: flex; gap: 0.85rem; flex-wrap: wrap; margin-bottom: 1.5rem;">
@@ -141,15 +218,15 @@
             <!-- Badges de Garantía -->
             <div style="display: flex; gap: 0.5rem; overflow-x: auto; padding-bottom: 0.2rem;">
               <span style="background: rgba(255,255,255,0.05); border: 1px solid var(--toon-border); padding: 0.3rem 0.7rem; border-radius: 20px; font-size: 0.75rem; font-weight: 800; color: #fff;">🥩 Carne 100% Res</span>
-              <span style="background: rgba(255,255,255,0.05); border: 1px solid var(--toon-border); padding: 0.3rem 0.7rem; border-radius: 20px; font-size: 0.75rem; font-weight: 800; color: #fff;">⚡ Preparación &lt;12 min</span>
-              <span style="background: rgba(255,255,255,0.05); border: 1px solid var(--toon-border); padding: 0.3rem 0.7rem; border-radius: 20px; font-size: 0.75rem; font-weight: 800; color: #fff;">💵 Tasa BCV Oficial</span>
+              <span style="background: rgba(255,255,255,0.05); border: 1px solid var(--toon-border); padding: 0.3rem 0.7rem; border-radius: 20px; font-size: 0.75rem; font-weight: 800; color: #fff;">⚡ Preparado al momento</span>
+              <span style="background: rgba(255,255,255,0.05); border: 1px solid var(--toon-border); padding: 0.3rem 0.7rem; border-radius: 20px; font-size: 0.75rem; font-weight: 800; color: #fff;">📱 QR y delivery</span>
             </div>
           </div>
 
           <!-- Columna Derecha: Carrusel Interactivo de Fotos HD -->
           <div id="landing-hero-carousel-container">
             <div style="position: relative; border-radius: 20px; overflow: hidden; height: 280px; border: 2px solid var(--gold-accent); box-shadow: 0 12px 35px rgba(255,183,3,0.4); cursor: pointer;" onclick="window.location.href='/static/cliente/app.html'">
-              <img src="https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=1000" style="width: 100%; height: 100%; object-fit: cover; filter: brightness(0.88);" alt="Hamburguesa Gourmet">
+              <img src="https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=1000" style="width: 100%; height: 100%; object-fit: cover; filter: brightness(0.88);" alt="Hamburguesa de Donde David">
               <div style="position: absolute; inset: 0; padding: 1.25rem; display: flex; flex-direction: column; justify-content: space-between; background: linear-gradient(0deg, rgba(8,12,20,0.92) 0%, rgba(8,12,20,0.2) 50%, rgba(0,0,0,0.4) 100%);">
                 <div style="display: flex; justify-content: space-between; align-items: center;">
                   <span style="font-size: 0.78rem; font-weight: 900; background: var(--gold-gradient); color: #000; padding: 0.3rem 0.85rem; border-radius: 20px;">
@@ -210,8 +287,8 @@
     <section style="padding: 3.5rem 1.25rem;">
       <div class="landing-container">
         <div style="text-align: center; margin-bottom: 2.5rem;">
-          <h2 style="font-size: clamp(1.8rem, 3.5vw, 2.5rem); font-family: var(--font-display); font-weight: 900; color: #ffffff;">🔥 LOS FAVORITOS DE DONDE DAVID</h2>
-          <p style="color: var(--text-dim); font-size: 0.95rem;">Los platillos más pedidos y recomendados por nuestros clientes</p>
+          <h2 style="font-size: clamp(1.8rem, 3.5vw, 2.5rem); font-family: var(--font-display); font-weight: 900; color: #ffffff;">🔥 ALGO RICO PARA HOY</h2>
+          <p style="color: var(--text-dim); font-size: 0.95rem;">Explora algunos de los productos disponibles en nuestro menú</p>
         </div>
 
         <div class="product-toon-grid" id="landing-featured-grid">
@@ -225,7 +302,7 @@
       <div class="landing-container">
         <div style="text-align: center; margin-bottom: 2.5rem;">
           <h2 style="font-size: clamp(1.8rem, 3.5vw, 2.5rem); font-family: var(--font-display); font-weight: 900; color: #ffffff;">🌟 RESEÑAS DE NUESTROS CLIENTES</h2>
-          <p style="color: var(--text-dim);">Opiniones verificadas registradas en nuestra plataforma</p>
+          <p style="color: var(--text-dim);">Experiencias compartidas por nuestros clientes</p>
         </div>
 
         <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1.25rem;" id="landing-reviews-grid">
@@ -235,55 +312,41 @@
     </section>
   </main>
 
-  <!-- FOOTER WEB ESTÁNDAR Y SENCILLO -->
-  <footer style="background: #060910; border-top: 2px solid var(--gold-accent); padding: 3.5rem 1.25rem 2rem 1.25rem; color: var(--text-dim); font-size: 0.88rem;">
+  <footer class="landing-footer">
     <div class="landing-container">
-      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 2.5rem; margin-bottom: 2.5rem; text-align: left;">
-        
-        <!-- Columna 1: Marca & Descripción -->
-        <div>
-          <div style="font-family: var(--font-display); font-size: 1.45rem; font-weight: 900; color: var(--gold-accent); margin-bottom: 0.5rem; display: flex; align-items: center; gap: 0.5rem;">
-            <span>🍔</span> DONDE DAVID
-          </div>
-          <p style="color: var(--text-dim); line-height: 1.6; margin-bottom: 1rem;">
-            Restaurante Gourmet &amp; Fast Food Tech. Las mejores hamburguesas artesanales de res 100% preparadas al instante.
-          </p>
-          <div style="display: flex; gap: 0.5rem; font-size: 0.8rem; color: var(--cyan-accent); font-weight: 800;">
-            <span>📍 Valencia • Sede Principal</span>
-          </div>
+      <div class="landing-footer-grid">
+        <div class="landing-footer-column landing-footer-brand-column">
+          <div class="landing-footer-brand" id="footer-brand-name">DONDE DAVID | FAST FOOD</div>
+          <p class="landing-footer-copy" id="footer-brand-description">Las mejores hamburguesas artesanales de res 100% preparadas al instante.</p>
+          <div class="landing-footer-detail" style="color:var(--cyan-accent);font-size:.84rem;font-weight:800;" id="footer-location">📍 Valencia • Sede Principal</div>
         </div>
 
-        <!-- Columna 2: Navegación Web Sencilla -->
-        <div>
-          <strong style="color: #ffffff; font-size: 1rem; display: block; margin-bottom: 1rem; text-transform: uppercase; letter-spacing: 0.5px;">ENLACES RÁPIDOS</strong>
+        <div class="landing-footer-column">
+          <strong class="landing-footer-title" id="footer-links-title">ENLACES RÁPIDOS</strong>
           <ul class="standard-footer-links">
-            <li><a href="#inicio">🏠 Inicio</a></li>
-            <li><a href="/static/cliente/app.html">🍔 Menú Interactivo</a></li>
-            <li><a href="/static/cliente/app.html#screen-perfil">🎁 Puntos de Fidelidad</a></li>
+            <li><a href="#inicio" id="footer-link-home">🏠 Inicio</a></li>
+            <li><a href="/static/cliente/app.html" id="footer-link-menu">🍔 Menú Interactivo</a></li>
+            <li><a href="/static/cliente/app.html#screen-perfil" id="footer-link-loyalty">🎁 Puntos de Fidelidad</a></li>
           </ul>
         </div>
 
-        <!-- Columna 3: Horario y Medios de Pago -->
-        <div>
-          <strong style="color: #ffffff; font-size: 1rem; display: block; margin-bottom: 1rem; text-transform: uppercase; letter-spacing: 0.5px;">HORARIO & ATENCIÓN</strong>
-          <p style="margin: 0 0 0.4rem 0; color: #fff;">🕒 Todos los días: 11:00 AM - 11:00 PM</p>
-          <p style="margin: 0 0 0.8rem 0; color: var(--text-dim);">📱 Delivery directo & Pedidos QR en mesa</p>
-          <div style="font-size: 0.82rem; color: var(--gold-accent); font-weight: 800;">
-            💳 Pago Móvil • Zelle • Tarjetas • Efectivo
-          </div>
+        <div class="landing-footer-column">
+          <strong class="landing-footer-title" id="footer-service-title">HORARIO &amp; ATENCIÓN</strong>
+          <p class="landing-footer-detail" style="color:#fff;">🕒 <span id="footer-hours">Todos los días: 11:00 AM - 11:00 PM</span></p>
+          <p class="landing-footer-detail">📱 <span id="footer-service">Delivery directo &amp; Pedidos QR en mesa</span></p>
+          <div class="landing-footer-payments">💳 <span id="footer-payment-methods">Pago Móvil • Zelle • Tarjetas • Efectivo</span></div>
         </div>
-
       </div>
 
-      <div style="border-top: 1px solid rgba(255,255,255,0.08); padding-top: 1.5rem; text-align: center; font-size: 0.8rem; color: var(--text-dim);">
-        © 2026 DONDE DAVID. Todos los derechos reservados. Sistema desarrollado para Trabajo Especial de Grado.
+      <div class="landing-footer-copyright">
+        © <span id="footer-year">2026</span> <span id="footer-copyright-brand">DONDE DAVID | FAST FOOD</span>. Todos los derechos reservados.
       </div>
     </div>
   </footer>
 
   <script src="/static/js/auth.js?v=2.0"></script>
   <script src="/static/js/websocket.js?v=2.0"></script>
-  <script src="/static/js/appShell.js?v=2.4"></script>
+  <script src="/static/js/appShell.js?v=2.5"></script>
 
   <script>
     let landingPromoIndex = 0;
@@ -291,10 +354,53 @@
     let landingPromos = [];
 
     document.addEventListener("DOMContentLoaded", () => {
+      loadLandingPublicSettings();
       loadLandingPromoCarousel();
       loadLandingFeaturedProducts();
       loadLandingReviews();
     });
+
+    async function loadLandingPublicSettings() {
+      try {
+        const response = await fetch("/api/v1/cliente/configuraciones-publicas");
+        if (!response.ok) throw new Error(`No se pudo cargar la configuración pública (HTTP ${response.status}).`);
+        const config = await response.json();
+        const bindings = {
+          "landing-title": "landing_titulo",
+          "landing-description": "landing_descripcion",
+          "footer-brand-name": "nombre_restaurante",
+          "footer-copyright-brand": "nombre_restaurante",
+          "footer-brand-description": "historia_restaurante",
+          "footer-location": "direccion_restaurante",
+          "footer-links-title": "footer_enlaces_titulo",
+          "footer-link-home": "footer_inicio_texto",
+          "footer-link-menu": "footer_menu_texto",
+          "footer-link-loyalty": "footer_puntos_texto",
+          "footer-service-title": "footer_atencion_titulo",
+          "footer-hours": "horario_atencion",
+          "footer-service": "servicio_restaurante",
+          "footer-payment-methods": "medios_pago_texto"
+        };
+        Object.entries(bindings).forEach(([elementId, settingKey]) => {
+          const element = document.getElementById(elementId);
+          const value = String(config[settingKey] || "").trim();
+          if (element && value) element.textContent = value;
+        });
+        const brand = String(config.nombre_restaurante || "DONDE DAVID | FAST FOOD").trim();
+        document.title = brand;
+        const description = String(config.landing_descripcion || "").trim();
+        const metaDescription = document.querySelector('meta[name="description"]');
+        const socialTitle = document.querySelector('meta[property="og:title"]');
+        const socialDescription = document.querySelector('meta[property="og:description"]');
+        if (description && metaDescription) metaDescription.setAttribute("content", description);
+        if (socialTitle) socialTitle.setAttribute("content", brand);
+        if (description && socialDescription) socialDescription.setAttribute("content", description);
+        const year = document.getElementById("footer-year");
+        if (year) year.textContent = String(new Date().getFullYear());
+      } catch (error) {
+        console.error("No se pudo cargar la identidad pública del restaurante:", error);
+      }
+    }
 
     async function loadLandingPromoCarousel() {
       const container = document.getElementById("landing-hero-carousel-container");

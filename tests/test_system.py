@@ -61,6 +61,40 @@ def test_public_products(client):
     assert response.status_code == 200
     assert isinstance(response.json(), list)
 
+def test_public_brand_and_footer_copy_can_be_configured(client):
+    public_config = client.get("/api/v1/cliente/configuraciones-publicas")
+    assert public_config.status_code == 200
+    assert public_config.json()["nombre_restaurante"] == "DONDE DAVID | FAST FOOD"
+    assert public_config.json()["direccion_restaurante"] == "📍 Valencia • Sede Principal"
+
+    login = client.post("/api/v1/auth/login", json={
+        "nombre_usuario": "admin",
+        "password": "admin123"
+    })
+    assert login.status_code == 200
+    headers = {"Authorization": f"Bearer {login.json()['access_token']}"}
+    updated = client.post("/api/v1/admin/configuraciones/lote", headers=headers, json={
+        "configuraciones": [
+            {"clave": "nombre_restaurante", "valor": "DONDE DAVID | FAST FOOD TEST"},
+            {"clave": "landing_titulo", "valor": "Sabor recién hecho"},
+            {"clave": "footer_inicio_texto", "valor": "Inicio actualizado"},
+        ],
+    })
+    assert updated.status_code == 200, updated.text
+
+    saved_config = client.get("/api/v1/cliente/configuraciones-publicas").json()
+    assert saved_config["nombre_restaurante"] == "DONDE DAVID | FAST FOOD TEST"
+    assert saved_config["landing_titulo"] == "Sabor recién hecho"
+    assert saved_config["footer_inicio_texto"] == "Inicio actualizado"
+
+    invalid = client.post("/api/v1/admin/configuraciones/lote", headers=headers, json={
+        "configuraciones": [{"clave": "landing_descripcion", "valor": "x" * 301}],
+    })
+    assert invalid.status_code == 422
+    assert client.get("/api/v1/cliente/configuraciones-publicas").json()["landing_descripcion"] == (
+        saved_config["landing_descripcion"]
+    )
+
 def test_login_demo_admin(client):
     response = client.post("/api/v1/auth/login", json={
         "nombre_usuario": "admin",

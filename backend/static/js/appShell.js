@@ -41,7 +41,7 @@ function renderUniversalHeader() {
 
   // Configuración de Insignias por Rol
   const roleBadges = {
-    landing: `<span class="universal-role-badge">🔥 GOURMET TECH</span>`,
+    landing: `<span class="universal-role-badge">🍔 FAST FOOD</span>`,
     cliente: `<span class="universal-role-badge cliente" id="header-table-badge">📱 QR MESA</span>`,
     admin: `<span class="universal-role-badge admin">👑 ADMINISTRADOR</span>`,
     gerente: `<span class="universal-role-badge admin">📊 GERENCIA</span>`,
@@ -103,8 +103,12 @@ function renderUniversalHeader() {
         <!-- Izquierda: Marca Destacada Donde David con Logo Oficial 3D Extra Grande -->
         <div class="universal-header-brand-section" style="display: flex; align-items: center;">
           ${leftAction}
-          <a href="#" class="universal-brand" aria-label="Recargar página" onclick="window.location.reload(); return false;" style="display: flex; align-items: center; gap: 0.85rem; text-decoration: none; padding: 0.2rem 0;">
-            <img src="/static/img/logo.png" alt="Donde David" style="height: clamp(45px, 7vw, 85px); max-height: 85px; width: auto; object-fit: contain; filter: drop-shadow(0 6px 20px rgba(255, 183, 3, 0.65)); transition: transform 0.25s ease;" onmouseover="this.style.transform='scale(1.06)'" onmouseout="this.style.transform='scale(1)'">
+          <a href="#" class="universal-brand" aria-label="Recargar página" onclick="window.location.reload(); return false;">
+            <img src="/static/img/logo.png" alt="Donde David">
+            <span class="universal-brand-copy">
+              <strong id="header-restaurant-name">DONDE DAVID | FAST FOOD</strong>
+              <small>RESTAURANTE • FAST FOOD</small>
+            </span>
           </a>
         </div>
 
@@ -139,6 +143,16 @@ async function updateHeaderBcvRate() {
     const res = await fetch("/api/v1/cliente/configuraciones-publicas");
     if (res.ok) {
       const cfg = await res.json();
+      const brandName = String(cfg.nombre_restaurante || "DONDE DAVID | FAST FOOD").trim();
+      const brandEl = document.getElementById("header-restaurant-name");
+      if (brandEl) brandEl.textContent = brandName;
+      const brandLink = document.querySelector(".universal-brand");
+      if (brandLink) brandLink.setAttribute("aria-label", `${brandName}. Recargar página`);
+      if (detectSystemRole() === "landing") {
+        document.title = brandName;
+        const ogTitle = document.querySelector('meta[property="og:title"]');
+        if (ogTitle) ogTitle.setAttribute("content", brandName);
+      }
       const rateValue = Number(cfg.tasa_cambio_bs);
       if (Number.isFinite(rateValue) && rateValue > 0) {
         if (el) el.innerText = `Bs. ${rateValue.toFixed(2)}/$`;
@@ -269,7 +283,7 @@ function createUniversalMobileDrawerDOM() {
     `;
   } else if (role === "cliente") {
     roleItems = `
-      <div class="drawer-nav-item" onclick="closeUniversalMobileDrawer(); if (typeof showScreen==='function') showScreen('screen-menu');">🍔 Menú Gourmet QR</div>
+      <div class="drawer-nav-item" onclick="closeUniversalMobileDrawer(); if (typeof showScreen==='function') showScreen('screen-menu');">🍔 Menú Fast Food QR</div>
       <div class="drawer-nav-item" onclick="closeUniversalMobileDrawer(); if (typeof showScreen==='function') showScreen('screen-carrito');">🛒 Mi Carrito de Compras</div>
       <div class="drawer-nav-item" onclick="closeUniversalMobileDrawer(); if (typeof showScreen==='function') showScreen('screen-historial');">📋 Mis Pedidos Activos</div>
       <div class="drawer-nav-item" onclick="closeUniversalMobileDrawer(); if (typeof showScreen==='function') showScreen('screen-tracking');">📍 Seguimiento de pedido</div>

@@ -1808,3 +1808,142 @@ select {
     max-width: 100%;
   }
 }
+
+/* Balanced shared header: keep brand, live status and actions visually distinct. */
+.universal-header {
+  padding: 0.55rem clamp(0.75rem, 2vw, 1.5rem);
+}
+
+.universal-header-inner {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: clamp(0.5rem, 1.5vw, 1.25rem);
+}
+
+.universal-header-brand-section {
+  min-width: 0;
+  gap: clamp(0.35rem, 1vw, 0.75rem);
+}
+
+.universal-header-brand-section .universal-mobile-hamburger-trigger {
+  flex: 0 0 auto;
+}
+
+.universal-header .universal-brand {
+  min-width: 0;
+  gap: 0.65rem !important;
+}
+
+.universal-header .universal-brand img {
+  display: block;
+  width: auto;
+  height: clamp(42px, 5vw, 56px) !important;
+  max-height: 56px !important;
+  filter: drop-shadow(0 3px 8px rgba(255, 183, 3, 0.28)) !important;
+}
+
+.universal-brand-copy {
+  display: grid;
+  min-width: 0;
+  gap: 0.15rem;
+  line-height: 1.15;
+}
+
+.universal-brand-copy strong {
+  color: #fff;
+  font-family: var(--font-display);
+  font-size: clamp(0.8rem, 1.25vw, 1rem);
+  font-weight: 900;
+  letter-spacing: 0.02em;
+  overflow-wrap: anywhere;
+}
+
+.universal-brand-copy small {
+  color: var(--gold-accent);
+  font-size: 0.62rem;
+  font-weight: 800;
+  letter-spacing: 0.11em;
+}
+
+.universal-header-status-section {
+  justify-content: center;
+  flex-wrap: wrap;
+  min-width: 0;
+  gap: 0.45rem !important;
+}
+
+.universal-header-action-section {
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  min-width: 0;
+  gap: 0.45rem !important;
+}
+
+@media (max-width: 960px) {
+  .universal-header-inner {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas: "brand actions" "status status";
+    row-gap: 0.4rem;
+  }
+
+  .universal-header-brand-section {
+    grid-area: brand;
+  }
+
+  .universal-header-status-section {
+    grid-area: status;
+  }
+
+  .universal-header-action-section {
+    grid-area: actions;
+  }
+}
+
+@media (max-width: 520px) {
+  .universal-header {
+    padding: 0.45rem 0.6rem;
+  }
+
+  .universal-header-inner {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas: "brand" "actions" "status";
+    gap: 0.35rem;
+    row-gap: 0.3rem;
+  }
+
+  .universal-header-brand-section,
+  .universal-header-action-section,
+  .universal-header-status-section {
+    width: 100%;
+  }
+
+  .universal-header .universal-brand {
+    flex: 1 1 auto;
+    gap: 0.4rem !important;
+  }
+
+  .universal-header .universal-brand img {
+    flex: 0 0 auto;
+    height: 42px !important;
+    max-height: 42px !important;
+  }
+
+  .universal-brand-copy strong {
+    max-width: 40vw;
+    font-size: 0.75rem;
+  }
+
+  .universal-brand-copy small {
+    font-size: 0.55rem;
+  }
+
+  .universal-header-status-section,
+  .universal-header-action-section {
+    justify-content: center;
+  }
+
+  .universal-header-action-section {
+    flex-wrap: wrap;
+  }
+}

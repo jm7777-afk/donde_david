@@ -124,8 +124,8 @@ class GuiaItemCreate(BaseModel):
     orden: Optional[int] = 1
 
 class ConfiguracionUpdate(BaseModel):
-    clave: str
-    valor: str
+    clave: str = Field(min_length=1, max_length=100)
+    valor: str = Field(max_length=1000)
 
 
 def validate_product_json(value: Optional[str], field: str) -> None:
@@ -183,6 +183,31 @@ class ConfiguracionBatchUpdate(BaseModel):
 
 
 def validate_configuracion(data: ConfiguracionUpdate) -> None:
+    public_text_limits = {
+        "nombre_restaurante": 80,
+        "historia_restaurante": 300,
+        "direccion_restaurante": 160,
+        "footer_enlaces_titulo": 48,
+        "footer_inicio_texto": 40,
+        "footer_menu_texto": 48,
+        "footer_puntos_texto": 48,
+        "footer_atencion_titulo": 48,
+        "horario_atencion": 120,
+        "servicio_restaurante": 120,
+        "medios_pago_texto": 140,
+        "landing_titulo": 100,
+        "landing_descripcion": 300,
+    }
+    max_length = public_text_limits.get(data.clave)
+    if max_length is not None:
+        if not data.valor.strip():
+            raise HTTPException(status_code=422, detail=f"El valor de {data.clave} no puede estar vacío.")
+        if len(data.valor.strip()) > max_length:
+            raise HTTPException(
+                status_code=422,
+                detail=f"El valor de {data.clave} no puede superar {max_length} caracteres.",
+            )
+
     numeric_limits = {
         "impuesto_porcentaje": (0.0, 100.0),
         "costo_delivery": (0.0, None),

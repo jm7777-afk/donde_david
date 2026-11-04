@@ -29,7 +29,7 @@ tests\test_system.py .......                                             [100%]
 
 ### 🎨 UI/UX Lead Specialist
 - **Barra de Navegación Inferior (`.bottom-bar`)**: Integrada en la parte inferior (footer) en todas las pantallas (`cliente/app.html`, `index.html`, etc.).
-- **Coherencia Estética**: 100% unificada con el esquema de diseño Toon Gourmet de la página principal (Fondo Navy `#071A3D`, tipografía `Outfit`/`Inter`, tarjetas glassmorphism `.card` y botones `.btn-gold`/`.btn-cta`).
+- **Coherencia Estética**: 100% unificada con el esquema de diseño de comida rápida de la página principal (Fondo Navy `#071A3D`, tipografía `Outfit`/`Inter`, tarjetas glassmorphism `.card` y botones `.btn-gold`/`.btn-cta`).
 - **Modo Oscuro / Claro**: Persistencia automática de tema mediante `localStorage` y `theme-toggle.js`.
 
 ### ⚡ Backend Architect & Data Specialist

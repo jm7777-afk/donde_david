@@ -46,9 +46,32 @@ def get_configuraciones_publicas(db: Session = Depends(get_db)):
     res["tasa_estado"] = rate_status["tasa_estado"]
     res["tasa_respaldo"] = str(rate_status["tasa_respaldo"]).lower()
     
-    # Defaults
-    if "historia_restaurante" not in res:
-        res["historia_restaurante"] = "Donde David comenzó con la pasión por ofrecer las mejores hamburguesas y perros al estilo Toon Gourmet en un ambiente divertido y tecnológico."
+    # Public brand and footer copy are configurable from the admin portal.
+    public_defaults = {
+        "nombre_restaurante": "DONDE DAVID | FAST FOOD",
+        "historia_restaurante": "Las mejores hamburguesas artesanales de res 100% preparadas al instante.",
+        "direccion_restaurante": "📍 Valencia • Sede Principal",
+        "footer_enlaces_titulo": "ENLACES RÁPIDOS",
+        "footer_inicio_texto": "🏠 Inicio",
+        "footer_menu_texto": "🍔 Menú Interactivo",
+        "footer_puntos_texto": "🎁 Puntos de Fidelidad",
+        "footer_atencion_titulo": "HORARIO & ATENCIÓN",
+        "horario_atencion": "Todos los días: 11:00 AM - 11:00 PM",
+        "servicio_restaurante": "Delivery directo & Pedidos QR en mesa",
+        "medios_pago_texto": "Pago Móvil • Zelle • Tarjetas • Efectivo",
+        "landing_titulo": "¡BUEN SABOR, RÁPIDO Y RECIÉN HECHO!",
+        "landing_descripcion": "Hamburguesas artesanales de carne 100% res, perros calientes con toppings crocantes y malteadas heladas. Pide por QR en mesa o solicita delivery.",
+    }
+    for key, value in public_defaults.items():
+        res.setdefault(key, value)
+
+    legacy_names = {"donde david fresh & tasty!", "donde david - fresh & tasty!"}
+    if str(res.get("nombre_restaurante", "")).strip().casefold() in legacy_names:
+        res["nombre_restaurante"] = public_defaults["nombre_restaurante"]
+    legacy_story = str(res.get("historia_restaurante", "")).casefold()
+    if "toon gourmet" in legacy_story or "hamburguesas artesanales gigantes" in legacy_story:
+        res["historia_restaurante"] = public_defaults["historia_restaurante"]
+
     if "instagram_link" not in res:
         res["instagram_link"] = "https://instagram.com/dondedavid"
     if "tiktok_link" not in res:
@@ -59,8 +82,6 @@ def get_configuraciones_publicas(db: Session = Depends(get_db)):
         res["costo_empaque"] = "3.00"
     if "costo_delivery" not in res:
         res["costo_delivery"] = "5.00"
-    if "costo_empaque" not in res:
-        res["costo_empaque"] = "3.00"
     if "tiempo_delivery_estimado_minutos" not in res:
         res["tiempo_delivery_estimado_minutos"] = "30"
     res["google_maps_api_key"] = res.get("google_maps_api_key", "").strip()

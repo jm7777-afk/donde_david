@@ -8,10 +8,10 @@
   --brand-orange: #FF7A00;       /* Naranja Calentado - Estimulante de apetito */
   --brand-orange-dark: #D95F00;  /* Hover CTA primarios */
   --brand-red: #FF3B30;          /* Rojo Fuego - Promociones & urgencia */
-  --brand-yellow: #FFC400;       /* Oro Gourmet - Valoraciones, insignias y ofertas */
+  --brand-yellow: #FFC400;       /* Amarillo de marca para insignias y ofertas */
   --brand-green: #34C759;        /* Verde Fresco - Calidad e ingredientes 100% frescos */
 
-  /* Theme-adaptive Tokens (Default Dark Gourmet) */
+  /* Theme-adaptive Tokens (Default Dark Fast Food) */
   --bg-main: #0A0F1D;
   --bg-surface: #121829;
   --bg-card: rgba(18, 24, 41, 0.85);
