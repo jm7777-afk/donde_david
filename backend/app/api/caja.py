@@ -20,6 +20,7 @@ from backend.app.models.mesa import Mesa
 from backend.app.models.usuario import Usuario
 from backend.app.models.movimiento_inventario import MovimientoInventario
 from backend.app.models.movimiento_caja import MovimientoCaja
+from backend.app.models.puntos_log import Auditoria
 from backend.app.models.arqueo_turno import ArqueoTurno
 from backend.app.schemas.schemas import PedidoOut, TurnoApertura, TurnoCierre, TurnoOut, CobrarPedidoRequest, DetallePedidoItem, MovimientoCajaCreate, MovimientoCajaOut, ConfirmarRetiroRequest
 from backend.app.schemas.schemas import ConfirmarPagoRequest
@@ -267,6 +268,7 @@ def get_pedidos_pendientes_cobro(
     db: Session = Depends(get_db)
 ):
     return db.query(Pedido).filter(
+        Pedido.estado_pago != "PAGADO",
         or_(
             Pedido.estado.in_(["PAGO_PENDIENTE", "PENDIENTE", "EN_PREPARACION", "LISTO"]),
             and_(Pedido.estado == "ENTREGADO", Pedido.estado_pago != "PAGADO"),
@@ -332,8 +334,18 @@ async def confirmar_pago_pedido(
     current_user = Depends(require_roles(["admin", "supervisor", "caja"]))
 ):
     pedido = db.query(Pedido).filter(Pedido.id == pedido_id).with_for_update().first()
-    if not pedido or pedido.estado_pago != "PENDIENTE_VALIDACION":
+    if not pedido:
         raise HTTPException(status_code=404, detail="No existe un pago móvil pendiente de validar para este pedido.")
+
+    if pedido.estado_pago == "PAGADO" and data.aprobado:
+        return {
+            "mensaje": "Este pago móvil ya había sido validado; no se volvió a registrar.",
+            "pedido_id": pedido.id,
+            "estado_pago": pedido.estado_pago,
+            "repetido": True,
+        }
+    if pedido.estado_pago != "PENDIENTE_VALIDACION":
+        raise HTTPException(status_code=409, detail="El pago ya fue rechazado o el pedido no está pendiente de validación.")
 
     if data.aprobado:
         turno = db.query(Turno).filter(Turno.activo == True).with_for_update().first()
@@ -374,6 +386,15 @@ async def confirmar_pago_pedido(
                 raise HTTPException(status_code=409, detail=str(exc)) from exc
         message = "Pago rechazado y pedido cancelado."
 
+    audit_detail = f"Pedido #{pedido.id}: {'aprobado' if data.aprobado else 'rechazado'}"
+    if data.observacion and data.observacion.strip():
+        audit_detail += f" · {data.observacion.strip()}"
+    db.add(Auditoria(
+        accion="Validación de Pago Móvil",
+        usuario=current_user.nombre_usuario,
+        detalle=audit_detail[:255],
+    ))
+
     db.commit()
     await ws_manager.broadcast("PAGO_VALIDADO", {
         "pedido_id": pedido.id,
@@ -393,7 +414,7 @@ async def confirmar_pago_pedido(
             "detalles_count": len(pedido.detalles),
             "fecha": str(pedido.fecha_creacion),
         })
-    return {"mensaje": message, "pedido_id": pedido.id, "estado_pago": pedido.estado_pago}
+    return {"mensaje": message, "pedido_id": pedido.id, "estado_pago": pedido.estado_pago, "repetido": False}
 
 # ==================== COBRO Y PEDIDO RÁPIDO EN CAJA POS ====================
 @router.post("/crear-y-cobrar-rapido")
@@ -626,16 +647,38 @@ async def cobrar_pedido(
     db: Session = Depends(get_db),
     current_user = Depends(require_roles(["admin", "supervisor", "caja"]))
 ):
-    rate_status = get_bcv_rate(db) if data.moneda_pago == "VES" else None
+    rate_status = None
     pedido = db.query(Pedido).filter(Pedido.id == pedido_id).with_for_update().first()
     if not pedido:
         raise HTTPException(status_code=404, detail="Pedido no encontrado.")
 
     if pedido.estado_pago == "PENDIENTE_VALIDACION":
         raise HTTPException(status_code=409, detail="El pago móvil debe validarse desde la cola de pagos antes de cobrar.")
-    if pedido.estado_pago == "PAGADO" or pedido.factura_numero or pedido.estado == "CANCELADO":
-        raise HTTPException(status_code=400, detail="El pedido no puede cobrarse en su estado actual.")
+    if pedido.estado_pago == "PAGADO" and pedido.factura_numero:
+        same_payment = (
+            pedido.metodo_pago == data.metodo_pago
+            and pedido.moneda_pago == data.moneda_pago
+            and round(float(pedido.monto_recibido or 0), 2) == round(float(data.monto_recibido), 2)
+        )
+        if same_payment:
+            return {
+                "mensaje": "Este pago ya estaba confirmado; no se volvió a registrar.",
+                "pedido_id": pedido.id,
+                "factura_numero": pedido.factura_numero,
+                "total": float(pedido.total or 0),
+                "monto_recibido": float(pedido.monto_recibido or 0),
+                "cambio": float(pedido.cambio or 0),
+                "metodo_pago": pedido.metodo_pago,
+                "moneda_pago": pedido.moneda_pago,
+                "monto_pago": float(pedido.monto_pago or 0),
+                "tasa_cambio_pago": float(pedido.tasa_cambio_pago) if pedido.tasa_cambio_pago else None,
+                "repetido": True,
+            }
+        raise HTTPException(status_code=409, detail="El pedido ya fue cobrado con otros datos. No se registró otro pago.")
+    if pedido.factura_numero or pedido.estado == "CANCELADO":
+        raise HTTPException(status_code=409, detail="El pedido no puede cobrarse en su estado actual.")
 
+    rate_status = get_bcv_rate(db) if data.moneda_pago == "VES" else None
     turno_activo = db.query(Turno).filter(Turno.activo == True).with_for_update().first()
     if not turno_activo:
         raise HTTPException(status_code=409, detail="Debe abrir un turno de caja antes de cobrar.")
@@ -680,6 +723,11 @@ async def cobrar_pedido(
     turno_activo.total_ventas = round(current_ventas + ped_total, 2)
     turno_activo.total_pedidos += 1
     award_order_loyalty_points(db, pedido)
+    db.add(Auditoria(
+        accion="Cobro de pedido",
+        usuario=current_user.nombre_usuario,
+        detalle=f"Pedido #{pedido.id}: {data.metodo_pago} {data.moneda_pago} {recibido:.2f}",
+    ))
 
     db.commit()
 
@@ -703,6 +751,7 @@ async def cobrar_pedido(
         "moneda_pago": pedido.moneda_pago,
         "monto_pago": float(pedido.monto_pago or 0.0),
         "tasa_cambio_pago": float(pedido.tasa_cambio_pago) if pedido.tasa_cambio_pago else None,
+        "repetido": False,
     }
 
 @router.get("/pedidos/{pedido_id}/factura")

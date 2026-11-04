@@ -712,12 +712,31 @@ def create_categoria_admin(
     return nueva
 
 @router.delete("/categorias/{categoria_id}")
-def delete_categoria_admin(categoria_id: int, db: Session = Depends(get_db)):
+async def delete_categoria_admin(
+    categoria_id: int,
+    db: Session = Depends(get_db),
+    current_user=Depends(require_roles(["admin", "supervisor"])),
+):
     cat = db.query(Categoria).filter(Categoria.id == categoria_id).first()
     if not cat:
         raise HTTPException(status_code=404, detail="Categoría no encontrada")
+    product_count = db.query(Producto).filter(Producto.categoria_id == categoria_id).count()
+    if product_count:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"No se puede eliminar «{cat.nombre}»: tiene {product_count} producto(s) asociado(s). "
+                "Reasigna primero esos productos a otra categoría; archivarlos no los desvincula."
+            ),
+        )
     db.delete(cat)
+    db.add(Auditoria(
+        accion="Eliminación de categoría",
+        usuario=current_user.nombre_usuario,
+        detalle=f"Categoría #{categoria_id}: {cat.nombre}",
+    ))
     db.commit()
+    await ws_manager.broadcast("PRODUCTOS_ACTUALIZADOS", {})
     return {"mensaje": "Categoría eliminada"}
 
 @router.get("/productos")
@@ -797,14 +816,29 @@ async def update_producto_admin(
     return p
 
 @router.delete("/productos/{producto_id}")
-async def delete_producto_admin(producto_id: int, db: Session = Depends(get_db)):
-    prod = db.query(Producto).filter(Producto.id == producto_id).first()
+async def delete_producto_admin(
+    producto_id: int,
+    db: Session = Depends(get_db),
+    current_user=Depends(require_roles(["admin", "supervisor"])),
+):
+    prod = db.query(Producto).filter(Producto.id == producto_id).with_for_update().first()
     if not prod:
         raise HTTPException(status_code=404, detail="Producto no encontrado")
-    db.delete(prod)
+    if not prod.activo:
+        return {"mensaje": "El producto ya estaba archivado.", "producto_id": prod.id, "activo": False}
+    prod.activo = False
+    db.add(Auditoria(
+        accion="Archivo de producto",
+        usuario=current_user.nombre_usuario,
+        detalle=f"Producto #{prod.id}: {prod.nombre}",
+    ))
     db.commit()
     await ws_manager.broadcast("PRODUCTOS_ACTUALIZADOS", {"producto_id": producto_id})
-    return {"mensaje": "Producto eliminado"}
+    return {
+        "mensaje": "Producto archivado; se conserva en el historial y en los pedidos anteriores.",
+        "producto_id": prod.id,
+        "activo": False,
+    }
 
 # ==================== CONFIGURACIONES GLOBALES (HISTORIA & REDES) ====================
 @router.post("/configuraciones")

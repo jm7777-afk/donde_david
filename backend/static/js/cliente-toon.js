@@ -6,6 +6,7 @@ let guiaItems = [];
 let currentGuiaIndex = 0;
 let activeCategoryFilter = null;
 let currentSelectedModalProduct = null;
+let editingCartIndex = null;
 let tasaCambioBs = null;
 let checkoutTaxRate = 16;
 let checkoutDeliveryFee = 5;
@@ -109,6 +110,9 @@ function normalizeStoredCartItem(item) {
     precio_unitario: unitPrice,
     cantidad: quantity,
     subtotal: unitPrice * quantity,
+    imagen_url: typeof item.imagen_url === "string" && /^(https:\/\/|\/static\/)/i.test(item.imagen_url)
+      ? item.imagen_url.slice(0, 500)
+      : "",
     puntos_fidelidad: Math.max(0, Number(item.puntos_fidelidad) || 0),
     opciones: safeStringList(item.opciones),
     extras: safeStringList(item.extras),
@@ -274,6 +278,8 @@ document.addEventListener("DOMContentLoaded", () => {
   if (mesaParam && /^[1-9]\d*$/.test(mesaParam)) {
     currentDetectedMesa = mesaParam;
     isTableQrSession = true;
+    const checkoutType = document.getElementById("checkout-type");
+    if (checkoutType) checkoutType.value = "mesa";
     const tableActions = document.getElementById("table-service-actions");
     if (tableActions) tableActions.style.display = "flex";
     if (document.getElementById("current-table-indicator")) {
@@ -297,6 +303,10 @@ document.addEventListener("DOMContentLoaded", () => {
       field.addEventListener("input", persistClientProgress);
       field.addEventListener("change", persistClientProgress);
     });
+  document.getElementById("checkout-payment-instructions")?.addEventListener("click", event => {
+    const button = event.target.closest("[data-copy-value]");
+    if (button) copyCheckoutValue(button.dataset.copyValue, button.dataset.copyLabel || "Dato");
+  });
   window.addEventListener("offline", () => updateClientNetworkStatus(false));
   window.addEventListener("pagehide", persistClientProgress);
   window.addEventListener("resize", () => {
@@ -672,6 +682,8 @@ function openProductModal(prodId) {
   if (!currentSelectedModalProduct) return;
 
   currentModalQty = 1;
+  const addButton = document.getElementById("modal-add-to-cart-btn");
+  if (addButton) addButton.textContent = "🛒 AGREGAR AL CARRITO";
   document.getElementById("modal-qty-val").innerText = "1";
   const productImage = String(currentSelectedModalProduct.imagen_url || "");
   document.getElementById("modal-product-img").src = /^(https:\/\/|\/static\/)/i.test(productImage)
@@ -761,12 +773,34 @@ function openProductModal(prodId) {
     extContainer.innerHTML = extHtml;
   }
 
+  const editingItem = Number.isInteger(editingCartIndex) ? toonCart[editingCartIndex] : null;
+  if (editingItem && editingItem.producto_id === currentSelectedModalProduct.id) {
+    currentModalQty = editingItem.cantidad;
+    document.getElementById("modal-qty-val").innerText = String(currentModalQty);
+    const removedIngredients = editingItem.opciones
+      .filter(option => option.startsWith("Sin "))
+      .map(option => option.slice(4));
+    document.querySelectorAll(".dyn-ing-check").forEach(checkbox => {
+      checkbox.checked = !removedIngredients.includes(checkbox.dataset.name);
+    });
+    document.querySelectorAll(".dyn-extra-check").forEach(checkbox => {
+      checkbox.checked = editingItem.extras.includes(checkbox.dataset.name);
+    });
+    const note = editingItem.opciones.find(option => option.startsWith("Nota: "));
+    const notesInput = document.getElementById("modal-product-notes");
+    if (notesInput) notesInput.value = note ? note.slice(6) : "";
+    if (addButton) addButton.textContent = "💾 GUARDAR CAMBIOS";
+  }
+
   if (mediaContainer) mediaContainer.hidden = !mediaContainer.innerHTML.trim();
   document.getElementById("product-detail-modal").classList.add("open");
 }
 
 function closeProductModal() {
   document.getElementById("product-detail-modal").classList.remove("open");
+  editingCartIndex = null;
+  const addButton = document.getElementById("modal-add-to-cart-btn");
+  if (addButton) addButton.textContent = "🛒 AGREGAR AL CARRITO";
 }
 
 function adjustModalQty(val) {
@@ -776,6 +810,7 @@ function adjustModalQty(val) {
 
 function addModalProductToCart() {
   if (!currentSelectedModalProduct) return;
+  const wasEditing = Number.isInteger(editingCartIndex);
 
   let extraPrice = 0.0;
   let opts = [];
@@ -806,9 +841,10 @@ function addModalProductToCart() {
     : Number(currentSelectedModalProduct.precio) || 0;
   const unitPrice = basePrice + extraPrice;
 
-  toonCart.push({
+  const cartItem = {
     producto_id: currentSelectedModalProduct.id,
     nombre: currentSelectedModalProduct.nombre,
+    imagen_url: currentSelectedModalProduct.imagen_url || "",
     precio_unitario: unitPrice,
     cantidad: currentModalQty,
     subtotal: unitPrice * currentModalQty,
@@ -816,11 +852,19 @@ function addModalProductToCart() {
     opciones: opts,
     extras: selectedExtras,
     tiempo_preparacion: Number(currentSelectedModalProduct.tiempo_preparacion) || 15
-  });
+  };
+  if (Number.isInteger(editingCartIndex) && toonCart[editingCartIndex]) {
+    toonCart[editingCartIndex] = cartItem;
+    editingCartIndex = null;
+  } else {
+    toonCart.push(cartItem);
+  }
 
   updateCartNavBadge();
   closeProductModal();
-  showToast(`¡Agregado al carrito: ${currentSelectedModalProduct.nombre}!`, "success");
+  showToast(wasEditing
+    ? `Pedido actualizado: ${cartItem.nombre}.`
+    : `¡Agregado al carrito: ${cartItem.nombre}!`, "success");
   renderToonCart();
 }
 
@@ -828,6 +872,8 @@ function updateCartNavBadge() {
   const totalCount = toonCart.reduce((sum, item) => sum + item.cantidad, 0);
   const totalSum = toonCart.reduce((sum, item) => sum + item.subtotal, 0);
 
+  const cartCount = document.getElementById("client-cart-count");
+  if (cartCount) cartCount.textContent = `${totalCount} ${totalCount === 1 ? "artículo" : "artículos"}`;
   const badgeEl = document.getElementById("nav-cart-badge");
   if (badgeEl) badgeEl.innerText = totalCount;
 
@@ -866,17 +912,30 @@ function renderToonCart() {
   let html = "";
   toonCart.forEach((item, idx) => {
     subtotal += item.subtotal;
+    const image = /^(https:\/\/|\/static\/)/i.test(item.imagen_url || "")
+      ? escapeClientHtml(item.imagen_url)
+      : "/static/img/logo.png";
+    const customizations = [...item.opciones, ...(item.extras || []).map(extra => `Extra: ${extra}`)];
     html += `
-      <div style="background: var(--toon-card); border: 1px solid var(--toon-border); padding: 1rem; border-radius: var(--radius-sm); margin-bottom: 0.75rem; display: flex; justify-content: space-between; align-items: center;">
-        <div>
-          <strong style="font-size: 1rem;">${escapeClientHtml(item.nombre)} (x${item.cantidad})</strong>
-          ${item.opciones.length > 0 ? `<br><small style="color: var(--gold-accent);">${item.opciones.map(escapeClientHtml).join(', ')}</small>` : ''}
+      <article class="client-cart-item">
+        <img class="client-cart-item-image" src="${image}" alt="" loading="lazy">
+        <div class="client-cart-item-content">
+          <div class="client-cart-item-heading">
+            <strong>${escapeClientHtml(item.nombre)}</strong>
+            <span class="client-cart-item-price">${formatPriceDual(item.subtotal)}</span>
+          </div>
+          ${customizations.length ? `<ul class="client-cart-item-options">${customizations.map(option => `<li>${escapeClientHtml(option)}</li>`).join("")}</ul>` : '<small class="client-cart-item-options">Preparación estándar</small>'}
+          <div class="client-cart-item-actions">
+            <div class="client-cart-quantity" aria-label="Cantidad">
+              <button type="button" aria-label="Disminuir cantidad" onclick="adjustToonCartQuantity(${idx}, -1)">−</button>
+              <strong>${item.cantidad}</strong>
+              <button type="button" aria-label="Aumentar cantidad" onclick="adjustToonCartQuantity(${idx}, 1)">+</button>
+            </div>
+            <button type="button" class="client-cart-action" onclick="editToonCartItem(${idx})">Editar</button>
+            <button type="button" class="client-cart-action remove" onclick="removeToonCartItem(${idx})">Quitar</button>
+          </div>
         </div>
-        <div style="display: flex; align-items: center; gap: 1rem;">
-          <span style="font-weight: 900; color: var(--gold-accent); font-size: 1.1rem;">${formatPriceDual(item.subtotal)}</span>
-          <button style="background: transparent; border: none; color: var(--neon-red); font-size: 1.2rem; cursor: pointer;" onclick="removeToonCartItem(${idx})">&times;</button>
-        </div>
-      </div>
+      </article>
     `;
   });
 
@@ -900,6 +959,27 @@ function removeToonCartItem(idx) {
   toonCart.splice(idx, 1);
   updateCartNavBadge();
   renderToonCart();
+}
+
+function adjustToonCartQuantity(index, amount) {
+  const item = toonCart[index];
+  if (!item) return;
+  item.cantidad = Math.max(1, Math.min(99, item.cantidad + amount));
+  item.subtotal = item.precio_unitario * item.cantidad;
+  updateCartNavBadge();
+  renderToonCart();
+}
+
+function editToonCartItem(index) {
+  const item = toonCart[index];
+  if (!item) return;
+  const product = toonProducts.find(candidate => candidate.id === item.producto_id);
+  if (!product || !product.activo || !product.disponible) {
+    showToast("Este producto ya no está disponible para editar; puedes quitarlo del pedido.", "warning");
+    return;
+  }
+  editingCartIndex = index;
+  openProductModal(item.producto_id);
 }
 
 function toggleCheckoutFields() {
@@ -941,13 +1021,15 @@ function updateCheckoutPaymentFields() {
   const currencySelect = document.getElementById("checkout-currency");
   const referenceInput = document.getElementById("checkout-payment-reference");
   const bankInfo = document.getElementById("checkout-payment-bank-details");
+  const methodGroup = document.getElementById("checkout-payment-method-group");
+  const instructions = document.getElementById("checkout-payment-instructions");
   if (!currencyGroup || !referenceGroup || !currencySelect || !referenceInput) return;
 
   const isMobilePay = method === "Pago Móvil";
   const bankDetailsConfigured = Boolean(pagoMovilConfig.banco && pagoMovilConfig.telefono && pagoMovilConfig.rif && pagoMovilConfig.titular);
   referenceGroup.style.display = !deferredPayment && isMobilePay ? "block" : "none";
   if (bankInfo) {
-    bankInfo.style.display = !deferredPayment && isMobilePay ? "block" : "none";
+    bankInfo.hidden = true;
     if (isMobilePay && !bankDetailsConfigured) {
       bankInfo.textContent = "Pago Móvil no está disponible: el restaurante aún no configuró los datos bancarios.";
     }
@@ -959,10 +1041,12 @@ function updateCheckoutPaymentFields() {
   referenceInput.required = !deferredPayment && isMobilePay;
   const methodSelect = document.getElementById("checkout-payment");
   if (methodSelect) methodSelect.disabled = deferredPayment;
+  if (methodGroup) methodGroup.style.display = deferredPayment ? "none" : "block";
+  if (instructions) instructions.hidden = deferredPayment;
   if (deferredPayment) {
     if (bankInfo) bankInfo.style.display = "none";
     const hint = document.getElementById("checkout-payment-hint");
-    if (hint) hint.textContent = "La cuenta quedará abierta en la mesa. El pedido se enviará a cocina y caja registrará el método e importe al momento de pagar.";
+    if (hint) hint.textContent = "Cuenta abierta en esta mesa. El pedido pasa a cocina; al finalizar, paga con Caja.";
     return;
   }
   updateCheckoutAmountHint();
@@ -976,31 +1060,100 @@ function updateCheckoutAmountHint() {
   const subtotal = toonCart.reduce((sum, item) => sum + item.subtotal, 0);
   const orderType = document.getElementById("checkout-type")?.value || "mesa";
   const extra = orderType === "delivery" ? checkoutDeliveryFee : (orderType === "llevar" ? checkoutPackageFee : 0);
-  const total = subtotal * (1 + checkoutTaxRate / 100) + extra;
+  const total = Math.round((subtotal * (1 + checkoutTaxRate / 100) + extra) * 100) / 100;
   updateCheckoutOrderSummary();
+  const paymentInstructions = document.getElementById("checkout-payment-instructions");
+  if (paymentInstructions) paymentInstructions.hidden = method !== "Pago Móvil";
   if (method === "Pago Móvil") {
     const required = Number.isFinite(tasaCambioBs) ? (total * tasaCambioBs).toFixed(2) : null;
     hint.textContent = required
-      ? `Envía Bs. ${required} e introduce la referencia. Caja verificará el pago antes de enviar el pedido a cocina. Tasa: Bs. ${tasaCambioBs.toFixed(4)}/USD.`
+      ? `Envía Bs. ${required}, copia la referencia que te entrega tu banco e ingrésala aquí. Caja verificará manualmente antes de liberar el pedido a cocina.`
       : "La tasa BCV no está disponible; Pago Móvil no puede calcularse ahora.";
+    renderMobilePaymentInstructions(required);
     return;
   }
+  renderMobilePaymentInstructions(null);
   if (method === "Punto de Venta") {
-    hint.textContent = "El pedido quedará pendiente de cobro y no se considerará pagado hasta que caja confirme la operación en el terminal físico.";
+    hint.textContent = "Paga en el punto de venta de Caja. El pedido solo pasará a cocina después de que el personal confirme el cobro.";
     return;
   }
   hint.textContent = currency === "VES" && Number.isFinite(tasaCambioBs)
-    ? `Total aproximado: Bs. ${(total * tasaCambioBs).toFixed(2)}. Caja confirmará el efectivo recibido.`
-    : "El pedido queda pendiente de cobro hasta que caja registre el efectivo recibido.";
+    ? `Paga en Caja: ${currency === "VES" ? `Bs. ${(total * tasaCambioBs).toFixed(2)}` : `$${total.toFixed(2)}`}. El pedido pasa a cocina cuando Caja confirme el efectivo.`
+    : "Paga en Caja al retirar o antes de preparar. El pedido pasa a cocina cuando Caja confirme el efectivo.";
+}
+
+function renderMobilePaymentInstructions(amountInBolivares) {
+  const container = document.getElementById("checkout-payment-instructions");
+  if (!container) return;
+  const bank = pagoMovilConfig.banco;
+  const details = [
+    ["Banco", bank],
+    ["Teléfono", pagoMovilConfig.telefono],
+    ["RIF", pagoMovilConfig.rif],
+    ["Titular", pagoMovilConfig.titular],
+  ];
+  const rateInfo = document.getElementById("checkout-rate-info")?.textContent || "";
+  container.innerHTML = `
+    <h3>Pago Móvil: pasos sencillos</h3>
+    ${bank && pagoMovilConfig.telefono && pagoMovilConfig.rif && pagoMovilConfig.titular
+      ? ""
+      : '<p class="checkout-payment-warning">El restaurante aún no ha configurado todos los datos de Pago Móvil. Selecciona otra forma de pago o consulta con Caja.</p>'}
+    <ol>
+      <li>Copia los datos y realiza la transferencia desde tu banco.</li>
+      <li>Envía el monto exacto indicado abajo.</li>
+      <li>Escribe el número de referencia en el campo siguiente.</li>
+      <li>Caja verificará el pago manualmente antes de enviarlo a cocina.</li>
+    </ol>
+    <div class="checkout-copy-list">
+      ${details.map(([label, value]) => `
+        <div class="checkout-copy-row"><span><small>${label}</small><strong>${escapeClientHtml(value || "No configurado")}</strong></span>
+          ${value ? `<button type="button" data-copy-value="${escapeClientHtml(value)}" data-copy-label="${label}">Copiar</button>` : ""}
+        </div>
+      `).join("")}
+      <div class="checkout-copy-row amount"><span><small>Monto exacto a enviar</small><strong>${amountInBolivares ? `Bs. ${amountInBolivares}` : "Tasa no disponible"}</strong></span>
+        ${amountInBolivares ? `<button type="button" data-copy-value="${amountInBolivares}" data-copy-label="Monto">Copiar</button>` : ""}
+      </div>
+    </div>
+    <small class="checkout-rate-note">${escapeClientHtml(rateInfo)}</small>
+  `;
+}
+
+async function copyCheckoutValue(value, label) {
+  try {
+    if (navigator.clipboard && window.isSecureContext) {
+      await navigator.clipboard.writeText(String(value));
+    } else {
+      const input = document.createElement("textarea");
+      input.value = String(value);
+      input.setAttribute("readonly", "");
+      input.style.position = "fixed";
+      input.style.opacity = "0";
+      document.body.appendChild(input);
+      input.select();
+      const copied = document.execCommand("copy");
+      input.remove();
+      if (!copied) throw new Error("El navegador no permitió copiar el dato.");
+    }
+    showToast(`${label} copiado.`, "success");
+  } catch (error) {
+    console.error("No se pudo copiar el dato de Pago Móvil.", error);
+    showToast("No se pudo copiar. Mantén presionado el dato para seleccionarlo.", "warning");
+  }
 }
 
 function updateCheckoutOrderSummary() {
   const subtotal = toonCart.reduce((sum, item) => sum + item.subtotal, 0);
-  const tax = subtotal * checkoutTaxRate / 100;
+  const tax = Math.round(subtotal * checkoutTaxRate / 100 * 100) / 100;
   const type = document.getElementById("checkout-type")?.value || "mesa";
   const deliveryFee = type === "delivery" ? checkoutDeliveryFee : 0;
   const packageFee = type === "llevar" ? checkoutPackageFee : 0;
-  const total = subtotal + tax + deliveryFee + packageFee;
+  const total = Math.round((subtotal + tax + deliveryFee + packageFee) * 100) / 100;
+  const cartSummary = document.getElementById("checkout-cart-items");
+  if (cartSummary) {
+    cartSummary.innerHTML = toonCart.length
+      ? toonCart.map(item => `<div class="checkout-item-row"><span>${escapeClientHtml(item.nombre)} × ${item.cantidad}</span><strong>${formatPriceDual(item.subtotal)}</strong></div>`).join("")
+      : '<p class="checkout-empty-cart">No hay productos en el pedido.</p>';
+  }
   const earnedPoints = toonCart.reduce(
     (sum, item) => sum + (Math.max(0, Number(item.puntos_fidelidad) || 0) * item.cantidad),
     0
@@ -1126,12 +1279,19 @@ async function submitFinalOrder() {
     updateCartNavBadge();
 
     document.getElementById("track-order-num").innerText = `PEDIDO #${order.id}`;
-    document.getElementById("track-order-status").innerText = order.estado === "PAGO_PENDIENTE" ? "PAGO PENDIENTE DE VALIDACIÓN" : (order.modo_pago === "PAGAR_DESPUES" ? "CUENTA ABIERTA EN MESA" : "RECIBIDO EN COCINA");
+    const waitingForCashier = order.estado_pago === "PENDIENTE" && order.modo_pago !== "PAGAR_DESPUES";
+    document.getElementById("track-order-status").innerText = order.estado_pago === "PENDIENTE_VALIDACION"
+      ? "PAGO MÓVIL PENDIENTE DE VALIDACIÓN"
+      : waitingForCashier
+        ? "PENDIENTE DE COBRO EN CAJA"
+        : (order.modo_pago === "PAGAR_DESPUES" ? "CUENTA ABIERTA EN MESA" : "RECIBIDO EN COCINA");
     const preparationNotice = prepEstimateMinutes
       ? ` Preparación estimada: ${prepEstimateMinutes} min; no incluye el traslado.`
       : "";
-    document.getElementById("track-order-info").innerText = order.estado === "PAGO_PENDIENTE"
+    document.getElementById("track-order-info").innerText = order.estado_pago === "PENDIENTE_VALIDACION"
       ? `Referencia ${order.referencia_pago} recibida. Caja validará el pago antes de liberar el pedido. Total: Bs. ${Number(order.monto_pago).toFixed(2)}.${preparationNotice}`
+      : waitingForCashier
+        ? `Tu pedido está en la cola de Caja. Cocina lo recibirá después de confirmar el pago${order.metodo_pago === "Punto de Venta" ? " en el terminal" : " en efectivo"}.${preparationNotice}`
       : order.tipo === "llevar"
         ? `Pedido para retirar en mostrador. Código de seguridad: ${order.codigo_retiro}. Muéstralo en caja al recibirlo.${preparationNotice}`
         : `${order.tipo === "delivery" ? `Entrega solicitada en: ${order.direccion_delivery}` : `Procesando para ${order.numero_mesa}`}.${preparationNotice}`;
@@ -1288,11 +1448,22 @@ async function refreshTrackedOrder() {
       ? deliveryLabels[result.estado_delivery] || result.estado_delivery
       : result.tipo === "delivery" && ["PENDIENTE_VALIDACION", "RECHAZADO"].includes(result.estado_pago)
         ? (result.estado_pago === "RECHAZADO" ? "Pago rechazado" : "Pago pendiente de validación")
+      : result.estado_pago === "PENDIENTE_VALIDACION"
+        ? "Pago Móvil pendiente de validación"
+      : result.estado_pago === "PENDIENTE" && result.modo_pago !== "PAGAR_DESPUES"
+        ? "Pendiente de cobro en Caja"
+      : result.modo_pago === "PAGAR_DESPUES" && result.estado_pago !== "PAGADO"
+        ? "Cuenta abierta · pedido en cocina"
       : statusLabels[result.estado] || result.estado;
     document.getElementById("track-order-status").textContent = state;
+    const paymentStatus = result.estado_pago === "PENDIENTE"
+      ? "pendiente de confirmación en Caja"
+      : result.estado_pago === "PENDIENTE_VALIDACION"
+        ? "en verificación manual por Caja"
+        : result.estado_pago;
     document.getElementById("track-order-info").textContent = result.tipo === "delivery"
-      ? `Entrega a: ${result.direccion_delivery || "dirección registrada"}. Pago: ${result.estado_pago}. Repartidor: ${result.repartidor_nombre || "pendiente de asignación"}${result.repartidor_telefono ? ` · ${result.repartidor_telefono}` : ""}.`
-      : `Modalidad: ${result.tipo === "mesa" ? result.numero_mesa : result.tipo}. Pago: ${result.estado_pago}.`;
+      ? `Entrega a: ${result.direccion_delivery || "dirección registrada"}. Pago ${paymentStatus}. Repartidor: ${result.repartidor_nombre || "pendiente de asignación"}${result.repartidor_telefono ? ` · ${result.repartidor_telefono}` : ""}.`
+      : `Modalidad: ${result.tipo === "mesa" ? result.numero_mesa : result.tipo}. Pago ${paymentStatus}.`;
 
     const deliveryCode = document.getElementById("track-delivery-code");
     const deliveryCodeValue = document.getElementById("track-delivery-code-value");
@@ -2154,11 +2325,12 @@ async function repeatLastOrderOneClick() {
     items.push({
       producto_id: product.id,
       nombre: product.nombre,
+      imagen_url: product.imagen_url || "",
       precio_unitario: price,
       cantidad: previousItem.cantidad,
       subtotal: price * previousItem.cantidad,
       puntos_fidelidad: Math.max(0, Number(product.puntos_fidelidad) || 0),
-      opciones,
+      opciones: options,
       extras,
       tiempo_preparacion: Number(product.tiempo_preparacion) || 15
     });

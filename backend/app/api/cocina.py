@@ -1,6 +1,7 @@
 from typing import List, Optional
 from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy import and_, or_
 from sqlalchemy.orm import Session
 from backend.app.core.database import get_db
 from backend.app.core.security import require_roles
@@ -24,7 +25,11 @@ def get_pedidos_cocina(
         raise HTTPException(status_code=422, detail="Modalidad de pedido inválida.")
     # Retrieve active orders for kitchen (PENDIENTE, COBRADO, EN_PREPARACION, LISTO)
     query = db.query(Pedido).filter(
-        Pedido.estado.in_(["PENDIENTE", "COBRADO", "EN_PREPARACION", "LISTO"])
+        Pedido.estado.in_(["PENDIENTE", "COBRADO", "EN_PREPARACION", "LISTO"]),
+        or_(
+            Pedido.estado_pago == "PAGADO",
+            and_(Pedido.tipo == "mesa", Pedido.modo_pago == "PAGAR_DESPUES"),
+        ),
     )
     if tipo:
         query = query.filter(Pedido.tipo == tipo)

@@ -56,12 +56,18 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   new WSClient((event, data) => {
-    if (event === "NUEVO_PEDIDO" || event === "PAGO_CONFIRMADO" || event === "TURNO_ACTUALIZADO"
+    if (event === "NUEVO_PEDIDO" || event === "PEDIDO_PENDIENTE_COBRO" || event === "PAGO_MOVIL_PENDIENTE"
+        || event === "PAGO_CONFIRMADO" || event === "TURNO_ACTUALIZADO"
         || event === "CAMBIO_ESTADO_PEDIDO" || event === "MOVIMIENTO_CAJA") {
       loadShiftStatus();
       loadPendingOrders();
       loadPaidOrders();
       loadPickupOrders();
+      if (event === "PAGO_MOVIL_PENDIENTE") {
+        showToast(`Nuevo Pago Móvil por verificar: pedido #${data.id}.`, "info");
+      } else if (event === "PEDIDO_PENDIENTE_COBRO") {
+        showToast(`Nuevo pedido pendiente de cobro: #${data.id}.`, "info");
+      }
     }
   });
 });
@@ -1552,7 +1558,9 @@ async function submitPayment() {
 
     const data = await res.json();
     const changeLabel = currency === "VES" ? `Bs. ${data.cambio.toFixed(2)}` : `$${data.cambio.toFixed(2)}`;
-    showToast(`✅ Factura emitida ${data.factura_numero} (Cambio: ${changeLabel})`, "success");
+    showToast(data.repetido
+      ? `Este cobro ya estaba confirmado (${data.factura_numero}); no se registró otra venta.`
+      : `✅ Factura emitida ${data.factura_numero} (Cambio: ${changeLabel})`, "success");
     
     loadShiftStatus();
     loadPendingOrders();

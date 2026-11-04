@@ -457,7 +457,7 @@ function renderProducts() {
         <td style="padding: 0.75rem;">${p.stock}</td>
         <td style="padding: 0.75rem; display: flex; gap: 0.4rem;">
           <button class="btn-gold" style="padding: 0.3rem 0.6rem; font-size: 0.75rem;" onclick="openEditProductModal(${p.id})">✏️ Editar</button>
-          <button class="btn-gold" style="padding: 0.3rem 0.6rem; font-size: 0.75rem; background: var(--neon-red); color: #fff;" onclick="deleteProducto(${p.id})">🗑️</button>
+          <button class="btn-gold" style="padding: 0.3rem 0.6rem; font-size: 0.75rem; background: ${p.activo ? "var(--neon-red)" : "var(--neon-green)"}; color: #fff;" onclick="${p.activo ? "deleteProducto" : "restoreProducto"}(${p.id})">${p.activo ? "📦 Archivar" : "↩️ Reactivar"}</button>
         </td>
       </tr>
     `;
@@ -1172,12 +1172,29 @@ async function submitCreateProduct() {
 }
 
 async function deleteProducto(id) {
-  if (!confirm("¿Eliminar este producto del catálogo?")) return;
+  if (!confirm("¿Archivar este producto? Se ocultará del menú, pero se conservará en pedidos anteriores.")) return;
   try {
     const res = await fetch(`/api/v1/admin/productos/${id}`, { method: "DELETE", headers: Auth.getHeaders() });
-    if (!res.ok) throw new Error("Error al eliminar producto");
-    showToast("Producto eliminado", "success");
-    loadProducts();
+    const result = await res.json();
+    if (!res.ok) throw new Error(result.detail || "No se pudo archivar el producto.");
+    showToast(result.mensaje || "Producto archivado.", "success");
+    await loadProducts();
+  } catch (err) {
+    showToast(err.message, "danger");
+  }
+}
+
+async function restoreProducto(id) {
+  try {
+    const res = await fetch(`/api/v1/admin/productos/${id}`, {
+      method: "PUT",
+      headers: Auth.getHeaders(),
+      body: JSON.stringify({ activo: true })
+    });
+    const result = await res.json();
+    if (!res.ok) throw new Error(result.detail || "No se pudo reactivar el producto.");
+    showToast("Producto reactivado; revisa su disponibilidad antes de publicarlo.", "success");
+    await loadProducts();
   } catch (err) {
     showToast(err.message, "danger");
   }
@@ -1236,12 +1253,13 @@ async function submitCreateCategory() {
 }
 
 async function deleteCategoria(id) {
-  if (!confirm("¿Eliminar esta categoría?")) return;
+  if (!confirm("¿Eliminar esta categoría? Solo se puede eliminar si no tiene productos asociados.")) return;
   try {
     const res = await fetch(`/api/v1/admin/categorias/${id}`, { method: "DELETE", headers: Auth.getHeaders() });
-    if (!res.ok) throw new Error("Error al eliminar categoría");
-    showToast("Categoría eliminada", "success");
-    loadCategories();
+    const result = await res.json();
+    if (!res.ok) throw new Error(result.detail || "No se pudo eliminar la categoría.");
+    showToast(result.mensaje || "Categoría eliminada.", "success");
+    await loadCategories();
   } catch (err) {
     showToast(err.message, "danger");
   }

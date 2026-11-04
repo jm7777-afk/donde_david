@@ -7,7 +7,9 @@ from fastapi.testclient import TestClient
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
+from backend.app.core.database import SessionLocal
 from backend.app.main import app
+from backend.app.models.puntos_log import Auditoria
 
 
 @pytest.fixture
@@ -281,6 +283,9 @@ def test_product_loyalty_points_are_credited_only_after_payment(client):
         },
     )
     assert paid.status_code == 200, paid.text
+    shift_after_payment = client.get(
+        "/api/v1/caja/turno-activo", headers=cashier_headers
+    ).json()["total_ventas"]
     after = client.get("/api/v1/cliente/personalizacion", headers=customer_headers).json()
     assert after["puntos_fidelidad"] == before["puntos_fidelidad"] + 21
     assert after["ultima_orden"]["id"] == order["id"]
@@ -296,10 +301,170 @@ def test_product_loyalty_points_are_credited_only_after_payment(client):
             "moneda_pago": "USD",
         },
     )
-    assert duplicate_payment.status_code == 400
+    assert duplicate_payment.status_code == 200, duplicate_payment.text
+    assert duplicate_payment.json()["repetido"] is True
+    shift_after_retry = client.get(
+        "/api/v1/caja/turno-activo", headers=cashier_headers
+    ).json()["total_ventas"]
+    assert shift_after_retry == shift_after_payment
     assert client.get("/api/v1/cliente/personalizacion", headers=customer_headers).json()[
         "puntos_fidelidad"
     ] == before["puntos_fidelidad"] + 21
+
+
+@pytest.mark.parametrize("payment_method", ["Efectivo", "Punto de Venta"])
+def test_app_cash_and_pos_orders_wait_for_cashier_confirmation(client, payment_method):
+    admin_headers = _login(client, "admin", "admin123")
+    customer_headers = _login(client, "javier", "javier123")
+    cashier_headers = _login(client, "caja", "caja123")
+    categories = client.get("/api/v1/admin/categorias", headers=admin_headers).json()
+    suffix = uuid4().hex[:12]
+    product_response = client.post("/api/v1/admin/productos", headers=admin_headers, json={
+        "nombre": f"Pedido pendiente {suffix}",
+        "categoria_id": categories[0]["id"],
+        "precio": 6,
+        "stock": 5,
+    })
+    assert product_response.status_code == 200, product_response.text
+
+    created = client.post("/api/v1/cliente/pedidos", headers=customer_headers, json={
+        "numero_mesa": "Mostrador",
+        "tipo": "llevar",
+        "metodo_pago": payment_method,
+        "moneda_pago": "USD",
+        "detalles": [{"producto_id": product_response.json()["id"], "cantidad": 1}],
+    })
+    assert created.status_code == 201, created.text
+    order = created.json()
+
+    pending = client.get("/api/v1/caja/pedidos-pendientes", headers=cashier_headers)
+    assert pending.status_code == 200
+    assert any(item["id"] == order["id"] for item in pending.json())
+    kitchen_before_payment = client.get("/api/v1/cocina/pedidos", headers=admin_headers)
+    assert kitchen_before_payment.status_code == 200
+    assert all(item["id"] != order["id"] for item in kitchen_before_payment.json())
+
+    shift = client.get("/api/v1/caja/turno-activo", headers=cashier_headers)
+    if shift.status_code == 404:
+        opened = client.post(
+            "/api/v1/caja/abrir-turno",
+            headers=cashier_headers,
+            json={"monto_apertura": 0},
+        )
+        assert opened.status_code == 200, opened.text
+        shift = client.get("/api/v1/caja/turno-activo", headers=cashier_headers)
+    assert shift.status_code == 200, shift.text
+    sales_before = shift.json()["total_ventas"]
+    payment_payload = {
+        "metodo_pago": payment_method,
+        "monto_recibido": order["total"],
+        "moneda_pago": "USD",
+    }
+    paid = client.post(
+        f"/api/v1/caja/pedidos/{order['id']}/cobrar",
+        headers=cashier_headers,
+        json=payment_payload,
+    )
+    assert paid.status_code == 200, paid.text
+    kitchen_after_payment = client.get("/api/v1/cocina/pedidos", headers=admin_headers)
+    assert any(item["id"] == order["id"] for item in kitchen_after_payment.json())
+
+    repeated = client.post(
+        f"/api/v1/caja/pedidos/{order['id']}/cobrar",
+        headers=cashier_headers,
+        json=payment_payload,
+    )
+    assert repeated.status_code == 200, repeated.text
+    assert repeated.json()["repetido"] is True
+    shift_after_retry = client.get(
+        "/api/v1/caja/turno-activo", headers=cashier_headers
+    ).json()
+    assert shift_after_retry["total_ventas"] == round(sales_before + order["total"], 2)
+
+
+def test_mobile_payment_requires_manual_validation_and_retry_is_safe(client, monkeypatch):
+    from backend.app.api import caja as caja_api
+    from backend.app.api import cliente as cliente_api
+
+    rate = {"tasa_cambio_bs": 50.0}
+    monkeypatch.setattr(cliente_api, "get_bcv_rate", lambda db: rate)
+    monkeypatch.setattr(caja_api, "get_bcv_rate", lambda db: rate)
+    admin_headers = _login(client, "admin", "admin123")
+    customer_headers = _login(client, "javier", "javier123")
+    cashier_headers = _login(client, "caja", "caja123")
+    settings = client.post("/api/v1/admin/configuraciones/lote", headers=admin_headers, json={
+        "configuraciones": [
+            {"clave": "pago_movil_banco", "valor": "0102"},
+            {"clave": "pago_movil_telefono", "valor": "04120000000"},
+            {"clave": "pago_movil_rif", "valor": "J-12345678-9"},
+            {"clave": "pago_movil_titular", "valor": "Restaurante QA"},
+        ],
+    })
+    assert settings.status_code == 200, settings.text
+    categories = client.get("/api/v1/admin/categorias", headers=admin_headers).json()
+    suffix = uuid4().hex[:12]
+    product = client.post("/api/v1/admin/productos", headers=admin_headers, json={
+        "nombre": f"Pago móvil QA {suffix}",
+        "categoria_id": categories[0]["id"],
+        "precio": 4,
+        "stock": 5,
+    })
+    assert product.status_code == 200, product.text
+    created = client.post("/api/v1/cliente/pedidos", headers=customer_headers, json={
+        "numero_mesa": "Mostrador",
+        "tipo": "llevar",
+        "metodo_pago": "Pago Móvil",
+        "moneda_pago": "VES",
+        "referencia_pago": f"REF-{suffix}",
+        "detalles": [{"producto_id": product.json()["id"], "cantidad": 1}],
+    })
+    assert created.status_code == 201, created.text
+    order = created.json()
+
+    pending = client.get("/api/v1/caja/pedidos-pendientes", headers=cashier_headers).json()
+    assert any(item["id"] == order["id"] for item in pending)
+    kitchen_before_validation = client.get("/api/v1/cocina/pedidos", headers=admin_headers).json()
+    assert all(item["id"] != order["id"] for item in kitchen_before_validation)
+
+    shift = client.get("/api/v1/caja/turno-activo", headers=cashier_headers)
+    if shift.status_code == 404:
+        opened = client.post(
+            "/api/v1/caja/abrir-turno",
+            headers=cashier_headers,
+            json={"monto_apertura": 0},
+        )
+        assert opened.status_code == 200, opened.text
+        shift = client.get("/api/v1/caja/turno-activo", headers=cashier_headers)
+    assert shift.status_code == 200, shift.text
+    sales_before = shift.json()["total_ventas"]
+    validation_url = f"/api/v1/caja/pedidos/{order['id']}/confirmar-pago"
+    approved = client.post(validation_url, headers=cashier_headers, json={
+        "aprobado": True,
+        "observacion": "x" * 250,
+    })
+    assert approved.status_code == 200, approved.text
+    assert approved.json()["repetido"] is False
+    kitchen_after_validation = client.get("/api/v1/cocina/pedidos", headers=admin_headers).json()
+    assert any(item["id"] == order["id"] for item in kitchen_after_validation)
+
+    repeated = client.post(validation_url, headers=cashier_headers, json={"aprobado": True})
+    assert repeated.status_code == 200, repeated.text
+    assert repeated.json()["repetido"] is True
+    shift_after_retry = client.get(
+        "/api/v1/caja/turno-activo", headers=cashier_headers
+    ).json()
+    assert shift_after_retry["total_ventas"] == round(sales_before + order["total"], 2)
+
+    db = SessionLocal()
+    try:
+        audit = db.query(Auditoria).filter(
+            Auditoria.accion == "Validación de Pago Móvil",
+            Auditoria.detalle.like(f"Pedido #{order['id']}:%"),
+        ).order_by(Auditoria.id.desc()).first()
+        assert audit is not None
+        assert len(audit.detalle) <= 255
+    finally:
+        db.close()
 
 
 def test_delivery_dispatch_list_hides_otp_without_response_validation_error(client):
@@ -522,6 +687,8 @@ def test_table_is_not_released_until_cleaning_after_payment(client):
     })
     assert created.status_code == 201, created.text
     order = created.json()
+    kitchen_pending = client.get("/api/v1/cocina/pedidos", headers=admin_headers)
+    assert any(item["id"] == order["id"] for item in kitchen_pending.json())
 
     assert client.put(
         f"/api/v1/cocina/pedidos/{order['id']}/estado?estado=LISTO",

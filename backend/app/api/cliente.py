@@ -172,6 +172,10 @@ async def crear_pedido(
     costo_empaque_val = float(empaque_config.valor) if pedido_in.tipo == "llevar" and empaque_config else (3.0 if pedido_in.tipo == "llevar" else 0.0)
 
     deferred_payment = pedido_in.tipo == "mesa" and pedido_in.modo_pago == "PAGAR_DESPUES"
+    if pedido_in.modo_pago not in {"PAGAR_ANTES", "PAGAR_DESPUES"}:
+        raise HTTPException(status_code=422, detail="La modalidad de cobro no es válida.")
+    if pedido_in.modo_pago == "PAGAR_DESPUES" and pedido_in.tipo != "mesa":
+        raise HTTPException(status_code=422, detail="La cuenta abierta solo está disponible para pedidos en mesa.")
     metodo_pago = None if deferred_payment else (pedido_in.metodo_pago or "Efectivo")
     moneda_pago = pedido_in.moneda_pago or "USD"
     if not deferred_payment and metodo_pago not in {"Pago Móvil", "Efectivo", "Punto de Venta"}:
@@ -360,7 +364,7 @@ async def crear_pedido(
     db.commit()
     db.refresh(nuevo_pedido)
 
-    if not is_mobile_payment:
+    if deferred_payment:
         await ws_manager.broadcast("NUEVO_PEDIDO", {
             "id": nuevo_pedido.id,
             "numero_mesa": nuevo_pedido.numero_mesa,
@@ -370,6 +374,24 @@ async def crear_pedido(
             "tipo": nuevo_pedido.tipo,
             "detalles_count": len(nuevo_pedido.detalles),
             "fecha": str(nuevo_pedido.fecha_creacion)
+        })
+    elif is_mobile_payment:
+        await ws_manager.broadcast("PAGO_MOVIL_PENDIENTE", {
+            "id": nuevo_pedido.id,
+            "numero_mesa": nuevo_pedido.numero_mesa,
+            "total": float(nuevo_pedido.total or 0),
+            "monto_pago": float(nuevo_pedido.monto_pago or 0),
+            "tipo": nuevo_pedido.tipo,
+            "fecha": str(nuevo_pedido.fecha_creacion),
+        })
+    else:
+        await ws_manager.broadcast("PEDIDO_PENDIENTE_COBRO", {
+            "id": nuevo_pedido.id,
+            "numero_mesa": nuevo_pedido.numero_mesa,
+            "total": float(nuevo_pedido.total or 0),
+            "metodo_pago": nuevo_pedido.metodo_pago,
+            "tipo": nuevo_pedido.tipo,
+            "fecha": str(nuevo_pedido.fecha_creacion),
         })
 
     response_order = PedidoCreadoOut.model_validate(nuevo_pedido)
@@ -411,7 +433,7 @@ def obtener_seguimiento_pedido(
         "estado": pedido.estado,
         "estado_pago": pedido.estado_pago,
         "estado_delivery": pedido.estado_delivery,
-        "estado_pago": pedido.estado_pago,
+        "modo_pago": pedido.modo_pago,
         "estado_retiro": pedido.estado_retiro,
         "total": float(pedido.total or 0),
         "subtotal": float(pedido.subtotal or 0),

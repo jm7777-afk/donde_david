@@ -230,14 +230,29 @@ def test_admin_product_availability_and_allergens_persist(client, monkeypatch):
                   if item["id"] == product_id)
     assert stored["alergenos"] == "leche"
     assert stored["disponible"] is False
+    available = client.put(f"/api/v1/admin/productos/{product_id}", headers=headers, json={
+        "disponible": True,
+    })
+    assert available.status_code == 200
+    assert any(item["id"] == product_id for item in client.get("/api/v1/cliente/productos").json())
+    category_delete = client.delete(
+        f"/api/v1/admin/categorias/{category.json()['id']}", headers=headers
+    )
+    assert category_delete.status_code == 409
+    assert "producto(s) asociado(s)" in category_delete.json()["detail"]
+    archived = client.delete(f"/api/v1/admin/productos/{product_id}", headers=headers)
+    assert archived.status_code == 200
+    archived_product = next(item for item in client.get("/api/v1/admin/productos", headers=headers).json()
+                            if item["id"] == product_id)
+    assert archived_product["activo"] is False
     public_products = client.get("/api/v1/cliente/productos")
     assert all(item["id"] != product_id for item in public_products.json())
-    assert client.delete(f"/api/v1/admin/productos/{product_id}", headers=headers).status_code == 200
     settings = client.post("/api/v1/admin/configuraciones/lote", headers=headers, json={
         "configuraciones": [{"clave": f"test_setting_{suffix}", "valor": "enabled"}],
     })
     assert settings.status_code == 200
     assert [event for event, _ in broadcasts] == [
+        "PRODUCTOS_ACTUALIZADOS",
         "PRODUCTOS_ACTUALIZADOS",
         "PRODUCTOS_ACTUALIZADOS",
         "PRODUCTOS_ACTUALIZADOS",

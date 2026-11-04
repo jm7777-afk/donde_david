@@ -7,7 +7,7 @@
   <link rel="manifest" href="/static/manifest.json">
   <meta name="theme-color" content="#FFBC0D">
   <link rel="stylesheet" href="/static/css/global.css?v=2.1">
-  <link rel="stylesheet" href="/static/css/toon-theme.css?v=2.7">
+  <link rel="stylesheet" href="/static/css/toon-theme.css?v=2.8">
   <link rel="stylesheet" href="/static/css/index.css?v=2.0">
   
   <!-- Leaflet Maps CSS & JS para Ubicación Exacta de Delivery -->
@@ -301,8 +301,11 @@
 
     <!-- 5. CARRITO -->
     <div id="screen-carrito" class="screen" style="padding: 1.25rem;">
-      <h2 style="font-size: 1.4rem; font-weight: 900; margin-bottom: 1.25rem;">🛒 TU PEDIDO ACTUAL</h2>
-      <div id="toon-cart-items"></div>
+      <header class="client-section-heading">
+        <div><small>REVISA ANTES DE CONTINUAR</small><h2>🛒 Tu pedido</h2></div>
+        <span id="client-cart-count" class="client-cart-count">0 artículos</span>
+      </header>
+      <div id="toon-cart-items" class="client-cart-list" aria-live="polite"></div>
 
       <div style="background: var(--toon-card); padding: 1.25rem; border-radius: var(--radius-md); margin: 1.25rem 0; border: 1px solid var(--toon-border);">
         <div style="display: flex; justify-content: space-between; color: var(--text-muted); margin-bottom: 0.5rem;"><span>Subtotal</span><span id="cart-subtotal">$0.00</span></div>
@@ -317,39 +320,45 @@
 
     <!-- 6. CHECKOUT COMPLETO (QR MESA VS DELIVERY) -->
     <div id="screen-checkout" class="screen" style="padding: 1.25rem;">
-      <h2 style="font-size: 1.4rem; font-weight: 900; margin-bottom: 1.25rem;">CONFIRMAR Y FINALIZAR</h2>
+      <header class="client-section-heading checkout-heading">
+        <div><small>PASO FINAL</small><h2>Confirmar y finalizar</h2></div>
+        <span class="checkout-secure-badge">✓ Revisa tu pedido</span>
+      </header>
 
       <!-- Selección de Tipo -->
-      <div class="form-group">
-        <label>MODALIDAD DEL PEDIDO</label>
+      <section class="checkout-step-card">
+        <div class="checkout-step-title"><span>1</span><div><h3>¿Cómo recibirás tu pedido?</h3><small>Elige la modalidad de entrega.</small></div></div>
+        <div class="form-group">
+        <label for="checkout-type">MODALIDAD DEL PEDIDO</label>
         <select id="checkout-type" class="form-control" onchange="toggleCheckoutFields()">
           <option value="mesa">🍽️ Pedido en Local / Mesa (Vía QR)</option>
           <option value="delivery">🛵 Delivery (Entrega a Domicilio)</option>
           <option value="llevar">🛍️ Para LLevar / Mostrador</option>
         </select>
-      </div>
+        </div>
+      </section>
 
       <!-- Sección exclusiva para MESA -->
-      <div id="section-checkout-mesa" style="background: rgba(0, 245, 212, 0.08); border: 1px solid var(--cyan-accent); padding: 1.25rem; border-radius: var(--radius-md); margin-bottom: 1.25rem;">
+      <div id="section-checkout-mesa" class="checkout-step-card checkout-table-card">
         <div style="display: flex; justify-content: space-between; align-items: center;">
           <h4 style="color: var(--cyan-accent); font-weight: 800; margin: 0; font-size: 0.95rem;">📱 UBICACIÓN VALIDADA POR QR</h4>
           <button style="background: transparent; border: 1px solid var(--cyan-accent); color: var(--cyan-accent); font-size: 0.75rem; border-radius: 12px; padding: 0.2rem 0.5rem; cursor: pointer;" onclick="openQrScannerModal()">📷 Escanear/Cambiar Mesa</button>
         </div>
         <p style="font-size: 0.85rem; color: #fff; margin: 0.5rem 0 0.75rem 0;">Estás pidiendo directamente en: <strong id="checkout-mesa-name">Mesa #5</strong></p>
         
-        <label style="font-size: 0.85rem; font-weight: 700; color: var(--gold-accent);">MODALIDAD DE COBRO EN MESA:</label>
-        <div style="display: flex; gap: 0.75rem; margin-top: 0.5rem;">
-          <label style="flex: 1; background: rgba(0,0,0,0.4); padding: 0.75rem; border-radius: 8px; border: 1px solid var(--gold-accent); cursor: pointer; font-size: 0.85rem;">
-            <input type="radio" name="modo_pago" value="PAGAR_ANTES" checked onchange="updateCheckoutPaymentFields()"> Pagar Antes (Anticipado)
+        <label class="checkout-choice-label">MODALIDAD DE COBRO EN MESA</label>
+        <div class="checkout-choice-grid">
+          <label class="checkout-choice">
+            <input type="radio" name="modo_pago" value="PAGAR_ANTES" checked onchange="updateCheckoutPaymentFields()"> <span><strong>Pagar antes</strong><small>Pago anticipado en Caja o Pago Móvil.</small></span>
           </label>
-          <label style="flex: 1; background: rgba(0,0,0,0.4); padding: 0.75rem; border-radius: 8px; border: 1px solid var(--gold-accent); cursor: pointer; font-size: 0.85rem;">
-            <input type="radio" name="modo_pago" value="PAGAR_DESPUES" onchange="updateCheckoutPaymentFields()"> Cuenta Abierta (Pagar al Salir)
+          <label class="checkout-choice">
+            <input type="radio" name="modo_pago" value="PAGAR_DESPUES" onchange="updateCheckoutPaymentFields()"> <span><strong>Cuenta abierta</strong><small>Disfruta y paga en Caja al salir.</small></span>
           </label>
         </div>
       </div>
 
       <!-- Sección exclusiva para DELIVERY - ULTRA SENCILLA CON 1 BOTÓN DE UBICACIÓN -->
-      <div id="section-checkout-delivery" style="display: none; background: rgba(0, 245, 212, 0.08); border: 1.5px solid var(--cyan-accent); padding: 1.25rem; border-radius: var(--radius-md); margin-bottom: 1.25rem;">
+      <div id="section-checkout-delivery" class="checkout-step-card checkout-delivery-card" style="display: none;">
         <h4 style="color: var(--cyan-accent); font-weight: 900; margin-top: 0; font-size: 1rem;">🛵 DATOS Y UBICACIÓN PARA DELIVERY</h4>
         
         <div class="form-group" style="margin-bottom: 0.75rem;">
@@ -374,8 +383,10 @@
         <div id="gps-status-badge" style="font-size: 0.82rem; color: var(--cyan-accent); font-weight: 800; display: none; margin-top: 0.6rem; text-align: center;"></div>
       </div>
 
-      <section id="checkout-order-summary" aria-live="polite" style="background:var(--toon-card);border:1px solid var(--toon-border);border-radius:14px;padding:1rem;margin-bottom:1rem">
-        <h3 style="margin:0 0 .65rem;color:var(--gold-accent)">Resumen de pago</h3>
+      <section id="checkout-order-summary" class="checkout-step-card checkout-summary-card" aria-live="polite">
+        <div class="checkout-step-title"><span>2</span><div><h3>Revisa tu pedido</h3><small>Productos, impuestos y total.</small></div></div>
+        <div id="checkout-cart-items" class="checkout-cart-items"></div>
+        <h4>Resumen de pago</h4>
         <div style="display:grid;gap:.45rem">
           <div style="display:flex;justify-content:space-between;gap:.75rem"><span>Productos</span><strong id="checkout-summary-subtotal">$0.00</strong></div>
           <div style="display:flex;justify-content:space-between;gap:.75rem"><span>Impuesto</span><strong id="checkout-summary-tax">$0.00</strong></div>
@@ -386,12 +397,14 @@
         </div>
       </section>
 
-      <div class="form-group">
-        <label>FORMA DE PAGO SELECCIONADA</label>
+      <section class="checkout-step-card checkout-pay-section">
+      <div class="checkout-step-title"><span>3</span><div><h3>¿Cómo pagarás?</h3><small>Selecciona una opción. Caja confirmará los pagos presenciales.</small></div></div>
+      <div class="form-group" id="checkout-payment-method-group">
+        <label for="checkout-payment">FORMA DE PAGO</label>
         <select id="checkout-payment" class="form-control" onchange="updateCheckoutPaymentFields()">
-          <option value="Pago Móvil">📱 Pago Móvil (validación por caja)</option>
           <option value="Efectivo">💵 Efectivo (USD o Bs.)</option>
-          <option value="Punto de Venta">💳 Punto de venta físico en caja</option>
+          <option value="Punto de Venta">💳 Punto de venta en Caja</option>
+          <option value="Pago Móvil">📱 Pago Móvil (verificación manual)</option>
         </select>
       </div>
       <small id="checkout-rate-info" style="display: block; color: var(--text-muted); margin: -.5rem 0 .75rem;"></small>
@@ -402,14 +415,14 @@
           <option value="USD">Dólares (USD)</option>
         </select>
       </div>
+      <div id="checkout-payment-hint" role="status" class="checkout-payment-hint"></div>
+      <section id="checkout-payment-instructions" class="checkout-payment-instructions" hidden aria-live="polite"></section>
       <div id="checkout-payment-reference-group" class="form-group">
-        <label>REFERENCIA DE PAGO MÓVIL</label>
-        <input id="checkout-payment-reference" class="form-control" maxlength="100" autocomplete="off" placeholder="Referencia indicada por el banco">
+        <label for="checkout-payment-reference">REFERENCIA DE LA TRANSFERENCIA</label>
+        <input id="checkout-payment-reference" class="form-control" maxlength="100" autocomplete="off" placeholder="Escribe el número de referencia del banco">
       </div>
-      <div id="checkout-payment-bank-details" style="display: none; background: rgba(0,245,212,.08); border: 1px solid var(--cyan-accent); border-radius: 10px; padding: .75rem; margin-bottom: .75rem; font-size: .85rem;"></div>
-      <div id="checkout-payment-hint" role="status" style="background: rgba(255,188,13,.08); border: 1px solid var(--gold-accent); border-radius: 10px; padding: .75rem; margin: .75rem 0; font-size: .85rem;"></div>
-
-      <button class="btn-gold" style="width: 100%; font-size: 1.15rem; margin-top: 1.5rem;" onclick="submitFinalOrder()">🚀 PROCESAR Y ENVIAR PEDIDO</button>
+      <button class="btn-gold checkout-submit-button" onclick="submitFinalOrder()">🚀 CONFIRMAR PEDIDO</button>
+      </section>
     </div>
 
     <!-- 7. SEGUIMIENTO DE PEDIDO -->
@@ -742,15 +755,15 @@
 
   <!-- MODAL DE DETALLE Y PERSONALIZACIÓN DE INGREDIENTES Y EXTRAS POR CATEGORÍA (REQUERIMIENTO #2 & #5) -->
   <div class="product-modal-backdrop" id="product-detail-modal">
-    <div class="product-modal-card">
-      <button class="modal-close-btn" onclick="closeProductModal()">&times;</button>
+    <div class="product-modal-card product-detail-card">
+      <button class="modal-close-btn" type="button" aria-label="Cerrar detalle del producto" onclick="closeProductModal()">&times;</button>
       <img id="modal-product-img" src="" class="product-hero-img" alt="Producto">
       <div class="modal-content-body">
-        <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 0.3rem;">
-          <h2 id="modal-product-title" style="font-size: 1.4rem; font-weight: 900; margin: 0; color: var(--text-primary);">Nombre del Producto</h2>
-          <span id="modal-product-price" style="font-size: 1.4rem; font-weight: 900; color: var(--gold-accent);">$0.00</span>
+        <div class="product-detail-heading">
+          <div><small>PREPARADO AL MOMENTO</small><h2 id="modal-product-title">Nombre del Producto</h2></div>
+          <span id="modal-product-price">$0.00</span>
         </div>
-        <p id="modal-product-desc" style="color: var(--text-muted); font-size: 0.88rem; line-height: 1.4; margin-bottom: 1.25rem;">Descripción detallada.</p>
+        <p id="modal-product-desc" class="product-detail-description">Descripción detallada.</p>
         <small id="modal-product-loyalty" style="display:block;color:var(--cyan-accent);margin:-.75rem 0 1rem"></small>
         <div id="modal-product-media" hidden aria-label="Galería multimedia del plato"></div>
         <div id="modal-product-allergens" role="note" style="display:none; margin-bottom:1rem; padding:.7rem; border:1px solid var(--gold-accent); border-radius:8px; color:var(--gold-accent); font-size:.82rem;"></div>
@@ -783,8 +796,10 @@
           </div>
         </div>
 
-        <button class="btn-gold" style="width: 100%; font-size: 1.1rem;" onclick="addModalProductToCart()">🛒 AGREGAR AL CARRITO</button>
+        <button class="btn-gold product-detail-add-button" id="modal-add-to-cart-btn" type="button" onclick="addModalProductToCart()">🛒 AGREGAR AL CARRITO</button>
       </div>
+    </div>
+  </div>
   <!-- BOTÓN FLOTANTE CHATBOT IA DAVIDBOT (ESTILO GUSTICOS VALENCIA) -->
   <div class="fab-chatbot" onclick="openModal('chatbot-modal')" title="Asistente Virtual DavidBot 💬">
     💬
@@ -820,7 +835,7 @@
 
   <script src="/static/js/auth.js?v=2.0"></script>
   <script src="/static/js/websocket.js?v=2.0"></script>
-  <script src="/static/js/cliente-toon.js?v=2.3"></script>
+  <script src="/static/js/cliente-toon.js?v=2.4"></script>
   <script src="/static/js/appShell.js?v=2.5"></script>
   <script>
     if ("serviceWorker" in navigator && (location.protocol === "https:" || location.hostname === "localhost" || location.hostname === "127.0.0.1")) {
