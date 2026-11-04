@@ -7,7 +7,7 @@
   <link rel="manifest" href="/static/manifest.json">
   <meta name="theme-color" content="#FFBC0D">
   <link rel="stylesheet" href="/static/css/global.css?v=2.1">
-  <link rel="stylesheet" href="/static/css/toon-theme.css?v=2.8">
+  <link rel="stylesheet" href="/static/css/toon-theme.css?v=2.10">
   <link rel="stylesheet" href="/static/css/index.css?v=2.0">
   
   <!-- Leaflet Maps CSS & JS para Ubicación Exacta de Delivery -->
@@ -301,6 +301,15 @@
 
     <!-- 5. CARRITO -->
     <div id="screen-carrito" class="screen" style="padding: 1.25rem;">
+      <nav class="checkout-progress" aria-label="Progreso del pedido">
+        <ol>
+          <li data-checkout-progress="1"><span>1</span><small>Carrito</small></li>
+          <li data-checkout-progress="2"><span>2</span><small>Entrega</small></li>
+          <li data-checkout-progress="3"><span>3</span><small>Resumen</small></li>
+          <li data-checkout-progress="4"><span>4</span><small>Pago</small></li>
+          <li data-checkout-progress="5"><span>5</span><small>Seguimiento</small></li>
+        </ol>
+      </nav>
       <header class="client-section-heading">
         <div><small>REVISA ANTES DE CONTINUAR</small><h2>🛒 Tu pedido</h2></div>
         <span id="client-cart-count" class="client-cart-count">0 artículos</span>
@@ -315,30 +324,36 @@
         <div style="display: flex; justify-content: space-between; font-size: 1.3rem; font-weight: 900; border-top: 1px dashed var(--toon-border); padding-top: 0.75rem; color: var(--gold-accent);"><span>TOTAL GENERAL</span><span id="cart-total">$0.00</span></div>
       </div>
 
-      <button class="btn-gold" style="width: 100%; font-size: 1.15rem;" onclick="openOrderModalityModal()">🚀 CONTINUAR Y ELEGIR MODALIDAD</button>
+      <button class="btn-gold checkout-submit-button" style="width: 100%;" onclick="startCheckoutFlow()">CONTINUAR · ENTREGA</button>
     </div>
 
-    <!-- 6. CHECKOUT COMPLETO (QR MESA VS DELIVERY) -->
-    <div id="screen-checkout" class="screen" style="padding: 1.25rem;">
+    <!-- 6. CHECKOUT 2/5: MODALIDAD Y DATOS DE ENTREGA -->
+    <div id="screen-checkout-delivery" class="screen" style="padding: 1.25rem;">
+      <nav class="checkout-progress" aria-label="Progreso del pedido">
+        <ol>
+          <li data-checkout-progress="1"><span>1</span><small>Carrito</small></li>
+          <li data-checkout-progress="2"><span>2</span><small>Entrega</small></li>
+          <li data-checkout-progress="3"><span>3</span><small>Resumen</small></li>
+          <li data-checkout-progress="4"><span>4</span><small>Pago</small></li>
+          <li data-checkout-progress="5"><span>5</span><small>Seguimiento</small></li>
+        </ol>
+      </nav>
       <header class="client-section-heading checkout-heading">
-        <div><small>PASO FINAL</small><h2>Confirmar y finalizar</h2></div>
-        <span class="checkout-secure-badge">✓ Revisa tu pedido</span>
+        <div><small>PASO 2 DE 5</small><h2>¿Cómo recibirás tu pedido?</h2></div>
+        <span class="checkout-secure-badge">Entrega</span>
       </header>
 
-      <!-- Selección de Tipo -->
       <section class="checkout-step-card">
-        <div class="checkout-step-title"><span>1</span><div><h3>¿Cómo recibirás tu pedido?</h3><small>Elige la modalidad de entrega.</small></div></div>
         <div class="form-group">
-        <label for="checkout-type">MODALIDAD DEL PEDIDO</label>
-        <select id="checkout-type" class="form-control" onchange="toggleCheckoutFields()">
-          <option value="mesa">🍽️ Pedido en Local / Mesa (Vía QR)</option>
-          <option value="delivery">🛵 Delivery (Entrega a Domicilio)</option>
-          <option value="llevar">🛍️ Para LLevar / Mostrador</option>
-        </select>
+          <label for="checkout-type">MODALIDAD DEL PEDIDO</label>
+          <select id="checkout-type" class="form-control" onchange="toggleCheckoutFields()">
+            <option value="mesa">🍽️ Pedido en Local / Mesa (Vía QR)</option>
+            <option value="delivery">🛵 Delivery (Entrega a Domicilio)</option>
+            <option value="llevar">🛍️ Para Llevar / Mostrador</option>
+          </select>
         </div>
       </section>
 
-      <!-- Sección exclusiva para MESA -->
       <div id="section-checkout-mesa" class="checkout-step-card checkout-table-card">
         <div style="display: flex; justify-content: space-between; align-items: center;">
           <h4 style="color: var(--cyan-accent); font-weight: 800; margin: 0; font-size: 0.95rem;">📱 UBICACIÓN VALIDADA POR QR</h4>
@@ -357,34 +372,54 @@
         </div>
       </div>
 
-      <!-- Sección exclusiva para DELIVERY - ULTRA SENCILLA CON 1 BOTÓN DE UBICACIÓN -->
       <div id="section-checkout-delivery" class="checkout-step-card checkout-delivery-card" style="display: none;">
         <h4 style="color: var(--cyan-accent); font-weight: 900; margin-top: 0; font-size: 1rem;">🛵 DATOS Y UBICACIÓN PARA DELIVERY</h4>
-        
         <div class="form-group" style="margin-bottom: 0.75rem;">
-          <label style="color: var(--text-primary); font-size: 0.82rem;">Nombre Completo de quien recibe</label>
-          <input type="text" id="deliv-nombre" class="form-control" placeholder="Ej. Juan Pérez">
+          <label for="deliv-nombre" style="color: var(--text-primary); font-size: 0.82rem;">Nombre completo de quien recibe</label>
+          <input type="text" id="deliv-nombre" class="form-control" autocomplete="name" maxlength="160" placeholder="Ej. Juan Pérez">
         </div>
         <div class="form-group" style="margin-bottom: 0.75rem;">
-          <label style="color: var(--text-primary); font-size: 0.82rem;">Teléfono de Contacto (WhatsApp)</label>
-          <input type="text" id="deliv-telefono" class="form-control" placeholder="+58 414 123 4567">
+          <label for="deliv-telefono" style="color: var(--text-primary); font-size: 0.82rem;">Teléfono de contacto (WhatsApp)</label>
+          <input type="tel" id="deliv-telefono" class="form-control" autocomplete="tel" maxlength="40" placeholder="+58 414 123 4567">
         </div>
-
         <div class="form-group" style="margin-bottom: 0.75rem;">
-          <label style="color: var(--text-primary); font-size: 0.82rem;">Dirección o Referencia de Entrega</label>
-          <textarea id="deliv-direccion" class="form-control" rows="2" placeholder="Ej. Av. Principal, Res. Las Palmeras, Apto 3B (o presiona el botón abajo)"></textarea>
+          <label for="deliv-direccion" style="color: var(--text-primary); font-size: 0.82rem;">Dirección o referencia de entrega</label>
+          <textarea id="deliv-direccion" class="form-control" rows="2" maxlength="500" autocomplete="street-address" placeholder="Av., edificio, urbanización, piso o punto de referencia"></textarea>
         </div>
         <button class="btn btn-outline" type="button" style="width:100%;margin-bottom:.65rem" onclick="openDeliveryMapModal()">🗺️ Elegir punto en el mapa</button>
-
-        <!-- BOTÓN ULTRA SENCILLO DE UBICACIÓN EN 1-CLIC -->
-        <button class="btn-gold" style="width: 100%; padding: 0.85rem; font-size: 0.95rem; background: linear-gradient(135deg, #00f5d4, #00b4d8); color: #000; font-weight: 900; display: flex; align-items: center; justify-content: center; gap: 0.5rem;" onclick="getDeviceGPSLocation()">
+        <button class="btn-gold" type="button" style="width: 100%; padding: 0.85rem; font-size: 0.95rem; background: linear-gradient(135deg, #00f5d4, #00b4d8); color: #000; font-weight: 900; display: flex; align-items: center; justify-content: center; gap: 0.5rem;" onclick="getDeviceGPSLocation()">
           <span>📍 USAR MI UBICACIÓN ACTUAL DEL CELULAR</span>
         </button>
         <div id="gps-status-badge" style="font-size: 0.82rem; color: var(--cyan-accent); font-weight: 800; display: none; margin-top: 0.6rem; text-align: center;"></div>
       </div>
 
+      <div id="checkout-takeaway-note" class="checkout-payment-hint" hidden>
+        Retira tu pedido en el mostrador. Podrás coordinar el pago en el siguiente paso.
+      </div>
+      <div class="checkout-navigation">
+        <button class="btn btn-outline" type="button" onclick="showScreen('screen-carrito')">← Volver al carrito</button>
+        <button class="btn-gold" type="button" onclick="continueToOrderSummary()">CONTINUAR · RESUMEN →</button>
+      </div>
+    </div>
+
+    <!-- 7. CHECKOUT 3/5: RESUMEN Y CONFIRMACIÓN DEL PEDIDO -->
+    <div id="screen-checkout-summary" class="screen" style="padding: 1.25rem;">
+      <nav class="checkout-progress" aria-label="Progreso del pedido">
+        <ol>
+          <li data-checkout-progress="1"><span>1</span><small>Carrito</small></li>
+          <li data-checkout-progress="2"><span>2</span><small>Entrega</small></li>
+          <li data-checkout-progress="3"><span>3</span><small>Resumen</small></li>
+          <li data-checkout-progress="4"><span>4</span><small>Pago</small></li>
+          <li data-checkout-progress="5"><span>5</span><small>Seguimiento</small></li>
+        </ol>
+      </nav>
+      <header class="client-section-heading checkout-heading">
+        <div><small>PASO 3 DE 5</small><h2>Revisa antes de pagar</h2></div>
+        <span class="checkout-secure-badge">Resumen</span>
+      </header>
       <section id="checkout-order-summary" class="checkout-step-card checkout-summary-card" aria-live="polite">
-        <div class="checkout-step-title"><span>2</span><div><h3>Revisa tu pedido</h3><small>Productos, impuestos y total.</small></div></div>
+        <div id="checkout-summary-destination" class="checkout-destination-summary"></div>
+        <div class="checkout-step-title"><span>✓</span><div><h3>Productos y total</h3><small>Confirma cantidades, cargos y destino.</small></div></div>
         <div id="checkout-cart-items" class="checkout-cart-items"></div>
         <h4>Resumen de pago</h4>
         <div style="display:grid;gap:.45rem">
@@ -396,42 +431,75 @@
           <small id="checkout-summary-points" style="color:var(--cyan-accent)">Puntos estimados al pagar: 0</small>
         </div>
       </section>
+      <div class="checkout-navigation">
+        <button class="btn btn-outline" type="button" onclick="showScreen('screen-checkout-delivery')">← Volver a entrega</button>
+        <button class="btn-gold" type="button" onclick="continueToPayment()">CONTINUAR · MÉTODO DE PAGO →</button>
+      </div>
+    </div>
 
+    <!-- 8. CHECKOUT 4/5: MÉTODO E INSTRUCCIONES DE PAGO -->
+    <div id="screen-checkout" class="screen" style="padding: 1.25rem;">
+      <nav class="checkout-progress" aria-label="Progreso del pedido">
+        <ol>
+          <li data-checkout-progress="1"><span>1</span><small>Carrito</small></li>
+          <li data-checkout-progress="2"><span>2</span><small>Entrega</small></li>
+          <li data-checkout-progress="3"><span>3</span><small>Resumen</small></li>
+          <li data-checkout-progress="4"><span>4</span><small>Pago</small></li>
+          <li data-checkout-progress="5"><span>5</span><small>Seguimiento</small></li>
+        </ol>
+      </nav>
+      <header class="client-section-heading checkout-heading">
+        <div><small>PASO 4 DE 5</small><h2>Selecciona cómo pagar</h2></div>
+        <span class="checkout-secure-badge">Confirmación en Caja</span>
+      </header>
       <section class="checkout-step-card checkout-pay-section">
-      <div class="checkout-step-title"><span>3</span><div><h3>¿Cómo pagarás?</h3><small>Selecciona una opción. Caja confirmará los pagos presenciales.</small></div></div>
-      <div class="form-group" id="checkout-payment-method-group">
-        <label for="checkout-payment">FORMA DE PAGO</label>
-        <select id="checkout-payment" class="form-control" onchange="updateCheckoutPaymentFields()">
-          <option value="Efectivo">💵 Efectivo (USD o Bs.)</option>
-          <option value="Punto de Venta">💳 Punto de venta en Caja</option>
-          <option value="Pago Móvil">📱 Pago Móvil (verificación manual)</option>
-        </select>
-      </div>
-      <small id="checkout-rate-info" style="display: block; color: var(--text-muted); margin: -.5rem 0 .75rem;"></small>
-      <div id="checkout-currency-group" class="form-group">
-        <label>MONEDA DE PAGO</label>
-        <select id="checkout-currency" class="form-control" onchange="updateCheckoutAmountHint()">
-          <option value="VES">Bolívares (Bs.)</option>
-          <option value="USD">Dólares (USD)</option>
-        </select>
-      </div>
-      <div id="checkout-payment-hint" role="status" class="checkout-payment-hint"></div>
-      <section id="checkout-payment-instructions" class="checkout-payment-instructions" hidden aria-live="polite"></section>
-      <div id="checkout-payment-reference-group" class="form-group">
-        <label for="checkout-payment-reference">REFERENCIA DE LA TRANSFERENCIA</label>
-        <input id="checkout-payment-reference" class="form-control" maxlength="100" autocomplete="off" placeholder="Escribe el número de referencia del banco">
-      </div>
-      <button class="btn-gold checkout-submit-button" onclick="submitFinalOrder()">🚀 CONFIRMAR PEDIDO</button>
+        <div class="checkout-step-title"><span>4</span><div><h3>Elige el método de pago</h3><small>El estado se actualizará en seguimiento cuando Caja lo confirme.</small></div></div>
+        <div class="form-group" id="checkout-payment-method-group">
+          <label for="checkout-payment">FORMA DE PAGO</label>
+          <select id="checkout-payment" class="form-control" onchange="updateCheckoutPaymentFields()">
+            <option value="Efectivo">💵 Efectivo (USD o Bs.)</option>
+            <option value="Punto de Venta">💳 Punto de venta en Caja</option>
+            <option value="Pago Móvil">📱 Pago Móvil (verificación manual)</option>
+          </select>
+        </div>
+        <small id="checkout-rate-info" style="display: block; color: var(--text-muted); margin: -.5rem 0 .75rem;"></small>
+        <div id="checkout-currency-group" class="form-group">
+          <label for="checkout-currency">MONEDA DE PAGO</label>
+          <select id="checkout-currency" class="form-control" onchange="updateCheckoutAmountHint()">
+            <option value="VES">Bolívares (Bs.)</option>
+            <option value="USD">Dólares (USD)</option>
+          </select>
+        </div>
+        <div id="checkout-payment-hint" role="status" class="checkout-payment-hint"></div>
+        <section id="checkout-payment-instructions" class="checkout-payment-instructions" hidden aria-live="polite"></section>
+        <div id="checkout-payment-reference-group" class="form-group">
+          <label for="checkout-payment-reference">REFERENCIA DE LA TRANSFERENCIA</label>
+          <input id="checkout-payment-reference" class="form-control" maxlength="100" autocomplete="off" placeholder="Escribe el número de referencia del banco">
+        </div>
       </section>
+      <div class="checkout-navigation">
+        <button class="btn btn-outline" type="button" onclick="showScreen('screen-checkout-summary')">← Volver al resumen</button>
+        <button class="btn-gold checkout-submit-button" type="button" onclick="submitFinalOrder()">CONFIRMAR PEDIDO · IR A SEGUIMIENTO →</button>
+      </div>
     </div>
 
     <!-- 7. SEGUIMIENTO DE PEDIDO -->
     <div id="screen-tracking" class="screen" style="padding: 1.25rem; text-align: center;">
+      <nav class="checkout-progress" aria-label="Progreso del pedido">
+        <ol>
+          <li data-checkout-progress="1"><span>1</span><small>Carrito</small></li>
+          <li data-checkout-progress="2"><span>2</span><small>Entrega</small></li>
+          <li data-checkout-progress="3"><span>3</span><small>Resumen</small></li>
+          <li data-checkout-progress="4"><span>4</span><small>Pago</small></li>
+          <li data-checkout-progress="5"><span>5</span><small>Seguimiento</small></li>
+        </ol>
+      </nav>
       <div style="background: var(--toon-card); padding: 1.75rem 1.25rem; border-radius: var(--radius-md); border: 1px solid var(--gold-accent);">
         <span style="font-size: 3rem;">🔥</span>
         <h2 style="font-size: 1.5rem; font-weight: 900; color: var(--gold-accent); margin-top: 0.5rem;" id="track-order-num">PEDIDO #1092</h2>
-        <div style="font-size: 1.2rem; font-weight: 800; margin-bottom: 0.5rem;" id="track-order-status">EN PREPARACIÓN</div>
-        <p style="color: var(--text-muted); font-size: 0.85rem;" id="track-order-info">Tu pedido ya está siendo preparado por nuestros cocineros.</p>
+        <div style="font-size: 1.2rem; font-weight: 800; margin-bottom: 0.5rem;" id="track-order-status">CONSULTANDO PEDIDO…</div>
+        <p style="color: var(--text-muted); font-size: 0.85rem;" id="track-order-info">Estamos consultando el estado más reciente.</p>
+        <div id="track-async-payment-status" class="checkout-async-status" role="status" aria-live="polite" hidden></div>
         <div id="track-order-progress" role="status" aria-live="polite" style="text-align:left;background:rgba(255,255,255,.03);border:1px solid var(--toon-border);border-radius:12px;padding:1rem;margin-top:1rem;"></div>
         <div id="track-delivery-code" hidden style="margin-top:1rem;padding:1rem;border:1px solid var(--gold-accent);border-radius:12px;background:rgba(255,183,3,.1)">
           <strong>🔐 Código de entrega</strong>
@@ -835,7 +903,7 @@
 
   <script src="/static/js/auth.js?v=2.0"></script>
   <script src="/static/js/websocket.js?v=2.0"></script>
-  <script src="/static/js/cliente-toon.js?v=2.4"></script>
+  <script src="/static/js/cliente-toon.js?v=2.7"></script>
   <script src="/static/js/appShell.js?v=2.5"></script>
   <script>
     if ("serviceWorker" in navigator && (location.protocol === "https:" || location.hostname === "localhost" || location.hostname === "127.0.0.1")) {
@@ -978,17 +1046,24 @@
       "screen-carrito": [
         ["#toon-cart-items", "Revisa tu pedido", "Aquí puedes comprobar, ajustar o quitar artículos."],
         ["#cart-total", "Total del pedido", "El total considera impuestos y cargos aplicables a la modalidad elegida."],
-        ["#screen-carrito > button", "Continúa al checkout", "Elige si tu pedido será en mesa, para llevar o delivery."]
+        ["#screen-carrito > .checkout-submit-button", "Continúa al checkout", "Elige si tu pedido será en mesa, para llevar o delivery."]
+      ],
+      "screen-checkout-delivery": [
+        ["#checkout-type", "Modalidad", "Selecciona mesa, delivery o para llevar."],
+        ["#section-checkout-mesa", "Pedido en mesa", "Confirma tu mesa y cuándo pagarás."],
+        ["#section-checkout-delivery", "Datos de entrega", "Para delivery, confirma el contacto y la dirección."]
+      ],
+      "screen-checkout-summary": [
+        ["#checkout-summary-destination", "Destino del pedido", "Confirma la modalidad y los datos de entrega."],
+        ["#checkout-order-summary", "Resumen", "Revisa artículos, impuestos y total antes de elegir el pago."]
       ],
       "screen-checkout": [
-        ["#checkout-type", "Modalidad", "Selecciona mesa, delivery o para llevar para ver los datos requeridos."],
-        ["#section-checkout-mesa", "Pedido en mesa", "La mesa se valida con el QR y puedes elegir cuándo pagar."],
-        ["#section-checkout-delivery", "Datos de entrega", "Para delivery, confirma los datos y la dirección de quien recibe."]
+        ["#checkout-payment", "Método de pago", "Elige efectivo, punto de venta o Pago Móvil."],
+        ["#checkout-payment-hint", "Instrucciones", "Caja confirma los pagos y la validación de Pago Móvil es manual."]
       ],
       "screen-tracking": [
-        ["#track-order-status", "Estado del pedido", "Consulta aquí el estado más reciente de preparación y entrega."],
-        ["#track-order-progress", "Progreso", "El progreso se actualiza al recibir cambios del restaurante."],
-        ["#track-order-map", "Entrega", "Cuando esté disponible, aquí verás la información de seguimiento."]
+        ["#track-async-payment-status", "Estado asíncrono", "La pantalla se actualiza al recibir la confirmación de Caja."],
+        ["#track-order-progress", "Progreso del pedido", "Consulta aquí el estado más reciente de preparación y entrega."]
       ],
       "screen-historial": [
         ["#screen-historial h2", "Historial", "Revisa el estado y los detalles de tus pedidos anteriores."],

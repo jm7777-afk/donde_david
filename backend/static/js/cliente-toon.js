@@ -31,6 +31,8 @@ const CLIENT_SCREEN_IDS = new Set([
   "screen-categorias",
   "screen-menu",
   "screen-carrito",
+  "screen-checkout-delivery",
+  "screen-checkout-summary",
   "screen-checkout",
   "screen-tracking",
   "screen-historial",
@@ -232,6 +234,13 @@ function renderCachedTrackingProgress() {
     const timestamp = Number.isNaN(updatedAt.getTime()) ? "" : ` (${updatedAt.toLocaleString("es-VE")})`;
     info.textContent = `Mostrando el último progreso confirmado${timestamp}. Conéctate a internet para consultar cambios recientes.`;
   }
+  if (cachedTrackingProgress.paymentStatus) {
+    updateAsyncPaymentStatus(
+      cachedTrackingProgress.paymentStatus,
+      cachedTrackingProgress.paymentMethod,
+      cachedTrackingProgress.paymentMode
+    );
+  }
   if (progress && Array.isArray(cachedTrackingProgress.steps)) {
     const currentIndex = Number(cachedTrackingProgress.currentIndex);
     progress.innerHTML = `<strong>Último seguimiento confirmado</strong><ol style="margin:.6rem 0 0;padding-left:1.25rem">${cachedTrackingProgress.steps.map((step, index) => `
@@ -298,10 +307,14 @@ document.addEventListener("DOMContentLoaded", () => {
   if (requestedScreen) showScreen(requestedScreen);
   updateClientNetworkStatus();
 
-  document.querySelectorAll("#screen-checkout input, #screen-checkout textarea, #screen-checkout select")
+  document.querySelectorAll("#screen-checkout-delivery input, #screen-checkout-delivery textarea, #screen-checkout-delivery select, #screen-checkout input, #screen-checkout textarea, #screen-checkout select")
     .forEach(field => {
-      field.addEventListener("input", persistClientProgress);
-      field.addEventListener("change", persistClientProgress);
+      const saveCheckoutProgress = () => {
+        persistClientProgress();
+        updateCheckoutOrderSummary();
+      };
+      field.addEventListener("input", saveCheckoutProgress);
+      field.addEventListener("change", saveCheckoutProgress);
     });
   document.getElementById("checkout-payment-instructions")?.addEventListener("click", event => {
     const button = event.target.closest("[data-copy-value]");
@@ -334,7 +347,7 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
   new WSClient((event, data) => {
-    if (["CAMBIO_ESTADO_PEDIDO", "PAGO_CONFIRMADO", "DELIVERY_ACTUALIZADO"].includes(event)) {
+    if (["CAMBIO_ESTADO_PEDIDO", "PAGO_CONFIRMADO", "PAGO_VALIDADO", "DELIVERY_ACTUALIZADO"].includes(event)) {
       if (Number(data.pedido_id) === Number(currentPendingOrderId)) refreshTrackedOrder();
     } else if (event === "PRODUCTOS_ACTUALIZADOS" || event === "NUEVO_PRODUCTO") {
       loadToonProducts();
@@ -349,6 +362,7 @@ function showScreen(screenId) {
   document.querySelectorAll(".screen").forEach(s => s.classList.remove("active"));
   const target = document.getElementById(screenId);
   if (target) target.classList.add("active");
+  if (target) window.scrollTo(0, 0);
 
   // Resalte activo en la barra inferior (.bottom-bar li a)
   document.querySelectorAll(".bottom-bar li a, .nav-item").forEach(n => n.classList.remove("active"));
@@ -357,6 +371,9 @@ function showScreen(screenId) {
     'screen-categorias': 'nav-link-menu',
     'screen-menu': 'nav-link-menu',
     'screen-carrito': 'nav-link-cart',
+    'screen-checkout-delivery': 'nav-link-cart',
+    'screen-checkout-summary': 'nav-link-cart',
+    'screen-checkout': 'nav-link-cart',
     'screen-historial': 'nav-link-historial',
     'screen-perfil': 'nav-link-perfil'
   };
@@ -369,6 +386,7 @@ function showScreen(screenId) {
   if (screenId === "screen-historial") loadHistorialPedidos();
   if (screenId === "screen-tracking") startTrackingRefresh();
   if (screenId === "screen-perfil") loadLoyaltyPanel();
+  updateCheckoutProgress(screenId);
   persistClientProgress();
   if (typeof scheduleClientTour === "function") scheduleClientTour(screenId);
 }
@@ -988,27 +1006,40 @@ function toggleCheckoutFields() {
   const sectionDelivery = document.getElementById("section-checkout-delivery");
   const deliveryRow = document.getElementById("cart-delivery-row");
   const empaqueRow = document.getElementById("cart-empaque-row");
+  const takeawayNote = document.getElementById("checkout-takeaway-note");
+  const deliveryFields = [
+    document.getElementById("deliv-nombre"),
+    document.getElementById("deliv-telefono"),
+    document.getElementById("deliv-direccion")
+  ].filter(Boolean);
+  deliveryFields.forEach(field => {
+    field.required = type === "delivery";
+  });
 
   if (type === "mesa") {
     sectionMesa.style.display = "block";
     sectionDelivery.style.display = "none";
+    if (takeawayNote) takeawayNote.hidden = true;
     if (deliveryRow) deliveryRow.style.display = "none";
     if (empaqueRow) empaqueRow.style.display = "none";
   } else if (type === "delivery") {
     sectionMesa.style.display = "none";
     sectionDelivery.style.display = "block";
+    if (takeawayNote) takeawayNote.hidden = true;
     if (deliveryRow) deliveryRow.style.display = "flex";
     if (empaqueRow) empaqueRow.style.display = "none";
     setTimeout(() => initDeliveryInteractiveMap(), 150);
   } else {
     sectionMesa.style.display = "none";
     sectionDelivery.style.display = "none";
+    if (takeawayNote) takeawayNote.hidden = false;
     if (deliveryRow) deliveryRow.style.display = "none";
     if (empaqueRow) empaqueRow.style.display = "flex";
   }
   renderToonCart();
   updateCheckoutAmountHint();
   updateCheckoutPaymentFields();
+  updateCheckoutOrderSummary();
 }
 
 function updateCheckoutPaymentFields() {
@@ -1023,10 +1054,19 @@ function updateCheckoutPaymentFields() {
   const bankInfo = document.getElementById("checkout-payment-bank-details");
   const methodGroup = document.getElementById("checkout-payment-method-group");
   const instructions = document.getElementById("checkout-payment-instructions");
+  const submitButton = document.querySelector('#screen-checkout button[onclick="submitFinalOrder()"]');
   if (!currencyGroup || !referenceGroup || !currencySelect || !referenceInput) return;
 
   const isMobilePay = method === "Pago Móvil";
   const bankDetailsConfigured = Boolean(pagoMovilConfig.banco && pagoMovilConfig.telefono && pagoMovilConfig.rif && pagoMovilConfig.titular);
+  if (submitButton) {
+    submitButton.textContent = deferredPayment
+      ? "CONFIRMAR CUENTA ABIERTA · ENVIAR PEDIDO →"
+      : isMobilePay
+        ? "REGISTRAR REFERENCIA · IR A SEGUIMIENTO →"
+        : "ENVIAR PEDIDO · PAGAR EN CAJA →";
+    submitButton.setAttribute("aria-describedby", "checkout-payment-hint");
+  }
   referenceGroup.style.display = !deferredPayment && isMobilePay ? "block" : "none";
   if (bankInfo) {
     bankInfo.hidden = true;
@@ -1148,6 +1188,24 @@ function updateCheckoutOrderSummary() {
   const deliveryFee = type === "delivery" ? checkoutDeliveryFee : 0;
   const packageFee = type === "llevar" ? checkoutPackageFee : 0;
   const total = Math.round((subtotal + tax + deliveryFee + packageFee) * 100) / 100;
+  const destinationSummary = document.getElementById("checkout-summary-destination");
+  if (destinationSummary) {
+    const destination = type === "mesa"
+      ? `🍽️ Pedido en mesa · ${document.getElementById("checkout-mesa-name")?.textContent.trim() || `Mesa #${currentDetectedMesa || 1}`}`
+      : type === "delivery"
+        ? `🛵 Delivery · ${document.getElementById("deliv-direccion")?.value.trim() || "Dirección pendiente"}`
+        : "🛍️ Retiro en mostrador";
+    const paymentMode = document.querySelector('input[name="modo_pago"]:checked')?.value;
+    destinationSummary.innerHTML = `<strong>${escapeClientHtml(destination)}</strong>${
+      type === "delivery" && document.getElementById("deliv-nombre")?.value.trim()
+        ? `<small>Recibe: ${escapeClientHtml(document.getElementById("deliv-nombre").value.trim())}</small>`
+        : ""
+    }${
+      type === "mesa" && paymentMode === "PAGAR_DESPUES"
+        ? "<small>Cuenta abierta: pagarás en Caja al finalizar.</small>"
+        : ""
+    }`;
+  }
   const cartSummary = document.getElementById("checkout-cart-items");
   if (cartSummary) {
     cartSummary.innerHTML = toonCart.length
@@ -1187,6 +1245,10 @@ async function submitFinalOrder() {
   }
 
   const orderType = document.getElementById("checkout-type").value;
+  if (!validateCheckoutDelivery()) {
+    showScreen("screen-checkout-delivery");
+    return;
+  }
   const selectedModoPago = orderType === "mesa"
     ? (document.querySelector('input[name="modo_pago"]:checked')?.value || "PAGAR_ANTES")
     : "PAGAR_ANTES";
@@ -1211,9 +1273,9 @@ async function submitFinalOrder() {
   const deliveryCoordinates = orderType === "delivery" ? currentCustomerGPS : null;
 
   if (orderType === "delivery") {
-    delivNombre = document.getElementById("deliv-nombre").value;
-    delivTel = document.getElementById("deliv-telefono").value;
-    delivDir = document.getElementById("deliv-direccion").value;
+    delivNombre = document.getElementById("deliv-nombre").value.trim();
+    delivTel = document.getElementById("deliv-telefono").value.trim();
+    delivDir = document.getElementById("deliv-direccion").value.trim();
 
     if (!delivNombre || !delivDir || !delivTel) {
       showToast("Por favor completa los datos obligatorios de entrega para Delivery.", "danger");
@@ -1249,9 +1311,11 @@ async function submitFinalOrder() {
 
   isSubmittingClientOrder = true;
   const submitButton = document.querySelector('#screen-checkout button[onclick="submitFinalOrder()"]');
+  const originalSubmitLabel = submitButton?.textContent;
   if (submitButton) {
     submitButton.disabled = true;
     submitButton.setAttribute("aria-busy", "true");
+    submitButton.textContent = "Registrando pedido…";
   }
   try {
     const res = await fetch("/api/v1/cliente/pedidos", {
@@ -1295,6 +1359,7 @@ async function submitFinalOrder() {
       : order.tipo === "llevar"
         ? `Pedido para retirar en mostrador. Código de seguridad: ${order.codigo_retiro}. Muéstralo en caja al recibirlo.${preparationNotice}`
         : `${order.tipo === "delivery" ? `Entrega solicitada en: ${order.direccion_delivery}` : `Procesando para ${order.numero_mesa}`}.${preparationNotice}`;
+    updateAsyncPaymentStatus(order.estado_pago, order.metodo_pago, order.modo_pago);
 
     showToast("¡Pedido emitido! Sigue el estado y el pago desde esta pantalla.", "success");
     showScreen("screen-tracking");
@@ -1310,6 +1375,7 @@ async function submitFinalOrder() {
     if (submitButton) {
       submitButton.disabled = false;
       submitButton.removeAttribute("aria-busy");
+      if (originalSubmitLabel) submitButton.textContent = originalSubmitLabel;
     }
   }
 }
@@ -1410,6 +1476,49 @@ function startTrackingRefresh() {
   }, 15000);
 }
 
+function updateAsyncPaymentStatus(paymentStatus, paymentMethod, paymentMode) {
+  const statusElement = document.getElementById("track-async-payment-status");
+  if (!statusElement) return;
+
+  const pendingText = paymentStatus === "PENDIENTE_VALIDACION"
+    ? {
+      state: "pending",
+      title: "Pago Móvil enviado · esperando validación",
+      detail: "Caja comprobará la referencia manualmente. No vuelvas a transferir; esta pantalla se actualizará cuando validen el pago."
+    }
+    : paymentStatus === "PENDIENTE" && paymentMode !== "PAGAR_DESPUES"
+      ? {
+        state: "pending",
+        title: "Pedido recibido · esperando confirmación de Caja",
+        detail: `${paymentMethod === "Punto de Venta" ? "Paga en el terminal de Caja." : "Paga en Caja."} El pedido pasará a cocina cuando el personal confirme el cobro.`
+      }
+      : paymentMode === "PAGAR_DESPUES" && paymentStatus !== "PAGADO"
+        ? {
+          state: "open",
+          title: "Cuenta abierta · pedido enviado a cocina",
+          detail: "Disfruta tu pedido y paga en Caja al finalizar."
+        }
+        : paymentStatus === "PAGADO"
+          ? {
+            state: "complete",
+            title: "Pago confirmado",
+            detail: "El restaurante recibió la confirmación del pago."
+          }
+          : paymentStatus === "RECHAZADO"
+            ? {
+              state: "error",
+              title: "Pago no validado",
+              detail: "Contacta a Caja antes de volver a pagar. No realices otra transferencia sin confirmar el estado de esta operación."
+            }
+            : null;
+
+  statusElement.hidden = !pendingText;
+  statusElement.dataset.state = pendingText?.state || "";
+  statusElement.innerHTML = pendingText
+    ? `<strong>${escapeClientHtml(pendingText.title)}</strong><span>${escapeClientHtml(pendingText.detail)}</span>`
+    : "";
+}
+
 async function refreshTrackedOrder() {
   if (!currentPendingOrderId) {
     const status = document.getElementById("track-order-status");
@@ -1456,6 +1565,7 @@ async function refreshTrackedOrder() {
         ? "Cuenta abierta · pedido en cocina"
       : statusLabels[result.estado] || result.estado;
     document.getElementById("track-order-status").textContent = state;
+    updateAsyncPaymentStatus(result.estado_pago, result.metodo_pago, result.modo_pago);
     const paymentStatus = result.estado_pago === "PENDIENTE"
       ? "pendiente de confirmación en Caja"
       : result.estado_pago === "PENDIENTE_VALIDACION"
@@ -1532,6 +1642,9 @@ async function refreshTrackedOrder() {
       cachedTrackingProgress = {
         orderId: currentPendingOrderId,
         status: state,
+        paymentStatus: result.estado_pago,
+        paymentMethod: result.metodo_pago,
+        paymentMode: result.modo_pago,
         steps: steps.map(step => statusLabels[step] || deliveryLabels[step] || step),
         currentIndex,
         updatedAt: new Date().toISOString()
@@ -1605,6 +1718,84 @@ function openOrderModalityModal() {
   openModal("order-modality-modal");
 }
 
+function updateCheckoutProgress(screenId = document.querySelector(".screen.active")?.id) {
+  const activeStep = {
+    "screen-carrito": 1,
+    "screen-checkout-delivery": 2,
+    "screen-checkout-summary": 3,
+    "screen-checkout": 4,
+    "screen-tracking": 5
+  }[screenId];
+  if (!activeStep) return;
+
+  document.querySelectorAll(".checkout-progress [data-checkout-progress]").forEach(step => {
+    const stepNumber = Number(step.dataset.checkoutProgress);
+    step.classList.toggle("is-complete", stepNumber < activeStep);
+    step.classList.toggle("is-current", stepNumber === activeStep);
+    if (stepNumber === activeStep) step.setAttribute("aria-current", "step");
+    else step.removeAttribute("aria-current");
+  });
+}
+
+function startCheckoutFlow() {
+  if (!toonCart.length) {
+    showToast("Agrega productos al carrito antes de continuar.", "warning");
+    return;
+  }
+  enterCheckout(document.getElementById("checkout-type")?.value || "delivery");
+}
+
+function validateCheckoutDelivery() {
+  const type = document.getElementById("checkout-type")?.value;
+  if (!["mesa", "delivery", "llevar"].includes(type)) {
+    showToast("Selecciona cómo recibirás tu pedido.", "warning");
+    return false;
+  }
+  if (type === "delivery") {
+    const deliveryFields = [
+      document.getElementById("deliv-nombre"),
+      document.getElementById("deliv-telefono"),
+      document.getElementById("deliv-direccion")
+    ].filter(Boolean);
+    const firstInvalidField = deliveryFields.find(field => !field.value.trim());
+    if (firstInvalidField) {
+      if (document.querySelector(".screen.active")?.id !== "screen-checkout-delivery") {
+        showScreen("screen-checkout-delivery");
+      }
+      firstInvalidField.reportValidity();
+      showToast("Completa los datos de contacto y entrega para continuar.", "warning");
+      return false;
+    }
+  }
+  return true;
+}
+
+function continueToOrderSummary() {
+  if (!toonCart.length) {
+    showToast("Tu carrito está vacío. Agrega productos antes de continuar.", "warning");
+    showScreen("screen-carrito");
+    return;
+  }
+  if (!validateCheckoutDelivery()) return;
+  updateCheckoutOrderSummary();
+  showScreen("screen-checkout-summary");
+}
+
+function continueToPayment() {
+  if (!toonCart.length) {
+    showToast("Tu carrito está vacío. Agrega productos antes de continuar.", "warning");
+    showScreen("screen-carrito");
+    return;
+  }
+  if (!validateCheckoutDelivery()) {
+    showScreen("screen-checkout-delivery");
+    return;
+  }
+  updateCheckoutOrderSummary();
+  updateCheckoutPaymentFields();
+  showScreen("screen-checkout");
+}
+
 function selectOrderModality(modality) {
   selectedModality = modality;
   closeModal("order-modality-modal");
@@ -1625,11 +1816,12 @@ function selectOrderModality(modality) {
     if (!u) {
       showToast("Puedes continuar como invitado; inicia sesión si quieres acumular puntos.", "info");
     }
-    openDeliveryMapModal();
+    enterCheckout(modality);
   }
 }
 
 function enterCheckout(modality) {
+  selectedModality = modality;
   const typeSelect = document.getElementById("checkout-type");
   if (typeSelect) typeSelect.value = modality;
   if (modality === "mesa") {
@@ -1645,7 +1837,7 @@ function enterCheckout(modality) {
       if (phone && !phone.value) phone.value = user.telefono || "";
     }
   }
-  showScreen("screen-checkout");
+  showScreen("screen-checkout-delivery");
   toggleCheckoutFields();
 }
 
