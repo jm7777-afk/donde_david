@@ -107,7 +107,6 @@ function renderUniversalHeader() {
             <img src="/static/img/logo.png" alt="Donde David">
             <span class="universal-brand-copy">
               <strong id="header-restaurant-name">DONDE DAVID | FAST FOOD</strong>
-              <small>RESTAURANTE • FAST FOOD</small>
             </span>
           </a>
         </div>

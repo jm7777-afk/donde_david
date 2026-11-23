@@ -25,12 +25,23 @@
     <form id="staff-portal-form">
       <div class="form-group">
         <label for="portal-user">Nombre de Usuario</label>
-        <input type="text" id="portal-user" class="form-control" placeholder="Ingresa tu usuario" required>
+        <input type="text" id="portal-user" class="form-control" placeholder="Ingresa tu usuario" required autocomplete="username">
       </div>
 
       <div class="form-group">
         <label for="portal-pass">Contraseña</label>
-        <input type="password" id="portal-pass" class="form-control" placeholder="••••••••" required>
+        <div class="password-input-wrapper">
+          <input type="password" id="portal-pass" class="form-control" placeholder="••••••••" required autocomplete="current-password">
+          <button type="button" class="password-toggle-btn" id="toggle-portal-pass" aria-label="Mostrar u ocultar contraseña" title="Mostrar u ocultar contraseña">👁️</button>
+        </div>
+      </div>
+
+      <div class="login-options-row">
+        <label class="login-remember-label" for="portal-remember">
+          <input type="checkbox" id="portal-remember">
+          <span>Recordar contraseña</span>
+        </label>
+        <a href="javascript:void(0)" class="login-forgot-link" onclick="forgotPasswordAlert()">¿Olvidaste tu contraseña?</a>
       </div>
 
       <button type="submit" class="btn btn-cta login-submit-button">
@@ -58,10 +69,60 @@
   <script src="/static/js/auth.js?v=2.0"></script>
   <script src="/static/js/appShell.js?v=2.5"></script>
   <script>
+    const rememberCheckbox = document.getElementById("portal-remember");
+    const userInput = document.getElementById("portal-user");
+    const passInput = document.getElementById("portal-pass");
+    const togglePassBtn = document.getElementById("toggle-portal-pass");
+
+    // Alternar visibilidad de contraseña
+    if (togglePassBtn && passInput) {
+      togglePassBtn.addEventListener("click", () => {
+        const isPass = passInput.type === "password";
+        passInput.type = isPass ? "text" : "password";
+        togglePassBtn.textContent = isPass ? "🙈" : "👁️";
+      });
+    }
+
+    // Cargar credenciales recordadas si existen
+    try {
+      const savedUser = localStorage.getItem("donde_david_portal_user");
+      const savedPass = localStorage.getItem("donde_david_portal_pass");
+      const isRemembered = localStorage.getItem("donde_david_portal_remember") === "true";
+      if (isRemembered && savedUser) {
+        userInput.value = savedUser;
+        if (savedPass) {
+          try {
+            passInput.value = atob(savedPass);
+          } catch (_) {
+            passInput.value = savedPass;
+          }
+        }
+        rememberCheckbox.checked = true;
+      }
+    } catch (err) {
+      console.warn("No se pudo acceder al almacenamiento local", err);
+    }
+
     document.getElementById("staff-portal-form").addEventListener("submit", async (e) => {
       e.preventDefault();
-      const u = document.getElementById("portal-user").value;
-      const p = document.getElementById("portal-pass").value;
+      const u = userInput.value.trim();
+      const p = passInput.value;
+
+      // Guardar o eliminar credenciales según estado del checkbox
+      try {
+        if (rememberCheckbox && rememberCheckbox.checked) {
+          localStorage.setItem("donde_david_portal_user", u);
+          localStorage.setItem("donde_david_portal_pass", btoa(p));
+          localStorage.setItem("donde_david_portal_remember", "true");
+        } else {
+          localStorage.removeItem("donde_david_portal_user");
+          localStorage.removeItem("donde_david_portal_pass");
+          localStorage.removeItem("donde_david_portal_remember");
+        }
+      } catch (err) {
+        console.warn("Error almacenando credenciales", err);
+      }
+
       try {
         const res = await Auth.login(u, p);
         showToast(`Bienvenido ${res.usuario.nombre}`, "success");
@@ -70,6 +131,10 @@
         showToast(err.message, "danger");
       }
     });
+
+    function forgotPasswordAlert() {
+      alert("Para recuperar o reasignar tu contraseña, comunícate con la Administración o Gerencia del restaurante para restablecer tus credenciales.");
+    }
 
     async function quickStaffLogin(user, pass, redirectUrl) {
       try {

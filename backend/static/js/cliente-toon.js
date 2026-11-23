@@ -266,9 +266,47 @@ function getDeclaredAllergens(product) {
   if (!product?.alergenos) return [];
   return String(product.alergenos).split(",").map(item => item.trim()).filter(Boolean);
 }
+function toggleClientPasswordVisibility() {
+  const input = document.getElementById("login-pass-input");
+  const btn = document.getElementById("toggle-client-pass");
+  if (!input || !btn) return;
+  const isPass = input.type === "password";
+  input.type = isPass ? "text" : "password";
+  btn.textContent = isPass ? "🙈" : "👁️";
+}
+
+function loadClientSavedCredentials() {
+  try {
+    const isRem = localStorage.getItem("donde_david_client_remember") === "true";
+    const user = localStorage.getItem("donde_david_client_saved_user");
+    const pass = localStorage.getItem("donde_david_client_saved_pass");
+    const userInput = document.getElementById("login-username-input");
+    const passInput = document.getElementById("login-pass-input");
+    const remCb = document.getElementById("client-remember-credentials");
+    if (isRem && user && userInput) {
+      userInput.value = user;
+      if (pass && passInput) {
+        try {
+          passInput.value = atob(pass);
+        } catch (_) {
+          passInput.value = pass;
+        }
+      }
+      if (remCb) remCb.checked = true;
+    }
+  } catch (e) {
+    console.warn("No se pudo cargar credenciales recordadas de cliente", e);
+  }
+}
+
 function openModal(id) {
   const el = document.getElementById(id);
-  if (el) el.classList.add("open");
+  if (el) {
+    el.classList.add("open");
+    if (id === "client-login-modal") {
+      loadClientSavedCredentials();
+    }
+  }
 }
 
 function closeModal(id) {
@@ -2340,12 +2378,28 @@ async function redeemLoyaltyReward(rewardName) {
 }
 
 async function submitClientLogin() {
-  const username = document.getElementById("login-username-input")?.value;
+  const username = document.getElementById("login-username-input")?.value?.trim();
   const pass = document.getElementById("login-pass-input")?.value;
+  const rememberCb = document.getElementById("client-remember-credentials");
 
   if (!username || !pass) {
     showToast("Ingresa tu usuario y contraseña", "warning");
     return;
+  }
+
+  // Guardar o limpiar credenciales de cliente según checkbox
+  try {
+    if (rememberCb && rememberCb.checked) {
+      localStorage.setItem("donde_david_client_saved_user", username);
+      localStorage.setItem("donde_david_client_saved_pass", btoa(pass));
+      localStorage.setItem("donde_david_client_remember", "true");
+    } else {
+      localStorage.removeItem("donde_david_client_saved_user");
+      localStorage.removeItem("donde_david_client_saved_pass");
+      localStorage.removeItem("donde_david_client_remember");
+    }
+  } catch (err) {
+    console.warn("No se pudo guardar la preferencia de recordar contraseña", err);
   }
 
   try {
