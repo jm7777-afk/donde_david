@@ -133,7 +133,30 @@ function renderUniversalHeader() {
       </div>
     </header>
   `;
+  // Eliminación absoluta e inmediata de subtítulos remanentes en todas las pantallas
+  headerEl.querySelectorAll(".universal-brand-copy small, .universal-brand small").forEach(el => el.remove());
   if (typeof syncThemeToggleButtons === "function") syncThemeToggleButtons();
+}
+
+function cleanHeaderSubtitles() {
+  document.querySelectorAll(".universal-brand-copy small, .universal-brand small, .universal-header small, #header-restaurant-name + small, #app-header small").forEach(el => el.remove());
+}
+if (typeof document !== "undefined") {
+  cleanHeaderSubtitles();
+  document.addEventListener("DOMContentLoaded", cleanHeaderSubtitles);
+  window.addEventListener("load", cleanHeaderSubtitles);
+  setInterval(cleanHeaderSubtitles, 200);
+}
+
+// Invalidador automático de caches obsoletos en el cliente
+if (typeof window !== "undefined" && "caches" in window) {
+  caches.keys().then(names => {
+    names.forEach(name => {
+      if (name.startsWith("donde-david-pwa-") && name !== "donde-david-pwa-v25") {
+        caches.delete(name);
+      }
+    });
+  }).catch(() => {});
 }
 
 async function updateHeaderBcvRate() {

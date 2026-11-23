@@ -1876,8 +1876,23 @@ select {
   text-overflow: ellipsis;
 }
 
-.universal-brand-copy small {
+.universal-brand-copy small,
+.universal-brand small,
+.universal-header small,
+#header-restaurant-name + small,
+#app-header small {
   display: none !important;
+  visibility: hidden !important;
+  height: 0 !important;
+  width: 0 !important;
+  font-size: 0 !important;
+  line-height: 0 !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+  position: absolute !important;
+  clip: rect(0, 0, 0, 0) !important;
 }
 
 .universal-header-status-section {

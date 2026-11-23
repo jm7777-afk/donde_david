@@ -96,12 +96,23 @@ async def global_exception_handler(request: Request, exc: Exception):
 async def setup_installer_guard_middleware(request: Request, call_next):
     path = request.url.path
     
-    # Excluir archivos estáticos css, js, uploads e imágenes, endpoints de API y websockets
-    is_static_asset = path.startswith("/static/css") or path.startswith("/static/js") or path.startswith("/static/uploads") or path.startswith("/static/images") or path.startswith("/api/") or path.startswith("/ws") or path == "/health"
+    # Excluir archivos estáticos, endpoints de API, healthcheck y websockets
+    is_static_asset = (
+        path.startswith("/static/")
+        or path.startswith("/api/")
+        or path.startswith("/ws")
+        or path == "/health"
+    )
     
     if is_static_asset:
         response = await call_next(request)
-        if path.startswith("/static/css") or path.startswith("/static/js"):
+        if (
+            path.endswith(".css")
+            or path.endswith(".js")
+            or path.endswith(".html")
+            or path.endswith(".json")
+            or "sw.js" in path
+        ):
             response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
             response.headers["Pragma"] = "no-cache"
             response.headers["Expires"] = "0"

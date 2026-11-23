@@ -1,4 +1,4 @@
-const CACHE_NAME = "donde-david-pwa-v10";
+const CACHE_NAME = "donde-david-pwa-v25";
 const ASSETS_TO_CACHE = [
   "/static/index.html",
   "/static/cliente/app.html",
@@ -14,10 +14,11 @@ const ASSETS_TO_CACHE = [
 ];
 
 self.addEventListener("install", event => {
+  self.skipWaiting();
   event.waitUntil(
     caches.open(CACHE_NAME)
       .then(cache => cache.addAll(ASSETS_TO_CACHE))
-      .then(() => self.skipWaiting())
+      .catch(err => console.warn("[SW] Cache preload warning:", err))
   );
 });
 
@@ -27,7 +28,10 @@ self.addEventListener("activate", event => {
       .then(cacheNames => Promise.all(
         cacheNames
           .filter(name => name.startsWith("donde-david-pwa-") && name !== CACHE_NAME)
-          .map(name => caches.delete(name))
+          .map(name => {
+            console.log("[SW] Deleting obsolete cache:", name);
+            return caches.delete(name);
+          })
       ))
       .then(() => self.clients.claim())
   );
@@ -43,15 +47,28 @@ self.addEventListener("fetch", event => {
     || url.pathname.startsWith("/static/api/")
   ) return;
 
+  // Para archivos JS, CSS y HTML: Estrategia Network-First obligatoria para reflejar cambios en tiempo real
+  if (url.pathname.endsWith(".js") || url.pathname.endsWith(".css") || url.pathname.endsWith(".html")) {
+    event.respondWith(
+      fetch(request, { cache: "no-store" }).then(response => {
+        if (response.ok) {
+          const responseCopy = response.clone();
+          caches.open(CACHE_NAME).then(cache => cache.put(request, responseCopy));
+        }
+        return response;
+      }).catch(() => caches.match(request))
+    );
+    return;
+  }
+
+  // Para otros activos estáticos (imágenes, logos): Cache-First con fallback a red
   event.respondWith(
-    caches.match(request, { ignoreSearch: true }).then(cachedResponse => {
+    caches.match(request).then(cachedResponse => {
       if (cachedResponse) return cachedResponse;
       return fetch(request).then(response => {
         if (response.ok) {
           const responseCopy = response.clone();
-          return caches.open(CACHE_NAME)
-            .then(cache => cache.put(request, responseCopy))
-            .then(() => response);
+          caches.open(CACHE_NAME).then(cache => cache.put(request, responseCopy));
         }
         return response;
       });
