@@ -7,64 +7,19 @@
   <link rel="stylesheet" href="/static/css/global.css?v=2.0">
   <link rel="stylesheet" href="/static/css/toon-theme.css?v=2.7">
   <link rel="stylesheet" href="/static/css/index.css?v=2.0">
-  <style>
-    body.login-portal-body {
-      background: var(--color-navy);
-      background-image: radial-gradient(circle at 50% 30%, rgba(8, 121, 232, 0.2), transparent 70%);
-      color: #FFFFFF;
-      font-family: var(--font-sans);
-      min-height: 100vh;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      padding: 1.5rem;
-      margin: 0;
-    }
-    .portal-card {
-      background: var(--color-dark);
-      border: 1px solid var(--color-border);
-      border-radius: var(--radius-lg);
-      max-width: 440px;
-      width: 100%;
-      padding: 2.5rem 2rem;
-      box-shadow: var(--shadow-lg);
-      position: relative;
-      animation: slideInDown var(--transition-smooth);
-    }
-    .demo-role-btn {
-      padding: 0.6rem 0.8rem;
-      font-size: 0.82rem;
-      background: rgba(255,255,255,0.05);
-      border: 1px solid var(--color-border);
-      border-radius: var(--radius-sm);
-      color: #FFFFFF;
-      cursor: pointer;
-      font-weight: 700;
-      transition: all var(--transition-fast);
-      min-height: 44px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 0.4rem;
-    }
-    .demo-role-btn:hover {
-      border-color: var(--color-orange);
-      background: rgba(255, 122, 0, 0.15);
-      color: var(--color-yellow);
-      transform: translateY(-2px);
-    }
-  </style>
+  <link rel="stylesheet" href="/static/css/login.css?v=1.0">
+  <link rel="stylesheet" href="/static/css/utilities.css?v=1.0">
 </head>
 <body class="login-portal-body">
 
   <div class="portal-card">
     
-    <div style="text-align: center; margin-bottom: 2rem;">
+    <div class="login-brand">
       <a href="#" aria-label="Recargar página" onclick="window.location.reload(); return false;">
-        <img src="/static/images/logo-donde-david.jpg" style="width: 84px; height: 84px; border-radius: 50%; border: 3px solid var(--color-yellow); box-shadow: var(--shadow-orange);" alt="Donde David Logo">
+        <img src="/static/images/logo-donde-david.jpg" class="login-brand-logo" alt="Donde David Logo">
       </a>
-      <h1 style="font-size: 1.6rem; font-weight: 900; font-family: var(--font-display); color: var(--color-yellow); margin-top: 0.75rem; margin-bottom: 0.2rem;">PORTAL DE PERSONAL</h1>
-      <p style="color: var(--color-text-secondary); font-size: 0.85rem; margin: 0;">Ingreso Exclusivo para Empleados y Administradores - DONDE DAVID</p>
+      <h1 class="login-brand-title">PORTAL DE PERSONAL</h1>
+      <p class="login-brand-subtitle">Ingreso Exclusivo para Empleados y Administradores - DONDE DAVID</p>
     </div>
 
     <form id="staff-portal-form">
@@ -78,14 +33,14 @@
         <input type="password" id="portal-pass" class="form-control" placeholder="••••••••" required>
       </div>
 
-      <button type="submit" class="btn btn-cta" style="width: 100%; margin-top: 1.25rem; font-size: 1.05rem;">
+      <button type="submit" class="btn btn-cta login-submit-button">
         🔐 INICIAR SESIÓN DE TRABAJO
       </button>
     </form>
 
-    <div style="margin-top: 2rem; border-top: 1px dashed var(--color-border); padding-top: 1.25rem;">
-      <div style="font-size: 0.8rem; color: var(--color-text-secondary); text-align: center; margin-bottom: 0.75rem; font-weight: 700;">ACCESOS DIRECTOS DEMO:</div>
-      <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.5rem;">
+    <div class="login-demo-panel">
+      <div class="login-demo-title">ACCESOS DIRECTOS DEMO:</div>
+      <div class="login-demo-grid">
         <button class="demo-role-btn" onclick="quickStaffLogin('admin', 'admin123', '/static/admin/index.html')">⚙️ Administrador</button>
         <button class="demo-role-btn" onclick="quickStaffLogin('caja', 'caja123', '/static/caja/panel.html')">💰 Caja POS</button>
         <button class="demo-role-btn" onclick="quickStaffLogin('cocina1', 'cocina123', '/static/cocina/monitor.html')">👨‍🍳 Cocina KDS</button>
@@ -93,8 +48,8 @@
       </div>
     </div>
 
-    <div style="text-align: center; margin-top: 1.5rem;">
-      <a href="/static/index.html" style="color: var(--color-text-secondary); font-size: 0.82rem; text-decoration: none;">← Volver al Sitio Web Público</a>
+    <div class="login-footer">
+      <a href="/static/index.html" class="login-footer-link">← Volver al Sitio Web Público</a>
     </div>
 
   </div>

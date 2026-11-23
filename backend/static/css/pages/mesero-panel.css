@@ -1,0 +1,58 @@
+.mesero-layout {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 1.5rem;
+  min-width: 0;
+}
+.mesero-section-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 1.25rem;
+}
+.mesas-grid-mesero {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+  gap: 1rem;
+  margin-bottom: 2rem;
+}
+.mesa-card-mesero {
+  background: var(--color-dark);
+  border: 2px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: 1.1rem;
+  text-align: center;
+  transition: all var(--transition-base);
+}
+.mesa-card-mesero.OCUPADA {
+  border-color: var(--color-red);
+  background: rgba(242, 29, 29, 0.1);
+}
+.mesa-card-mesero.LIBRE {
+  border-color: var(--color-success);
+  background: rgba(34, 197, 94, 0.1);
+}
+.mesa-card-mesero.PENDIENTE_LIMPIEZA,
+.mesa-card-mesero.EN_LIMPIEZA {
+  border-color: var(--color-yellow);
+  background: rgba(255, 188, 13, 0.1);
+}
+@media (max-width: 600px) {
+  .mesero-layout { padding: .75rem; }
+  .mesero-section-heading {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .mesero-section-heading h2 {
+    font-size: clamp(1.05rem, 5vw, 1.3rem) !important;
+  }
+  .mesero-section-heading .btn {
+    align-self: flex-start;
+    max-width: 100%;
+  }
+  .mesas-grid-mesero { grid-template-columns: repeat(auto-fit, minmax(min(100%, 210px), 1fr)); }
+  #mesero-pedidos-list {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+}

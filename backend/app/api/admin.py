@@ -30,6 +30,7 @@ from backend.app.models.publicacion import Publicacion
 from backend.app.models.movimiento_inventario import MovimientoInventario
 from backend.app.models.movimiento_caja import MovimientoCaja
 from backend.app.services.exchange_rate import get_bcv_rate
+from backend.app.services.audit_service import record_audit
 from backend.app.websockets.manager import ws_manager
 
 router = APIRouter(
@@ -882,14 +883,7 @@ async def update_configuraciones_batch(data: ConfiguracionBatchUpdate, db: Sessi
     await ws_manager.broadcast("CONFIGURACION_ACTUALIZADA", {"claves": keys})
     return {"guardadas": keys}
 
-# ==================== AUDITORIA & LOGS ====================
-@router.get("/auditoria")
-def get_auditoria(
-    db: Session = Depends(get_db),
-    user = Depends(require_roles(["admin", "supervisor"]))
-):
-    return db.query(Auditoria).order_by(Auditoria.fecha.desc()).all()
-
+# ==================== GESTIÓN DE USUARIOS DEL SISTEMA ====================
 class UsuarioCreateAdmin(BaseModel):
     nombre: str = Field(min_length=1, max_length=100)
     apellido: str = Field(min_length=1, max_length=100)
@@ -942,6 +936,17 @@ def create_usuario_admin(
     db.add(nuevo)
     db.commit()
     db.refresh(nuevo)
+
+    record_audit(
+        db=db,
+        accion="USER_CREATE",
+        usuario=user.nombre_usuario,
+        usuario_id=user.id,
+        recurso="usuarios",
+        recurso_id=str(nuevo.id),
+        detalle=f"Usuario '{nuevo.nombre_usuario}' creado con rol '{nuevo.rol}'",
+        datos_nuevos={"id": nuevo.id, "nombre_usuario": nuevo.nombre_usuario, "rol": nuevo.rol, "email": nuevo.email}
+    )
     return nuevo
 
 @router.put("/usuarios/{usuario_id}")
@@ -968,4 +973,15 @@ def update_usuario_admin(
     
     db.commit()
     db.refresh(u)
+
+    record_audit(
+        db=db,
+        accion="USER_UPDATE",
+        usuario=user.nombre_usuario,
+        usuario_id=user.id,
+        recurso="usuarios",
+        recurso_id=str(u.id),
+        detalle=f"Usuario '{u.nombre_usuario}' actualizado",
+        datos_nuevos={"id": u.id, "nombre_usuario": u.nombre_usuario, "rol": u.rol, "activo": u.activo}
+    )
     return u

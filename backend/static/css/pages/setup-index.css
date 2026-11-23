@@ -1,0 +1,72 @@
+body.setup-body {
+  background: #080c14;
+  background-image: radial-gradient(circle at 50% 30%, rgba(255, 183, 3, 0.15), transparent 70%);
+  color: #ffffff;
+  font-family: 'Outfit', sans-serif;
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+  margin: 0;
+}
+.setup-card {
+  background: #101726;
+  border: 2px solid var(--gold-accent);
+  border-radius: 24px;
+  max-width: 640px;
+  width: 100%;
+  padding: 2.5rem 2rem;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.8);
+  position: relative;
+}
+.setup-progress {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 2rem;
+  position: relative;
+}
+.setup-progress::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: var(--toon-border);
+  z-index: 1;
+  transform: translateY(-50%);
+}
+.progress-step-node {
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  background: #080c14;
+  border: 2px solid var(--toon-border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 800;
+  font-size: 0.9rem;
+  color: var(--text-muted);
+  z-index: 2;
+  transition: all 0.3s;
+}
+.progress-step-node.active {
+  border-color: var(--gold-accent);
+  background: var(--gold-accent);
+  color: #000;
+  box-shadow: 0 0 15px var(--gold-accent);
+}
+.progress-step-node.completed {
+  border-color: var(--cyan-accent);
+  background: var(--cyan-accent);
+  color: #000;
+}
+.wiz-form-step {
+  display: none;
+  animation: fadeIn 0.3s ease;
+}
+.wiz-form-step.active {
+  display: block;
+}

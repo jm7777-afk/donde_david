@@ -7,261 +7,8 @@
   <link rel="stylesheet" href="/static/css/global.css?v=2.0">
   <link rel="stylesheet" href="/static/css/toon-theme.css?v=2.7">
   <link rel="stylesheet" href="/static/css/index.css?v=2.0">
-  <style>
-    .product-modal-backdrop.open {
-      display: flex !important;
-      opacity: 1 !important;
-      pointer-events: auto !important;
-      z-index: 99999 !important;
-    }
-    body.pos-body {
-      background: var(--color-dark);
-      color: #FFFFFF;
-      font-family: var(--font-sans);
-      margin: 0;
-      padding: 0;
-      overflow-x: hidden;
-    }
-    .mc-pos-header {
-      background: var(--color-navy);
-      border-bottom: 2px solid var(--color-yellow);
-      padding: 0.75rem 1.25rem;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      box-shadow: var(--shadow-md);
-    }
-    .mc-pos-container {
-      display: grid;
-      grid-template-columns: 140px 1fr 380px;
-      height: calc(100vh - 65px);
-      gap: 0;
-    }
-    @media (max-width: 1100px) {
-      .mc-pos-container {
-        grid-template-columns: 110px 1fr 340px;
-      }
-    }
-    @media (max-width: 850px) {
-      .mc-pos-container {
-        grid-template-columns: 1fr;
-        height: auto;
-      }
-      .mc-categories-bar {
-        flex-direction: row;
-        overflow-x: auto;
-        border-right: 0;
-        border-bottom: 1px solid var(--color-border);
-      }
-      .mc-cat-btn {
-        min-width: 82px;
-      }
-      .mc-products-grid {
-        grid-template-columns: repeat(auto-fit, minmax(min(100%, 150px), 1fr));
-      }
-      .mc-ticket-panel {
-        position: static;
-        width: auto;
-        max-height: none;
-        overflow: visible;
-        border-left: 0;
-        border-top: 1px solid var(--color-border);
-      }
-    }
-    @media (max-width: 480px) {
-      .mc-products-area,
-      #view-queue-container,
-      #view-history-container,
-      #view-postres-container,
-      #view-app-payments-container,
-      #view-deliverys-container,
-      #view-pickup-container {
-        padding: .75rem !important;
-      }
-      .mc-pos-container {
-        gap: 0;
-      }
-      .mc-pay-btn-grid {
-        grid-template-columns: repeat(3, minmax(0, 1fr));
-      }
-      #view-btn-pos,
-      #view-btn-queue,
-      #view-btn-pickup,
-      #view-btn-postres,
-      #view-btn-deliverys,
-      #view-btn-history {
-        flex: 1 1 45%;
-        min-width: 0;
-      }
-      #view-history-container table {
-        min-width: 620px;
-      }
-    }
-    /* Left Sidebar: Categories */
-    .mc-categories-bar {
-      background: var(--color-navy);
-      border-right: 1px solid var(--color-border);
-      display: flex;
-      flex-direction: column;
-      gap: 0.5rem;
-      padding: 0.75rem 0.5rem;
-      overflow-y: auto;
-    }
-    .mc-cat-btn {
-      background: rgba(255,255,255,0.03);
-      border: 1px solid var(--color-border);
-      border-radius: var(--radius-sm);
-      padding: 0.85rem 0.4rem;
-      color: #FFFFFF;
-      font-size: 0.8rem;
-      font-weight: 800;
-      text-align: center;
-      cursor: pointer;
-      transition: all var(--transition-fast);
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 0.4rem;
-      min-height: 52px;
-    }
-    .mc-cat-btn.active, .mc-cat-btn:hover {
-      background: var(--gold-gradient);
-      color: #000000;
-      border-color: var(--color-yellow);
-      box-shadow: var(--shadow-orange);
-    }
-    .mc-cat-btn span.icon {
-      font-size: 1.5rem;
-    }
-
-    /* Center: Touch Products Grid */
-    .mc-products-area {
-      padding: 1.25rem;
-      overflow-y: auto;
-      background: rgba(0,0,0,0.25);
-    }
-    .mc-products-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(145px, 1fr));
-      gap: 0.85rem;
-    }
-    .mc-product-touch-card {
-      background: var(--color-dark);
-      border: 1px solid var(--color-border);
-      border-radius: var(--radius-sm);
-      padding: 0.75rem;
-      text-align: center;
-      cursor: pointer;
-      user-select: none;
-      transition: all var(--transition-fast);
-      display: flex;
-      flex-direction: column;
-      justify-content: space-between;
-      min-height: 175px;
-    }
-    .mc-product-touch-card:hover, .mc-product-touch-card:active {
-      transform: translateY(-3px);
-      border-color: var(--color-yellow);
-      box-shadow: var(--shadow-md);
-    }
-    .mc-product-touch-card img {
-      width: 100%;
-      height: 95px;
-      object-fit: cover;
-      border-radius: 8px;
-      margin-bottom: 0.5rem;
-    }
-    .mc-product-title {
-      font-size: 0.85rem;
-      font-weight: 800;
-      color: #FFFFFF;
-      line-height: 1.2;
-      margin-bottom: 0.3rem;
-      height: 2.4em;
-      overflow: hidden;
-    }
-    .mc-product-price {
-      font-size: 1.1rem;
-      font-weight: 900;
-      color: var(--color-yellow);
-      background: rgba(0,0,0,0.4);
-      padding: 0.3rem;
-      border-radius: 6px;
-    }
-
-    /* Right Sidebar: Active Ticket & Billing */
-    .mc-ticket-panel {
-      background: var(--color-navy);
-      border-left: 1px solid var(--color-border);
-      display: flex;
-      flex-direction: column;
-      justify-content: space-between;
-      padding: 1rem;
-    }
-    .mc-mode-tabs {
-      display: flex;
-      gap: 0.4rem;
-      margin-bottom: 0.85rem;
-    }
-    .mc-mode-btn {
-      flex: 1;
-      padding: 0.5rem;
-      background: rgba(255,255,255,0.05);
-      border: 1px solid var(--color-border);
-      border-radius: 8px;
-      color: #FFFFFF;
-      font-size: 0.75rem;
-      font-weight: 800;
-      cursor: pointer;
-      text-align: center;
-      min-height: 44px;
-    }
-    .mc-mode-btn.active {
-      background: var(--color-red);
-      border-color: var(--color-red);
-      color: #FFFFFF;
-    }
-    .mc-ticket-items {
-      flex: 1;
-      overflow-y: auto;
-      max-height: 240px;
-      border-top: 1px solid var(--color-border);
-      border-bottom: 1px solid var(--color-border);
-      padding: 0.5rem 0;
-      margin-bottom: 0.85rem;
-    }
-    .mc-ticket-row {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      padding: 0.4rem 0;
-      border-bottom: 1px dashed rgba(255,255,255,0.1);
-      font-size: 0.85rem;
-    }
-    .mc-pay-btn-grid {
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 0.5rem;
-      margin-top: 0.75rem;
-    }
-    .mc-pay-btn {
-      padding: 0.65rem 0.2rem;
-      background: rgba(255,255,255,0.05);
-      border: 1px solid var(--color-border);
-      border-radius: 8px;
-      color: #FFFFFF;
-      font-size: 0.75rem;
-      font-weight: 800;
-      cursor: pointer;
-      text-align: center;
-      min-height: 44px;
-    }
-    .mc-pay-btn.active {
-      background: var(--color-yellow);
-      color: #000000;
-      border-color: var(--color-yellow);
-    }
-  </style>
+  <link rel="stylesheet" href="/static/css/pages/caja-panel.css?v=1.0">
+  <link rel="stylesheet" href="/static/css/utilities.css?v=1.0">
 </head>
 <body class="pos-body">
 <nav id="app-sidebar"></nav>
@@ -269,7 +16,7 @@
   <header id="app-header"></header>
 
     <!-- Switcher de Vistas Completo (Estilo Cashea) -->
-    <div style="display: flex; gap: 0.4rem; flex-wrap: wrap; margin: 0.75rem 1rem;">
+    <div class="u-display-flex u-gap-0-4rem u-flex-wrap-wrap u-margin-0-75rem-1rem">
       <button class="mc-mode-btn active" id="view-btn-pos" onclick="switchPosMainView('pos')">🖥️ POS TOUCH</button>
       <button class="mc-mode-btn" id="view-btn-queue" onclick="switchPosMainView('queue')">🧾 CUENTAS Y PAGOS POR COBRAR</button>
       <button class="mc-mode-btn" id="view-btn-pickup" onclick="switchPosMainView('pickup')">📦 RETIROS</button>
@@ -278,21 +25,21 @@
       <button class="mc-mode-btn" id="view-btn-history" onclick="switchPosMainView('history')">📄 FACTURAS</button>
     </div>
 
-    <div id="view-pickup-container" style="display:none;max-width:1200px;margin:0 auto;padding:1.5rem;">
-      <div style="display:flex;justify-content:space-between;align-items:center;gap:.75rem;flex-wrap:wrap;margin-bottom:1rem;">
+    <div id="view-pickup-container" class="u-display-none u-max-width-1200px u-margin-0-auto u-padding-1-5rem">
+      <div class="u-display-flex u-justify-content-space-between u-align-items-center u-gap-0p75rem u-flex-wrap-wrap u-margin-bottom-1rem">
         <div>
-          <h2 style="margin:0;color:var(--color-yellow)">📦 Pedidos listos para retirar</h2>
-          <p style="color:var(--text-muted);margin:.4rem 0 0">Confirma la entrega validando el código de seis dígitos del cliente.</p>
+          <h2 class="u-margin-0 u-color-token-color-yellow">📦 Pedidos listos para retirar</h2>
+          <p class="u-color-token-text-muted u-margin-0p4rem-0-0">Confirma la entrega validando el código de seis dígitos del cliente.</p>
         </div>
         <span class="badge" id="pickup-count">0 listos</span>
       </div>
-      <div id="pickup-orders-list" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,320px),1fr));gap:1rem"></div>
+      <div id="pickup-orders-list" class="u-display-grid u-grid-template-columns-repeat-auto-fit-minmax-min-100-320px-1fr u-gap-1rem"></div>
     </div>
 
-    <div style="display: flex; align-items: center; gap: 0.75rem; padding: 0 1rem; margin-bottom: 0.5rem;">
-      <div style="font-size: 0.8rem;">
-        <span style="color: var(--color-yellow); font-weight: 800;" id="shift-number-label">Caja: #1 Activa</span> | 
-        <span style="color: var(--color-success); font-weight: 900;" id="shift-sales-label">$0.00</span>
+    <div class="u-display-flex u-align-items-center u-gap-0-75rem u-padding-0-1rem u-margin-bottom-0-5rem">
+      <div class="u-font-size-0-8rem">
+        <span id="shift-number-label" class="u-color-token-color-yellow u-font-weight-800">Caja: #1 Activa</span> | 
+        <span id="shift-sales-label" class="u-color-token-color-success u-font-weight-900">$0.00</span>
       </div>
       <div id="shift-actions"></div>
     </div>
@@ -311,13 +58,13 @@
 
     <!-- Centro: Grid de Productos -->
     <div class="mc-products-area">
-      <section id="pos-frequent-products" aria-label="Productos más vendidos" style="display:none; margin-bottom:1rem; padding:.75rem; background:rgba(255,188,13,.08); border:1px solid var(--color-yellow); border-radius:10px;">
-        <strong style="display:block; margin-bottom:.5rem; color:var(--color-yellow)">Más vendidos en los últimos 30 días</strong>
-        <div id="pos-frequent-products-list" style="display:flex; gap:.5rem; overflow-x:auto;"></div>
+      <section id="pos-frequent-products" aria-label="Productos más vendidos" class="u-display-none u-margin-bottom-1rem u-padding-0p75rem u-background-rgba-255-188-13-0p08 u-border-1px-solid-token-color-yellow u-border-radius-10px">
+        <strong class="u-display-block u-margin-bottom-0p5rem u-color-token-color-yellow">Más vendidos en los últimos 30 días</strong>
+        <div id="pos-frequent-products-list" class="u-display-flex u-gap-0p5rem u-overflow-x-auto"></div>
       </section>
-      <div style="margin-bottom: 1rem; display: flex; justify-content: space-between; align-items: center;">
-        <input type="text" id="mc-search-input" class="form-control" style="max-width: 320px;" placeholder="🔍 Buscar producto rápido..." oninput="filterProductsPos()">
-        <span style="font-size: 0.85rem; color: var(--color-text-secondary);" id="mc-cat-title-label">Mostrando Menú Completo</span>
+      <div class="u-margin-bottom-1rem u-display-flex u-justify-content-space-between u-align-items-center">
+        <input type="text" id="mc-search-input" class="form-control u-max-width-320px" placeholder="🔍 Buscar producto rápido..." oninput="filterProductsPos()">
+        <span id="mc-cat-title-label" class="u-font-size-0-85rem u-color-token-color-text-secondary">Mostrando Menú Completo</span>
       </div>
 
       <div class="mc-products-grid" id="mc-products-touch-grid">
@@ -328,25 +75,25 @@
     <!-- Derecha: Ticket Activo y Cobro POS -->
     <div class="mc-ticket-panel">
       <div>
-        <h3 style="font-size: 1.1rem; font-weight: 900; font-family: var(--font-display); color: var(--color-yellow); margin-top: 0; margin-bottom: 0.75rem;">🛒 PEDIDO PRESENCIAL CAJA</h3>
+        <h3 class="u-font-size-1-1rem u-font-weight-900 u-font-family-token-font-display u-color-token-color-yellow u-margin-top-0 u-margin-bottom-0-75rem">🛒 PEDIDO PRESENCIAL CAJA</h3>
         
         <!-- Modalidad Order Tabs -->
-        <div class="mc-mode-tabs" style="margin-bottom: 0.75rem;">
+        <div class="mc-mode-tabs u-margin-bottom-0-75rem">
           <button class="mc-mode-btn active" id="type-btn-llevar" onclick="setPosOrderType('llevar')">🛍️ Para Llevar</button>
           <button class="mc-mode-btn" id="type-btn-mesa" onclick="setPosOrderType('mesa')">🍽️ Comer Aquí</button>
           <button class="mc-mode-btn" id="type-btn-delivery" onclick="setPosOrderType('delivery')">🛵 Delivery</button>
         </div>
 
         <!-- BÚSQUEDA DE CLIENTE REGISTRADO POR ID O NOMBRE (REQUERIMIENTO OFICIAL) -->
-        <div style="position: relative; margin-bottom: 0.6rem;">
-          <input type="text" id="pos-customer-search-input" class="form-control" style="font-size: 0.85rem; padding: 0.45rem; border-color: var(--cyan-accent); color: var(--cyan-accent); font-weight: 800;" placeholder="🔍 Buscar Cliente por ID (ej. CLI-0042) o Nombre..." oninput="searchCustomerPosLive()">
-          <div id="pos-customer-results-dropdown" style="position: absolute; top: 100%; left: 0; right: 0; background: var(--toon-card); border: 1px solid var(--cyan-accent); border-radius: 10px; z-index: 100; max-height: 200px; overflow-y: auto; display: none; box-shadow: 0 10px 25px rgba(0,0,0,0.85);"></div>
+        <div class="u-position-relative u-margin-bottom-0-6rem">
+          <input type="text" id="pos-customer-search-input" class="form-control u-font-size-0-85rem u-padding-0-45rem u-border-color-token-cyan-accent u-color-token-cyan-accent u-font-weight-800" placeholder="🔍 Buscar Cliente por ID (ej. CLI-0042) o Nombre..." oninput="searchCustomerPosLive()">
+          <div id="pos-customer-results-dropdown" class="u-position-absolute u-top-100 u-left-0 u-right-0 u-background-token-toon-card u-border-1px-solid-token-cyan-accent u-border-radius-10px u-z-index-100 u-max-height-200px u-overflow-y-auto u-display-none u-box-shadow-0-10px-25px-rgba-0-0-0-0-85"></div>
         </div>
 
-        <div class="form-group" style="margin-bottom: 0.6rem;">
-          <input type="text" id="pos-mesa-input" class="form-control" style="font-size: 0.85rem; padding: 0.4rem;" value="Mostrador" placeholder="Mesa # o Nombre / ID Cliente">
+        <div class="form-group u-margin-bottom-0-6rem">
+          <input type="text" id="pos-mesa-input" class="form-control u-font-size-0-85rem u-padding-0-4rem" value="Mostrador" placeholder="Mesa # o Nombre / ID Cliente">
         </div>
-        <div id="pos-delivery-details" hidden style="display:grid;gap:.5rem;margin-bottom:.75rem">
+        <div id="pos-delivery-details" hidden class="u-display-grid u-gap-0p5rem u-margin-bottom-0p75rem">
           <input type="text" id="pos-delivery-name" class="form-control" maxlength="150" placeholder="Nombre de quien recibe">
           <input type="tel" id="pos-delivery-phone" class="form-control" maxlength="50" autocomplete="tel" placeholder="Teléfono de contacto">
           <textarea id="pos-delivery-address" class="form-control" maxlength="500" rows="2" placeholder="Dirección completa de entrega"></textarea>
@@ -354,21 +101,21 @@
 
         <!-- Lista de Items en Ticket -->
         <div class="mc-ticket-items" id="pos-ticket-items-list">
-          <p style="text-align: center; color: var(--color-text-secondary); font-size: 0.8rem; padding: 2rem 0;">Toca productos a la izquierda para armar el pedido presencial.</p>
+          <p class="u-text-align-center u-color-token-color-text-secondary u-font-size-0-8rem u-padding-2rem-0">Toca productos a la izquierda para armar el pedido presencial.</p>
         </div>
       </div>
 
       <!-- Resumen de Costos y Pago -->
       <div>
-        <div style="font-size: 0.8rem; color: var(--color-text-secondary);">
-          <div style="display: flex; justify-content: space-between; margin-bottom: 0.2rem;"><span>Subtotal:</span><span id="pos-subtotal">$0.00</span></div>
-          <div style="display: flex; justify-content: space-between; margin-bottom: 0.2rem;"><span id="pos-tax-label">IVA (16%):</span><span id="pos-tax">$0.00</span></div>
-          <div style="display: flex; justify-content: space-between; margin-bottom: 0.2rem;" id="pos-extra-row"><span>Recargo Empaque/Envío:</span><span id="pos-extra">$0.00</span></div>
+        <div class="u-font-size-0-8rem u-color-token-color-text-secondary">
+          <div class="u-display-flex u-justify-content-space-between u-margin-bottom-0-2rem"><span>Subtotal:</span><span id="pos-subtotal">$0.00</span></div>
+          <div class="u-display-flex u-justify-content-space-between u-margin-bottom-0-2rem"><span id="pos-tax-label">IVA (16%):</span><span id="pos-tax">$0.00</span></div>
+          <div id="pos-extra-row" class="u-display-flex u-justify-content-space-between u-margin-bottom-0-2rem"><span>Recargo Empaque/Envío:</span><span id="pos-extra">$0.00</span></div>
         </div>
 
-        <div style="background: rgba(255, 196, 0, 0.15); border: 1px solid var(--color-yellow); border-radius: 10px; padding: 0.75rem; text-align: center; margin: 0.6rem 0;">
-          <div style="font-size: 0.75rem; color: #FFFFFF; font-weight: 800;">TOTAL A COBRAR</div>
-          <div style="font-size: 1.8rem; font-weight: 900; font-family: var(--font-display); color: var(--color-yellow);" id="pos-total">$0.00</div>
+        <div class="u-background-rgba-255-196-0-0-15 u-border-1px-solid-token-color-yellow u-border-radius-10px u-padding-0-75rem u-text-align-center u-margin-0-6rem-0">
+          <div class="u-font-size-0-75rem u-color-hex-ffffff u-font-weight-800">TOTAL A COBRAR</div>
+          <div id="pos-total" class="u-font-size-1-8rem u-font-weight-900 u-font-family-token-font-display u-color-token-color-yellow">$0.00</div>
         </div>
 
         <!-- Forma de Pago -->
@@ -378,26 +125,26 @@
           <button class="mc-pay-btn" id="pay-btn-Pago Móvil" onclick="setPosPaymentMethod('Pago Móvil')">📱 Móvil</button>
         </div>
 
-        <div class="form-group" style="margin-top:.6rem;margin-bottom:.6rem">
+        <div class="form-group u-margin-top-0p6rem u-margin-bottom-0p6rem">
           <label for="pos-currency-select">Moneda recibida</label>
           <select id="pos-currency-select" class="form-control" onchange="calcPosChange()">
             <option value="USD">Dólares (USD)</option>
             <option value="VES">Bolívares (Bs.)</option>
           </select>
-          <small id="pos-rate-info" role="status" style="display:block;margin-top:.3rem;color:var(--text-muted)"></small>
+          <small id="pos-rate-info" role="status" class="u-display-block u-margin-top-0p3rem u-color-token-text-muted"></small>
         </div>
 
-        <div class="form-group" style="margin-top: 0.6rem; margin-bottom: 0.6rem;">
-          <div style="display: flex; justify-content: space-between; font-size: 0.8rem; margin-bottom: 0.2rem;">
+        <div class="form-group u-margin-top-0-6rem u-margin-bottom-0-6rem">
+          <div class="u-display-flex u-justify-content-space-between u-font-size-0-8rem u-margin-bottom-0-2rem">
             <span id="pos-received-label">Monto Recibido (USD):</span>
-            <span style="color: var(--color-success); font-weight: 800;" id="pos-change-lbl">Cambio: $0.00</span>
+            <span id="pos-change-lbl" class="u-color-token-color-success u-font-weight-800">Cambio: $0.00</span>
           </div>
-          <input type="number" step="0.01" id="pos-received-input" class="form-control" style="font-size: 1rem; font-weight: 800;" placeholder="0.00" oninput="calcPosChange()">
+          <input type="number" step="0.01" id="pos-received-input" class="form-control u-font-size-1rem u-font-weight-800" placeholder="0.00" oninput="calcPosChange()">
         </div>
 
-        <div style="display: flex; gap: 0.5rem;">
-          <button class="btn btn-danger" style="flex: 1; font-size: 0.85rem;" onclick="clearPosCart()">🗑️ Vaciar</button>
-          <button class="btn btn-cta" style="flex: 2; font-size: 0.95rem; font-weight: 900;" onclick="submitPosOrderFast()">⚡ COBRAR Y FACTURAR</button>
+        <div class="u-display-flex u-gap-0-5rem">
+          <button class="btn btn-danger u-flex-1 u-font-size-0-85rem" onclick="clearPosCart()">🗑️ Vaciar</button>
+          <button class="btn btn-cta u-flex-2 u-font-size-0-95rem u-font-weight-900" onclick="submitPosOrderFast()">⚡ COBRAR Y FACTURAR</button>
         </div>
       </div>
 
@@ -406,36 +153,36 @@
   </div>
 
   <!-- CONTENIDO 2: MAESTRO UNIFICADO DE CUENTAS, MESAS Y PAGOS DIGITALES POR COBRAR -->
-  <div id="view-queue-container" style="display: none; max-width: 1200px; margin: 0 auto; padding: 1.5rem;">
-    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; flex-wrap: wrap; gap: 0.85rem;">
+  <div id="view-queue-container" class="u-display-none u-max-width-1200px u-margin-0-auto u-padding-1-5rem">
+    <div class="u-display-flex u-justify-content-space-between u-align-items-center u-margin-bottom-1rem u-flex-wrap-wrap u-gap-0-85rem">
       <div>
-        <h2 style="font-size: 1.4rem; font-weight: 900; font-family: var(--font-display); color: var(--color-yellow); margin: 0;">🧾 CUENTAS, PAGOS Y PEDIDOS EN ESPERA DE COBRO</h2>
-        <p style="color: var(--color-text-secondary); font-size: 0.85rem; margin: 0.2rem 0 0 0;">Visualización unificada de comandas de salón, pagos digitales y búsqueda por ID.</p>
+        <h2 class="u-font-size-1-4rem u-font-weight-900 u-font-family-token-font-display u-color-token-color-yellow u-margin-0">🧾 CUENTAS, PAGOS Y PEDIDOS EN ESPERA DE COBRO</h2>
+        <p class="u-color-token-color-text-secondary u-font-size-0-85rem u-margin-0-2rem-0-0-0">Visualización unificada de comandas de salón, pagos digitales y búsqueda por ID.</p>
       </div>
-      <span class="badge" style="background: var(--color-yellow); color: #000; font-size: 0.9rem; padding: 0.4rem 0.85rem; border-radius: 20px; font-weight: 900;" id="pending-count">0 En Espera</span>
+      <span class="badge u-background-token-color-yellow u-color-hex-000 u-font-size-0-9rem u-padding-0-4rem-0-85rem u-border-radius-20px u-font-weight-900" id="pending-count">0 En Espera</span>
     </div>
 
     <!-- BUSCADOR INTERACTIVO EN TIEMPO REAL POR ID DE PEDIDO (#104), CÓDIGO O CLIENTE -->
-    <div class="form-group" style="margin-bottom: 1.25rem; position: relative;">
-      <input type="text" id="pos-queue-search-input" class="form-control" placeholder="🔍 BUSCAR CUENTA O PAGO POR ID (#104 / 104), CÓDIGO CLIENTE (CLI-0042) O NOMBRE..." style="font-size: 0.95rem; font-weight: 800; border: 2px solid var(--color-yellow); padding: 0.75rem 1rem 0.75rem 2.8rem; background: rgba(0,0,0,0.5); color: #fff;" oninput="searchPosQueueLive()">
-      <span style="position: absolute; left: 1rem; top: 50%; transform: translateY(-50%); font-size: 1.2rem;">🔎</span>
+    <div class="form-group u-margin-bottom-1-25rem u-position-relative">
+      <input type="text" id="pos-queue-search-input" class="form-control u-font-size-0-95rem u-font-weight-800 u-border-2px-solid-token-color-yellow u-padding-0-75rem-1rem-0-75rem-2-8rem u-background-rgba-0-0-0-0-5 u-color-hex-fff" placeholder="🔍 BUSCAR CUENTA O PAGO POR ID (#104 / 104), CÓDIGO CLIENTE (CLI-0042) O NOMBRE..." oninput="searchPosQueueLive()">
+      <span class="u-position-absolute u-left-1rem u-top-50 u-transform-translatey-neg-50 u-font-size-1-2rem">🔎</span>
     </div>
 
-    <div id="pending-orders-list" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr)); gap: 1.25rem;"></div>
+    <div id="pending-orders-list" class="u-display-grid u-grid-template-columns-repeat-auto-fill-minmax-min-100-320px-1fr u-gap-1-25rem"></div>
   </div>
 
   <!-- CONTENIDO 3: HISTORIAL DE FACTURAS -->
-  <div id="view-history-container" style="display: none; max-width: 1200px; margin: 0 auto; padding: 1.5rem;">
-    <h2 style="font-size: 1.4rem; font-weight: 900; font-family: var(--font-display); color: var(--color-yellow); margin-top: 0; margin-bottom: 1.25rem;">📄 HISTORIAL Y REIMPRESIÓN DE FACTURAS</h2>
-    <div style="background: var(--color-dark); border: 1px solid var(--color-border); border-radius: var(--radius-md); overflow-x: auto;">
-      <table style="width: 100%; border-collapse: collapse; text-align: left;">
+  <div id="view-history-container" class="u-display-none u-max-width-1200px u-margin-0-auto u-padding-1-5rem">
+    <h2 class="u-font-size-1-4rem u-font-weight-900 u-font-family-token-font-display u-color-token-color-yellow u-margin-top-0 u-margin-bottom-1-25rem">📄 HISTORIAL Y REIMPRESIÓN DE FACTURAS</h2>
+    <div class="u-background-token-color-dark u-border-1px-solid-token-color-border u-border-radius-token-radius-md u-overflow-x-auto">
+      <table class="u-width-100 u-border-collapse-collapse u-text-align-left">
         <thead>
-          <tr style="border-bottom: 1px solid var(--color-border); color: var(--color-text-secondary);">
-            <th style="padding: 0.75rem;">Factura</th>
-            <th style="padding: 0.75rem;">Ubicación</th>
-            <th style="padding: 0.75rem;">Método</th>
-            <th style="padding: 0.75rem;">Total</th>
-            <th style="padding: 0.75rem;">Acción</th>
+          <tr class="u-border-bottom-1px-solid-token-color-border u-color-token-color-text-secondary">
+            <th class="u-padding-0-75rem">Factura</th>
+            <th class="u-padding-0-75rem">Ubicación</th>
+            <th class="u-padding-0-75rem">Método</th>
+            <th class="u-padding-0-75rem">Total</th>
+            <th class="u-padding-0-75rem">Acción</th>
           </tr>
         </thead>
         <tbody id="paid-orders-tbody"></tbody>
@@ -443,47 +190,47 @@
     </div>
   </div>
   <!-- CONTENIDO 4: PREPARACIÓN DE POSTRES (PREPARADOS POR LA CAJERA) -->
-  <div id="view-postres-container" style="display: none; max-width: 1200px; margin: 0 auto; padding: 1.5rem;">
-    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.25rem;">
-      <h2 style="font-size: 1.4rem; font-weight: 900; font-family: var(--font-display); color: var(--color-yellow); margin: 0;">🍰 MONITOR DE PREPARACIÓN DE POSTRES (CAJA)</h2>
-      <span class="badge" style="background: var(--color-yellow); color: #000; font-size: 0.9rem; padding: 0.4rem 0.8rem; border-radius: 20px; font-weight: 900;" id="postres-queue-count">0 Postres Pendientes</span>
+  <div id="view-postres-container" class="u-display-none u-max-width-1200px u-margin-0-auto u-padding-1-5rem">
+    <div class="u-display-flex u-justify-content-space-between u-align-items-center u-margin-bottom-1-25rem">
+      <h2 class="u-font-size-1-4rem u-font-weight-900 u-font-family-token-font-display u-color-token-color-yellow u-margin-0">🍰 MONITOR DE PREPARACIÓN DE POSTRES (CAJA)</h2>
+      <span class="badge u-background-token-color-yellow u-color-hex-000 u-font-size-0-9rem u-padding-0-4rem-0-8rem u-border-radius-20px u-font-weight-900" id="postres-queue-count">0 Postres Pendientes</span>
     </div>
-    <p style="color: var(--color-text-secondary); font-size: 0.88rem; margin-top: -0.5rem; margin-bottom: 1.25rem;">La cajera prepara los postres solicitados por clientes en mesa y delivery.</p>
+    <p class="u-color-token-color-text-secondary u-font-size-0-88rem u-margin-top-neg-0-5rem u-margin-bottom-1-25rem">La cajera prepara los postres solicitados por clientes en mesa y delivery.</p>
 
-    <div id="postres-grid-list" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 1.25rem;">
+    <div id="postres-grid-list" class="u-display-grid u-grid-template-columns-repeat-auto-fill-minmax-320px-1fr u-gap-1-25rem">
       <!-- Tarjetas de Postres Generadas Dinámicamente -->
     </div>
   </div>
 
   <!-- CONTENIDO 5: CONFIRMACIÓN DE PAGOS DIGITALES APP CLIENTE -->
-  <div id="view-app-payments-container" style="display: none; max-width: 1200px; margin: 0 auto; padding: 1.5rem;">
-    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.25rem;">
-      <h2 style="font-size: 1.4rem; font-weight: 900; font-family: var(--font-display); color: var(--cyan-accent); margin: 0;">📱 PAGOS DIGITALES APP CLIENTE POR CONFIRMAR</h2>
-      <span class="badge" style="background: var(--cyan-accent); color: #000; font-size: 0.9rem; padding: 0.4rem 0.8rem; border-radius: 20px; font-weight: 900;" id="app-payments-count">0 Pagos por Confirmar</span>
+  <div id="view-app-payments-container" class="u-display-none u-max-width-1200px u-margin-0-auto u-padding-1-5rem">
+    <div class="u-display-flex u-justify-content-space-between u-align-items-center u-margin-bottom-1-25rem">
+      <h2 class="u-font-size-1-4rem u-font-weight-900 u-font-family-token-font-display u-color-token-cyan-accent u-margin-0">📱 PAGOS DIGITALES APP CLIENTE POR CONFIRMAR</h2>
+      <span class="badge u-background-token-cyan-accent u-color-hex-000 u-font-size-0-9rem u-padding-0-4rem-0-8rem u-border-radius-20px u-font-weight-900" id="app-payments-count">0 Pagos por Confirmar</span>
     </div>
-    <p style="color: var(--color-text-secondary); font-size: 0.88rem; margin-top: -0.5rem; margin-bottom: 1.25rem;">Verifica las referencias de Pago Móvil / Transferencia enviadas por los clientes desde la app antes de liberar a cocina.</p>
-    <div id="app-payments-grid-list" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 1.25rem;"></div>
+    <p class="u-color-token-color-text-secondary u-font-size-0-88rem u-margin-top-neg-0-5rem u-margin-bottom-1-25rem">Verifica las referencias de Pago Móvil / Transferencia enviadas por los clientes desde la app antes de liberar a cocina.</p>
+    <div id="app-payments-grid-list" class="u-display-grid u-grid-template-columns-repeat-auto-fill-minmax-340px-1fr u-gap-1-25rem"></div>
   </div>
 
   <!-- CONTENIDO 6: GESTIÓN DE DELIVERYS Y MOTORIZADOS -->
-  <div id="view-deliverys-container" style="display: none; max-width: 1200px; margin: 0 auto; padding: 1.5rem;">
-    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.25rem;">
-      <h2 style="font-size: 1.4rem; font-weight: 900; font-family: var(--font-display); color: var(--gold-accent); margin: 0;">🛵 GESTIÓN DE ENVÍOS DELIVERY</h2>
-      <span class="badge" style="background: var(--gold-accent); color: #000; font-size: 0.9rem; padding: 0.4rem 0.8rem; border-radius: 20px; font-weight: 900;" id="deliverys-count">0 Envíos Activos</span>
+  <div id="view-deliverys-container" class="u-display-none u-max-width-1200px u-margin-0-auto u-padding-1-5rem">
+    <div class="u-display-flex u-justify-content-space-between u-align-items-center u-margin-bottom-1-25rem">
+      <h2 class="u-font-size-1-4rem u-font-weight-900 u-font-family-token-font-display u-color-token-gold-accent u-margin-0">🛵 GESTIÓN DE ENVÍOS DELIVERY</h2>
+      <span class="badge u-background-token-gold-accent u-color-hex-000 u-font-size-0-9rem u-padding-0-4rem-0-8rem u-border-radius-20px u-font-weight-900" id="deliverys-count">0 Envíos Activos</span>
     </div>
-    <p style="color: var(--color-text-secondary); font-size: 0.88rem; margin-top: -0.5rem; margin-bottom: 1.25rem;">Asignación de motorizados, verificación de pago previo y envío con mapa de ubicación GPS.</p>
-    <div id="deliverys-grid-list" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr)); gap: 1.25rem;"></div>
+    <p class="u-color-token-color-text-secondary u-font-size-0-88rem u-margin-top-neg-0-5rem u-margin-bottom-1-25rem">Asignación de motorizados, verificación de pago previo y envío con mapa de ubicación GPS.</p>
+    <div id="deliverys-grid-list" class="u-display-grid u-grid-template-columns-repeat-auto-fill-minmax-min-100-320px-1fr u-gap-1-25rem"></div>
   </div>
 
 
   <!-- MODAL GUÍA DE USO DE CAJA POS -->
   <div class="product-modal-backdrop" id="caja-guide-modal">
-    <div class="product-modal-card" style="max-width: 480px; padding: 1.75rem;">
+    <div class="product-modal-card u-max-width-480px u-padding-1-75rem">
       <button class="modal-close-btn" onclick="closeModal('caja-guide-modal')">&times;</button>
-      <span style="font-size: 2.5rem; text-align: center; display: block;">💰</span>
-      <h3 style="font-size: 1.3rem; font-weight: 900; font-family: var(--font-display); color: var(--color-yellow); text-align: center; margin-top: 0.3rem;">GUÍA DE USO DE CAJA REGISTRADORA POS</h3>
+      <span class="u-font-size-2-5rem u-text-align-center u-display-block">💰</span>
+      <h3 class="u-font-size-1-3rem u-font-weight-900 u-font-family-token-font-display u-color-token-color-yellow u-text-align-center u-margin-top-0-3rem">GUÍA DE USO DE CAJA REGISTRADORA POS</h3>
       
-      <div style="font-size: 0.85rem; line-height: 1.6; color: #FFFFFF; margin-top: 1rem;">
+      <div class="u-font-size-0-85rem u-line-height-1-6 u-color-hex-ffffff u-margin-top-1rem">
         <p><strong>1. Abrir Turno:</strong> Al iniciar tu jornada, pulsa el botón 🟢 <em>ABRIR TURNO DE CAJA</em> e ingresa el monto inicial en caja.</p>
         <p><strong>2. Venta Presencial Rápida:</strong> Toca cualquier categoría a la izquierda y presiona los productos deseados para agregarlos al ticket.</p>
         <p><strong>3. Personalización e Ingredientes:</strong> Al tocar un producto se abre el modal para quitar ingredientes (Sin cebolla) o agregar extras recomendados por categoría.</p>
@@ -491,106 +238,106 @@
         <p><strong>5. Cuentas de Mesas:</strong> Cambia a la pestaña <em>⏳ MESAS & CUENTAS</em> para cobrar las comandas abiertas de comensales en el salón.</p>
       </div>
 
-      <button class="btn btn-cta" style="width: 100%; margin-top: 1.25rem;" onclick="closeModal('caja-guide-modal')">✅ ENTENDIDO</button>
+      <button class="btn btn-cta u-width-100 u-margin-top-1-25rem" onclick="closeModal('caja-guide-modal')">✅ ENTENDIDO</button>
     </div>
   </div>
 
   <!-- Modal Personalizar Producto POS -->
   <div class="product-modal-backdrop" id="pos-customization-modal">
-    <div class="product-modal-card" style="max-width: 480px; padding: 1.5rem;">
+    <div class="product-modal-card u-max-width-480px u-padding-1-5rem">
       <button class="modal-close-btn" onclick="closeModal('pos-customization-modal')">&times;</button>
-      <h3 style="font-size: 1.3rem; font-weight: 900; font-family: var(--font-display); color: var(--color-yellow); margin-top: 0; margin-bottom: 0.5rem;" id="pos-cust-title">🛠️ PERSONALIZAR PRODUCTO</h3>
-      <p style="font-size: 0.85rem; color: var(--color-text-secondary); margin-top: 0;" id="pos-cust-desc"></p>
+      <h3 id="pos-cust-title" class="u-font-size-1-3rem u-font-weight-900 u-font-family-token-font-display u-color-token-color-yellow u-margin-top-0 u-margin-bottom-0-5rem">🛠️ PERSONALIZAR PRODUCTO</h3>
+      <p id="pos-cust-desc" class="u-font-size-0-85rem u-color-token-color-text-secondary u-margin-top-0"></p>
       
-      <div style="display: flex; align-items: center; gap: 1rem; margin-bottom: 1rem; background: rgba(255,255,255,0.03); padding: 0.75rem; border-radius: 10px;">
-        <img id="pos-cust-img" src="" style="width: 75px; height: 75px; object-fit: cover; border-radius: 8px;">
+      <div class="u-display-flex u-align-items-center u-gap-1rem u-margin-bottom-1rem u-background-rgba-255-255-255-0-03 u-padding-0-75rem u-border-radius-10px">
+        <img id="pos-cust-img" src="" class="u-width-75px u-height-75px u-object-fit-cover u-border-radius-8px">
         <div>
-          <div style="font-size: 1.1rem; font-weight: 900; color: var(--color-yellow);" id="pos-cust-price">$0.00</div>
-          <div style="font-size: 0.8rem; color: #FFFFFF;">Personalización para el Cajero / Cliente</div>
+          <div id="pos-cust-price" class="u-font-size-1-1rem u-font-weight-900 u-color-token-color-yellow">$0.00</div>
+          <div class="u-font-size-0-8rem u-color-hex-ffffff">Personalización para el Cajero / Cliente</div>
         </div>
       </div>
 
       <!-- Ingredientes Dinámicos y Extras -->
-      <div id="pos-cust-ingredients-container" style="max-height: 200px; overflow-y: auto; border: 1px solid var(--color-border); padding: 0.75rem; border-radius: 8px; margin-bottom: 1rem;"></div>
+      <div id="pos-cust-ingredients-container" class="u-max-height-200px u-overflow-y-auto u-border-1px-solid-token-color-border u-padding-0-75rem u-border-radius-8px u-margin-bottom-1rem"></div>
 
-      <div class="form-group" style="margin-bottom: 1rem;">
-        <label style="font-size: 0.85rem; color: #FFFFFF;">📝 Notas Especiales para la Cocina</label>
+      <div class="form-group u-margin-bottom-1rem">
+        <label class="u-font-size-0-85rem u-color-hex-ffffff">📝 Notas Especiales para la Cocina</label>
         <input type="text" id="pos-cust-notes" class="form-control" placeholder="Ej. Sin sal en papas, bien tostado">
       </div>
 
-      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.25rem;">
+      <div class="u-display-flex u-justify-content-space-between u-align-items-center u-margin-bottom-1-25rem">
         <span>Cantidad:</span>
-        <div style="display: flex; align-items: center; gap: 0.75rem;">
-          <button class="btn btn-outline" style="min-height: 36px; padding: 0.3rem 0.8rem;" onclick="adjustPosCustQty(-1)">-</button>
-          <strong style="font-size: 1.2rem; color: var(--color-yellow);" id="pos-cust-qty">1</strong>
-          <button class="btn btn-outline" style="min-height: 36px; padding: 0.3rem 0.8rem;" onclick="adjustPosCustQty(1)">+</button>
+        <div class="u-display-flex u-align-items-center u-gap-0-75rem">
+          <button class="btn btn-outline u-min-height-36px u-padding-0-3rem-0-8rem" onclick="adjustPosCustQty(-1)">-</button>
+          <strong id="pos-cust-qty" class="u-font-size-1-2rem u-color-token-color-yellow">1</strong>
+          <button class="btn btn-outline u-min-height-36px u-padding-0-3rem-0-8rem" onclick="adjustPosCustQty(1)">+</button>
         </div>
       </div>
 
-      <button class="btn btn-cta" style="width: 100%; font-size: 1rem;" onclick="confirmAddPosCustomizedItem()">➕ AGREGAR PRODUCTO AL TICKET</button>
+      <button class="btn btn-cta u-width-100 u-font-size-1rem" onclick="confirmAddPosCustomizedItem()">➕ AGREGAR PRODUCTO AL TICKET</button>
     </div>
   </div>
 
   <!-- PASARELA DIGITAL DE PAGO EN CAJA (ESTILO CASHEA / STRIPE) -->
   <div class="product-modal-backdrop" id="payment-modal">
-    <div class="product-modal-card" style="max-width: 470px; padding: 1.5rem;">
+    <div class="product-modal-card u-max-width-470px u-padding-1-5rem">
       <button class="modal-close-btn" onclick="closeModal('payment-modal')">&times;</button>
       
       <!-- Security Badge Header -->
-      <div style="display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--toon-border); padding-bottom: 0.75rem; margin-bottom: 1rem;">
-        <div style="display: flex; align-items: center; gap: 0.5rem;">
-          <span style="font-size: 1.4rem;">🔒</span>
+      <div class="u-display-flex u-align-items-center u-justify-content-space-between u-border-bottom-1px-solid-token-toon-border u-padding-bottom-0-75rem u-margin-bottom-1rem">
+        <div class="u-display-flex u-align-items-center u-gap-0-5rem">
+          <span class="u-font-size-1-4rem">🔒</span>
           <div>
-            <strong style="font-size: 0.95rem; color: #fff; display: block; line-height: 1;">REGISTRO DE COBRO EN CAJA</strong>
-            <small style="color: var(--cyan-accent); font-size: 0.7rem; font-weight: 800;">DONDE DAVID POS • CONFIRMACIÓN MANUAL</small>
+            <strong class="u-font-size-0-95rem u-color-hex-fff u-display-block u-line-height-1">REGISTRO DE COBRO EN CAJA</strong>
+            <small class="u-color-token-cyan-accent u-font-size-0-7rem u-font-weight-800">DONDE DAVID POS • CONFIRMACIÓN MANUAL</small>
           </div>
         </div>
-        <span class="badge" style="background: var(--gold-accent); color: #000; font-weight: 900; font-size: 0.75rem;" id="pay-order-id">#0</span>
+        <span class="badge u-background-token-gold-accent u-color-hex-000 u-font-weight-900 u-font-size-0-75rem" id="pay-order-id">#0</span>
       </div>
 
       <!-- Resumen Total $ / Bs. -->
-      <div style="background: linear-gradient(135deg, rgba(255,183,3,0.15), rgba(0,245,212,0.1)); border: 1.5px solid var(--gold-accent); border-radius: 12px; padding: 1rem; text-align: center; margin-bottom: 1.25rem;">
-        <div style="display: flex; justify-content: space-between; font-size: 0.82rem; color: var(--text-muted); margin-bottom: 0.3rem;">
+      <div class="u-background-linear-gradient-135deg-rgba-255-183-3-0-15-rgba-0-245-212-0-1 u-border-1-5px-solid-token-gold-accent u-border-radius-12px u-padding-1rem u-text-align-center u-margin-bottom-1-25rem">
+        <div class="u-display-flex u-justify-content-space-between u-font-size-0-82rem u-color-token-text-muted u-margin-bottom-0-3rem">
           <span>UBICACIÓN / MESA:</span>
-          <strong id="pay-order-mesa" style="color: #fff;">Mesa 1</strong>
+          <strong id="pay-order-mesa" class="u-color-hex-fff">Mesa 1</strong>
         </div>
-        <small style="color: var(--text-muted); font-weight: 800; text-transform: uppercase;">TOTAL NETO A COBRAR EN PASARELA:</small>
-        <div style="font-size: 2rem; font-weight: 900; color: var(--gold-accent); margin-top: 0.2rem;" id="pay-order-total">$0.00</div>
+        <small class="u-color-token-text-muted u-font-weight-800 u-text-transform-uppercase">TOTAL NETO A COBRAR EN PASARELA:</small>
+        <div id="pay-order-total" class="u-font-size-2rem u-font-weight-900 u-color-token-gold-accent u-margin-top-0-2rem">$0.00</div>
       </div>
 
-      <div class="form-group" style="margin-bottom: 0.75rem;">
-        <label style="font-size: 0.82rem; color: #fff;">MÉTODO DE PAGO RECIBIDO</label>
-        <select id="pay-method-select" class="form-control" style="font-size: 0.95rem; font-weight: 800;" onchange="calculateChange()">
+      <div class="form-group u-margin-bottom-0-75rem">
+        <label class="u-font-size-0-82rem u-color-hex-fff">MÉTODO DE PAGO RECIBIDO</label>
+        <select id="pay-method-select" class="form-control u-font-size-0-95rem u-font-weight-800" onchange="calculateChange()">
           <option value="Efectivo">💵 Efectivo</option>
           <option value="Punto de Venta">💳 Punto de venta físico</option>
           <option value="Pago Móvil">📱 Pago Móvil verificado en caja</option>
         </select>
       </div>
-      <div class="form-group" style="margin-bottom: 0.75rem;">
-        <label style="font-size: 0.82rem; color: #fff;">MONEDA RECIBIDA</label>
+      <div class="form-group u-margin-bottom-0-75rem">
+        <label class="u-font-size-0-82rem u-color-hex-fff">MONEDA RECIBIDA</label>
         <select id="pay-currency-select" class="form-control" onchange="updatePaymentCurrencyAmount()">
           <option value="USD">Dólares (USD)</option>
           <option value="VES" disabled>Bolívares (Bs.)</option>
         </select>
-        <small id="pay-rate-info" role="status" style="display:block;margin-top:.35rem;color:var(--text-muted);"></small>
+        <small id="pay-rate-info" role="status" class="u-display-block u-margin-top-0p35rem u-color-token-text-muted"></small>
       </div>
 
-      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; margin-bottom: 0.75rem;">
-        <div class="form-group" style="margin: 0;"><label style="font-size: 0.8rem; color: #fff;">NIT Cliente</label><input type="text" id="pay-nit-input" class="form-control" value="CF"></div>
-        <div class="form-group" style="margin: 0;"><label style="font-size: 0.8rem; color: #fff;">Nombre Factura</label><input type="text" id="pay-nombre-input" class="form-control" value="Consumidor Final"></div>
+      <div class="u-display-grid u-grid-template-columns-1fr-1fr u-gap-0-75rem u-margin-bottom-0-75rem">
+        <div class="form-group u-margin-0"><label class="u-font-size-0-8rem u-color-hex-fff">NIT Cliente</label><input type="text" id="pay-nit-input" class="form-control" value="CF"></div>
+        <div class="form-group u-margin-0"><label class="u-font-size-0-8rem u-color-hex-fff">Nombre Factura</label><input type="text" id="pay-nombre-input" class="form-control" value="Consumidor Final"></div>
       </div>
 
-      <div class="form-group" style="margin-bottom: 0.75rem;">
-        <label id="pay-received-label" style="font-size: 0.82rem; color: #fff;">Monto Recibido (USD)</label>
-        <input type="number" step="0.01" id="pay-received-input" class="form-control" placeholder="0.00" style="font-size: 1.1rem; font-weight: 900; color: var(--gold-accent);" oninput="calculateChange()">
+      <div class="form-group u-margin-bottom-0-75rem">
+        <label id="pay-received-label" class="u-font-size-0-82rem u-color-hex-fff">Monto Recibido (USD)</label>
+        <input type="number" step="0.01" id="pay-received-input" class="form-control u-font-size-1-1rem u-font-weight-900 u-color-token-gold-accent" placeholder="0.00" oninput="calculateChange()">
       </div>
 
-      <div style="background: rgba(34, 197, 94, 0.15); border: 1px solid var(--color-success); padding: 0.75rem; border-radius: 10px; text-align: center; margin-bottom: 1.25rem;">
-        <div style="font-size: 0.75rem; color: var(--text-muted); font-weight: 800;">CAMBIO / VUELTO A ENTREGAR AL CLIENTE:</div>
-        <div style="font-size: 1.5rem; font-weight: 900; color: var(--color-success);" id="pay-change-display">$0.00 (Bs. 0.00)</div>
+      <div class="u-background-rgba-34-197-94-0-15 u-border-1px-solid-token-color-success u-padding-0-75rem u-border-radius-10px u-text-align-center u-margin-bottom-1-25rem">
+        <div class="u-font-size-0-75rem u-color-token-text-muted u-font-weight-800">CAMBIO / VUELTO A ENTREGAR AL CLIENTE:</div>
+        <div id="pay-change-display" class="u-font-size-1-5rem u-font-weight-900 u-color-token-color-success">$0.00 (Bs. 0.00)</div>
       </div>
 
-      <button class="btn btn-cta" style="width: 100%; font-size: 1.05rem; font-weight: 900; padding: 0.85rem;" onclick="submitPayment()">
+      <button class="btn btn-cta u-width-100 u-font-size-1-05rem u-font-weight-900 u-padding-0-85rem" onclick="submitPayment()">
         🔒 PROCESAR COBRO Y EMITIR FACTURA
       </button>
     </div>
@@ -598,49 +345,49 @@
 
   <!-- Modal Ver Ticket Factura Imprimible -->
   <div class="product-modal-backdrop" id="receipt-modal">
-    <div class="product-modal-card" style="max-width: 420px; background: #1a2336;">
+    <div class="product-modal-card u-max-width-420px u-background-hex-1a2336">
       <button class="modal-close-btn" onclick="closeModal('receipt-modal')">&times;</button>
-      <div style="padding: 1.5rem;">
+      <div class="u-padding-1-5rem">
         <div class="factura-ticket" id="factura-ticket-content"></div>
-        <button class="btn btn-cta" style="width: 100%; margin-top: 1rem;" onclick="window.print()">🖨️ IMPRIMIR FACTURA / TICKET</button>
+        <button class="btn btn-cta u-width-100 u-margin-top-1rem" onclick="window.print()">🖨️ IMPRIMIR FACTURA / TICKET</button>
       </div>
     </div>
   </div>
 
   <!-- Modal Apertura Shift -->
   <div class="product-modal-backdrop" id="open-shift-modal">
-    <div class="product-modal-card" style="max-width: 400px; padding: 1.5rem; position: relative;">
+    <div class="product-modal-card u-max-width-400px u-padding-1-5rem u-position-relative">
       <button class="modal-close-btn" onclick="closeModal('open-shift-modal')">&times;</button>
-      <h3 style="font-size: 1.3rem; font-weight: 900; font-family: var(--font-display); color: var(--color-yellow); margin-top: 0;">🟢 APERTURA DE TURNO DE CAJA</h3>
+      <h3 class="u-font-size-1-3rem u-font-weight-900 u-font-family-token-font-display u-color-token-color-yellow u-margin-top-0">🟢 APERTURA DE TURNO DE CAJA</h3>
       <div class="form-group"><label>Monto inicial de apertura (USD equivalente)</label><input type="number" min="0" step="0.01" id="monto-apertura-input" class="form-control" value="0.00" required></div>
-      <button class="btn btn-success" style="width: 100%; margin-top: 1rem;" onclick="submitAbrirTurno()">🟢 ABRIR TURNO DE CAJA</button>
+      <button class="btn btn-success u-width-100 u-margin-top-1rem" onclick="submitAbrirTurno()">🟢 ABRIR TURNO DE CAJA</button>
     </div>
   </div>
   <div class="product-modal-backdrop" id="close-shift-modal">
-      <div class="product-modal-card" style="max-width:420px;padding:1.5rem">
+      <div class="product-modal-card u-max-width-420px u-padding-1-5rem">
         <button class="modal-close-btn" onclick="closeModal('close-shift-modal')">&times;</button>
-        <h3 style="margin-top:0;color:var(--color-yellow)">🔴 CIERRE Y ARQUEO DE CAJA</h3>
-        <p id="shift-cash-expected" style="color:var(--text-muted)"></p>
+        <h3 class="u-margin-top-0 u-color-token-color-yellow">🔴 CIERRE Y ARQUEO DE CAJA</h3>
+        <p id="shift-cash-expected" class="u-color-token-text-muted"></p>
         <div class="form-group">
           <label for="monto-cierre-input">Efectivo contado (equivalente USD)</label>
           <input type="number" min="0" step="0.01" id="monto-cierre-input" class="form-control" required>
         </div>
         <div class="form-group"><label for="cierre-movil-input">Pago móvil contado (USD equivalente)</label><input type="number" min="0" step="0.01" id="cierre-movil-input" class="form-control" required></div>
         <div class="form-group"><label for="cierre-pos-input">Punto de venta contado (USD equivalente)</label><input type="number" min="0" step="0.01" id="cierre-pos-input" class="form-control" required></div>
-        <small style="color:var(--text-muted)">Registra cada método de pago en su equivalente USD. Los egresos del turno se descuentan del esperado.</small>
-        <button class="btn-gold" style="width:100%;margin-top:1rem" onclick="confirmarCerrarTurno()">Confirmar cierre</button>
+        <small class="u-color-token-text-muted">Registra cada método de pago en su equivalente USD. Los egresos del turno se descuentan del esperado.</small>
+        <button class="btn-gold u-width-100 u-margin-top-1rem" onclick="confirmarCerrarTurno()">Confirmar cierre</button>
       </div>
     </div>
   <div class="product-modal-backdrop" id="cash-expense-modal">
-    <div class="product-modal-card" style="max-width:460px;padding:1.5rem">
+    <div class="product-modal-card u-max-width-460px u-padding-1-5rem">
       <button class="modal-close-btn" onclick="closeModal('cash-expense-modal')">&times;</button>
-      <h3 style="margin-top:0;color:var(--color-yellow)">Registrar egreso de caja</h3>
+      <h3 class="u-margin-top-0 u-color-token-color-yellow">Registrar egreso de caja</h3>
       <div class="form-group"><label for="cash-expense-concept">Concepto</label><input id="cash-expense-concept" class="form-control" maxlength="150" required></div>
       <div class="form-group"><label for="cash-expense-amount">Monto USD equivalente</label><input id="cash-expense-amount" class="form-control" type="number" min="0.01" step="0.01" required></div>
       <div class="form-group"><label for="cash-expense-method">Método usado</label><select id="cash-expense-method" class="form-control"><option>Efectivo</option><option>Pago Móvil</option><option>Punto de Venta</option></select></div>
       <div class="form-group"><label for="cash-expense-note">Observación (opcional)</label><textarea id="cash-expense-note" class="form-control" maxlength="300"></textarea></div>
-      <button class="btn-gold" style="width:100%" onclick="submitCashExpense()">Guardar egreso</button>
-      <div id="cash-movements-list" style="margin-top:1rem" aria-live="polite"></div>
+      <button class="btn-gold u-width-100" onclick="submitCashExpense()">Guardar egreso</button>
+      <div id="cash-movements-list" aria-live="polite" class="u-margin-top-1rem"></div>
     </div>
   </div>
 

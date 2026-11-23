@@ -1,0 +1,148 @@
+/* Estilos Específicos para la Landing Page Donde David */
+.landing-hero {
+  position: relative;
+  padding: clamp(2rem, 5vw, 4rem) 1.25rem;
+  background: radial-gradient(circle at 70% 20%, rgba(255, 183, 3, 0.12) 0%, transparent 60%),
+              radial-gradient(circle at 20% 80%, rgba(0, 245, 212, 0.08) 0%, transparent 60%),
+              var(--toon-bg);
+  border-bottom: 2px solid var(--gold-accent);
+}
+.landing-container {
+  max-width: 1280px;
+  margin: 0 auto;
+}
+.landing-hero-grid {
+  display: grid;
+  grid-template-columns: 1.1fr 0.9fr;
+  gap: clamp(1.5rem, 4vw, 3rem);
+  align-items: center;
+}
+@media (max-width: 992px) {
+  .landing-hero-grid {
+    grid-template-columns: 1fr;
+    text-align: center;
+  }
+}
+.landing-badge-trust {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: rgba(255, 188, 13, 0.12);
+  border: 1px solid var(--gold-accent);
+  border-radius: 30px;
+  padding: 0.4rem 1.1rem;
+  margin-bottom: 1.25rem;
+}
+.landing-hero-title {
+  font-family: var(--font-display);
+  font-size: clamp(2.2rem, 5vw, 3.8rem);
+  font-weight: 900;
+  line-height: 1.08;
+  color: #ffffff;
+  margin-bottom: 1rem;
+  text-shadow: 0 4px 15px rgba(0,0,0,0.8);
+}
+.landing-hero-title span {
+  background: var(--gold-gradient);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+/* Standard Web Footer Links Styling */
+.standard-footer-links {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+.standard-footer-links a {
+  color: var(--text-dim);
+  text-decoration: none;
+  font-size: 0.88rem;
+  font-weight: 600;
+  transition: color 0.2s ease;
+}
+.standard-footer-links a:hover {
+  color: var(--gold-accent);
+}
+.landing-footer {
+  background: linear-gradient(160deg, #0d1421, #060910 75%);
+  border-top: 2px solid var(--gold-accent);
+  padding: 3rem 1.25rem 1.5rem;
+  color: var(--text-dim);
+  font-size: 0.9rem;
+}
+.landing-footer-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) repeat(2, minmax(0, 1fr));
+  gap: clamp(1.25rem, 3vw, 2.5rem);
+  margin-bottom: 2.25rem;
+}
+.landing-footer-column {
+  min-width: 0;
+  padding: clamp(1rem, 2vw, 1.4rem);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 18px;
+  background: rgba(255,255,255,0.025);
+}
+.landing-footer-brand {
+  color: var(--gold-accent);
+  font-family: var(--font-display);
+  font-size: clamp(1.1rem, 2vw, 1.4rem);
+  font-weight: 900;
+  line-height: 1.25;
+  margin-bottom: 0.8rem;
+  overflow-wrap: anywhere;
+}
+.landing-footer-title {
+  display: block;
+  color: #fff;
+  font-size: 0.88rem;
+  letter-spacing: 0.08em;
+  margin-bottom: 1rem;
+}
+.landing-footer-copy {
+  line-height: 1.7;
+  margin: 0 0 0.85rem;
+  overflow-wrap: anywhere;
+}
+.landing-footer-detail {
+  margin: 0 0 0.65rem;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+.landing-footer-payments {
+  color: var(--gold-accent);
+  font-size: 0.82rem;
+  font-weight: 800;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+.landing-footer-copyright {
+  border-top: 1px solid rgba(255,255,255,0.1);
+  padding-top: 1.25rem;
+  text-align: center;
+  font-size: 0.78rem;
+  line-height: 1.6;
+}
+@media (max-width: 760px) {
+  .landing-footer-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .landing-footer-brand-column {
+    grid-column: 1 / -1;
+  }
+}
+@media (max-width: 520px) {
+  .landing-footer-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .landing-footer-brand-column {
+    grid-column: auto;
+  }
+  .landing-footer-column {
+    padding: 1rem;
+  }
+}

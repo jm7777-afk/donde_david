@@ -1,18 +1,21 @@
 # Python
 __pycache__/
+.pytest_cache/
 *.py[cod]
 *$py.class
 *.so
 .Python
-env/
+/env/
+/venv/
+/.venv/
 build/
 develop-eggs/
 dist/
 downloads/
 eggs/
 .eggs/
-lib/
-lib64/
+/lib/
+/lib64/
 parts/
 sdist/
 var/
@@ -26,7 +29,23 @@ wheels/
 *.sqlite3
 installed.lock
 .env
+backend/logs/
+backend/backups/
+logs/
+backups/
+*.apk
 
 # Antigravity & OS
 .DS_Store
 Thumbs.db
+~$*
+
+# Flutter / Dart generated files
+**/.dart_tool/
+**/.flutter-plugins
+**/.flutter-plugins-dependencies
+**/.packages
+**/.gradle/
+**/local.properties
+*.log
+hs_err_pid*.log

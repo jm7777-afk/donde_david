@@ -31,6 +31,80 @@ class UsuarioOut(UsuarioBase):
 
     model_config = ConfigDict(from_attributes=True)
 
+
+# ==================== SCHEMAS: AUDITORIA ====================
+class AuditoriaOut(BaseModel):
+    id: int
+    accion: str
+    usuario: str
+    usuario_id: Optional[int] = None
+    ip_address: Optional[str] = None
+    recurso: Optional[str] = None
+    recurso_id: Optional[str] = None
+    detalle: Optional[str] = None
+    datos_previos: Optional[str] = None
+    datos_nuevos: Optional[str] = None
+    fecha: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class AuditoriaListOut(BaseModel):
+    total: int
+    items: List[AuditoriaOut]
+    acciones_disponibles: List[str] = Field(default_factory=list)
+    recursos_disponibles: List[str] = Field(default_factory=list)
+
+
+# ==================== SCHEMAS: LOGS ====================
+class LogEntryOut(BaseModel):
+    timestamp: Optional[str] = None
+    level: str
+    logger: str
+    message: str
+    raw: str
+
+
+class LogResponseOut(BaseModel):
+    file: str
+    size_kb: float
+    total_returned: int
+    logs: List[LogEntryOut]
+
+
+class LogStatsOut(BaseModel):
+    total_recent_events: int
+    counts_by_level: dict[str, int]
+    error_rate_percentage: float
+    app_log_size_kb: float
+    error_log_size_kb: float
+
+
+# ==================== SCHEMAS: BACKUPS ====================
+class BackupCreateRequest(BaseModel):
+    descripcion: Optional[str] = Field(default=None, max_length=255)
+
+
+class BackupOut(BaseModel):
+    filename: str
+    engine: str
+    created_at: str
+    created_by: str
+    description: Optional[str] = None
+    size_bytes: int
+    size_human: str
+    sha256: str
+    status: str
+
+
+class BackupRestoreResponse(BaseModel):
+    mensaje: str
+    checkpoint_previo: Optional[str] = None
+    tablas_restauradas: Optional[List[str]] = None
+    restaurado_por: str
+    timestamp: str
+
+
 # Categoria Schemas
 class CategoriaBase(BaseModel):
     nombre: str
@@ -47,6 +121,80 @@ class CategoriaOut(CategoriaBase):
     fecha_creacion: Optional[datetime] = None
 
     model_config = ConfigDict(from_attributes=True)
+
+
+# ==================== SCHEMAS: AUDITORIA ====================
+class AuditoriaOut(BaseModel):
+    id: int
+    accion: str
+    usuario: str
+    usuario_id: Optional[int] = None
+    ip_address: Optional[str] = None
+    recurso: Optional[str] = None
+    recurso_id: Optional[str] = None
+    detalle: Optional[str] = None
+    datos_previos: Optional[str] = None
+    datos_nuevos: Optional[str] = None
+    fecha: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class AuditoriaListOut(BaseModel):
+    total: int
+    items: List[AuditoriaOut]
+    acciones_disponibles: List[str] = Field(default_factory=list)
+    recursos_disponibles: List[str] = Field(default_factory=list)
+
+
+# ==================== SCHEMAS: LOGS ====================
+class LogEntryOut(BaseModel):
+    timestamp: Optional[str] = None
+    level: str
+    logger: str
+    message: str
+    raw: str
+
+
+class LogResponseOut(BaseModel):
+    file: str
+    size_kb: float
+    total_returned: int
+    logs: List[LogEntryOut]
+
+
+class LogStatsOut(BaseModel):
+    total_recent_events: int
+    counts_by_level: dict[str, int]
+    error_rate_percentage: float
+    app_log_size_kb: float
+    error_log_size_kb: float
+
+
+# ==================== SCHEMAS: BACKUPS ====================
+class BackupCreateRequest(BaseModel):
+    descripcion: Optional[str] = Field(default=None, max_length=255)
+
+
+class BackupOut(BaseModel):
+    filename: str
+    engine: str
+    created_at: str
+    created_by: str
+    description: Optional[str] = None
+    size_bytes: int
+    size_human: str
+    sha256: str
+    status: str
+
+
+class BackupRestoreResponse(BaseModel):
+    mensaje: str
+    checkpoint_previo: Optional[str] = None
+    tablas_restauradas: Optional[List[str]] = None
+    restaurado_por: str
+    timestamp: str
+
 
 # Producto Schemas
 class ProductoBase(BaseModel):
@@ -93,6 +241,80 @@ class ProductoOut(ProductoBase):
 
     model_config = ConfigDict(from_attributes=True)
 
+
+# ==================== SCHEMAS: AUDITORIA ====================
+class AuditoriaOut(BaseModel):
+    id: int
+    accion: str
+    usuario: str
+    usuario_id: Optional[int] = None
+    ip_address: Optional[str] = None
+    recurso: Optional[str] = None
+    recurso_id: Optional[str] = None
+    detalle: Optional[str] = None
+    datos_previos: Optional[str] = None
+    datos_nuevos: Optional[str] = None
+    fecha: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class AuditoriaListOut(BaseModel):
+    total: int
+    items: List[AuditoriaOut]
+    acciones_disponibles: List[str] = Field(default_factory=list)
+    recursos_disponibles: List[str] = Field(default_factory=list)
+
+
+# ==================== SCHEMAS: LOGS ====================
+class LogEntryOut(BaseModel):
+    timestamp: Optional[str] = None
+    level: str
+    logger: str
+    message: str
+    raw: str
+
+
+class LogResponseOut(BaseModel):
+    file: str
+    size_kb: float
+    total_returned: int
+    logs: List[LogEntryOut]
+
+
+class LogStatsOut(BaseModel):
+    total_recent_events: int
+    counts_by_level: dict[str, int]
+    error_rate_percentage: float
+    app_log_size_kb: float
+    error_log_size_kb: float
+
+
+# ==================== SCHEMAS: BACKUPS ====================
+class BackupCreateRequest(BaseModel):
+    descripcion: Optional[str] = Field(default=None, max_length=255)
+
+
+class BackupOut(BaseModel):
+    filename: str
+    engine: str
+    created_at: str
+    created_by: str
+    description: Optional[str] = None
+    size_bytes: int
+    size_human: str
+    sha256: str
+    status: str
+
+
+class BackupRestoreResponse(BaseModel):
+    mensaje: str
+    checkpoint_previo: Optional[str] = None
+    tablas_restauradas: Optional[List[str]] = None
+    restaurado_por: str
+    timestamp: str
+
+
 # Promocion Schemas
 class PromocionCreate(BaseModel):
     titulo: str
@@ -107,6 +329,80 @@ class PromocionOut(PromocionCreate):
 
     model_config = ConfigDict(from_attributes=True)
 
+
+# ==================== SCHEMAS: AUDITORIA ====================
+class AuditoriaOut(BaseModel):
+    id: int
+    accion: str
+    usuario: str
+    usuario_id: Optional[int] = None
+    ip_address: Optional[str] = None
+    recurso: Optional[str] = None
+    recurso_id: Optional[str] = None
+    detalle: Optional[str] = None
+    datos_previos: Optional[str] = None
+    datos_nuevos: Optional[str] = None
+    fecha: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class AuditoriaListOut(BaseModel):
+    total: int
+    items: List[AuditoriaOut]
+    acciones_disponibles: List[str] = Field(default_factory=list)
+    recursos_disponibles: List[str] = Field(default_factory=list)
+
+
+# ==================== SCHEMAS: LOGS ====================
+class LogEntryOut(BaseModel):
+    timestamp: Optional[str] = None
+    level: str
+    logger: str
+    message: str
+    raw: str
+
+
+class LogResponseOut(BaseModel):
+    file: str
+    size_kb: float
+    total_returned: int
+    logs: List[LogEntryOut]
+
+
+class LogStatsOut(BaseModel):
+    total_recent_events: int
+    counts_by_level: dict[str, int]
+    error_rate_percentage: float
+    app_log_size_kb: float
+    error_log_size_kb: float
+
+
+# ==================== SCHEMAS: BACKUPS ====================
+class BackupCreateRequest(BaseModel):
+    descripcion: Optional[str] = Field(default=None, max_length=255)
+
+
+class BackupOut(BaseModel):
+    filename: str
+    engine: str
+    created_at: str
+    created_by: str
+    description: Optional[str] = None
+    size_bytes: int
+    size_human: str
+    sha256: str
+    status: str
+
+
+class BackupRestoreResponse(BaseModel):
+    mensaje: str
+    checkpoint_previo: Optional[str] = None
+    tablas_restauradas: Optional[List[str]] = None
+    restaurado_por: str
+    timestamp: str
+
+
 # Resena Schemas
 class ResenaCreate(BaseModel):
     nombre_cliente: str = Field(min_length=1, max_length=150)
@@ -119,6 +415,80 @@ class ResenaOut(ResenaCreate):
     fecha_creacion: Optional[datetime] = None
 
     model_config = ConfigDict(from_attributes=True)
+
+
+# ==================== SCHEMAS: AUDITORIA ====================
+class AuditoriaOut(BaseModel):
+    id: int
+    accion: str
+    usuario: str
+    usuario_id: Optional[int] = None
+    ip_address: Optional[str] = None
+    recurso: Optional[str] = None
+    recurso_id: Optional[str] = None
+    detalle: Optional[str] = None
+    datos_previos: Optional[str] = None
+    datos_nuevos: Optional[str] = None
+    fecha: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class AuditoriaListOut(BaseModel):
+    total: int
+    items: List[AuditoriaOut]
+    acciones_disponibles: List[str] = Field(default_factory=list)
+    recursos_disponibles: List[str] = Field(default_factory=list)
+
+
+# ==================== SCHEMAS: LOGS ====================
+class LogEntryOut(BaseModel):
+    timestamp: Optional[str] = None
+    level: str
+    logger: str
+    message: str
+    raw: str
+
+
+class LogResponseOut(BaseModel):
+    file: str
+    size_kb: float
+    total_returned: int
+    logs: List[LogEntryOut]
+
+
+class LogStatsOut(BaseModel):
+    total_recent_events: int
+    counts_by_level: dict[str, int]
+    error_rate_percentage: float
+    app_log_size_kb: float
+    error_log_size_kb: float
+
+
+# ==================== SCHEMAS: BACKUPS ====================
+class BackupCreateRequest(BaseModel):
+    descripcion: Optional[str] = Field(default=None, max_length=255)
+
+
+class BackupOut(BaseModel):
+    filename: str
+    engine: str
+    created_at: str
+    created_by: str
+    description: Optional[str] = None
+    size_bytes: int
+    size_human: str
+    sha256: str
+    status: str
+
+
+class BackupRestoreResponse(BaseModel):
+    mensaje: str
+    checkpoint_previo: Optional[str] = None
+    tablas_restauradas: Optional[List[str]] = None
+    restaurado_por: str
+    timestamp: str
+
 
 # Publicacion Schemas
 class PublicacionCreate(BaseModel):
@@ -133,6 +503,80 @@ class PublicacionOut(PublicacionCreate):
     fecha_creacion: Optional[datetime] = None
 
     model_config = ConfigDict(from_attributes=True)
+
+
+# ==================== SCHEMAS: AUDITORIA ====================
+class AuditoriaOut(BaseModel):
+    id: int
+    accion: str
+    usuario: str
+    usuario_id: Optional[int] = None
+    ip_address: Optional[str] = None
+    recurso: Optional[str] = None
+    recurso_id: Optional[str] = None
+    detalle: Optional[str] = None
+    datos_previos: Optional[str] = None
+    datos_nuevos: Optional[str] = None
+    fecha: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class AuditoriaListOut(BaseModel):
+    total: int
+    items: List[AuditoriaOut]
+    acciones_disponibles: List[str] = Field(default_factory=list)
+    recursos_disponibles: List[str] = Field(default_factory=list)
+
+
+# ==================== SCHEMAS: LOGS ====================
+class LogEntryOut(BaseModel):
+    timestamp: Optional[str] = None
+    level: str
+    logger: str
+    message: str
+    raw: str
+
+
+class LogResponseOut(BaseModel):
+    file: str
+    size_kb: float
+    total_returned: int
+    logs: List[LogEntryOut]
+
+
+class LogStatsOut(BaseModel):
+    total_recent_events: int
+    counts_by_level: dict[str, int]
+    error_rate_percentage: float
+    app_log_size_kb: float
+    error_log_size_kb: float
+
+
+# ==================== SCHEMAS: BACKUPS ====================
+class BackupCreateRequest(BaseModel):
+    descripcion: Optional[str] = Field(default=None, max_length=255)
+
+
+class BackupOut(BaseModel):
+    filename: str
+    engine: str
+    created_at: str
+    created_by: str
+    description: Optional[str] = None
+    size_bytes: int
+    size_human: str
+    sha256: str
+    status: str
+
+
+class BackupRestoreResponse(BaseModel):
+    mensaje: str
+    checkpoint_previo: Optional[str] = None
+    tablas_restauradas: Optional[List[str]] = None
+    restaurado_por: str
+    timestamp: str
+
 
 # Cambiar Mesa Request
 class CambiarMesaRequest(BaseModel):
@@ -163,6 +607,80 @@ class DetallePedidoOut(BaseModel):
     producto: Optional[ProductoOut] = None
 
     model_config = ConfigDict(from_attributes=True)
+
+
+# ==================== SCHEMAS: AUDITORIA ====================
+class AuditoriaOut(BaseModel):
+    id: int
+    accion: str
+    usuario: str
+    usuario_id: Optional[int] = None
+    ip_address: Optional[str] = None
+    recurso: Optional[str] = None
+    recurso_id: Optional[str] = None
+    detalle: Optional[str] = None
+    datos_previos: Optional[str] = None
+    datos_nuevos: Optional[str] = None
+    fecha: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class AuditoriaListOut(BaseModel):
+    total: int
+    items: List[AuditoriaOut]
+    acciones_disponibles: List[str] = Field(default_factory=list)
+    recursos_disponibles: List[str] = Field(default_factory=list)
+
+
+# ==================== SCHEMAS: LOGS ====================
+class LogEntryOut(BaseModel):
+    timestamp: Optional[str] = None
+    level: str
+    logger: str
+    message: str
+    raw: str
+
+
+class LogResponseOut(BaseModel):
+    file: str
+    size_kb: float
+    total_returned: int
+    logs: List[LogEntryOut]
+
+
+class LogStatsOut(BaseModel):
+    total_recent_events: int
+    counts_by_level: dict[str, int]
+    error_rate_percentage: float
+    app_log_size_kb: float
+    error_log_size_kb: float
+
+
+# ==================== SCHEMAS: BACKUPS ====================
+class BackupCreateRequest(BaseModel):
+    descripcion: Optional[str] = Field(default=None, max_length=255)
+
+
+class BackupOut(BaseModel):
+    filename: str
+    engine: str
+    created_at: str
+    created_by: str
+    description: Optional[str] = None
+    size_bytes: int
+    size_human: str
+    sha256: str
+    status: str
+
+
+class BackupRestoreResponse(BaseModel):
+    mensaje: str
+    checkpoint_previo: Optional[str] = None
+    tablas_restauradas: Optional[List[str]] = None
+    restaurado_por: str
+    timestamp: str
+
 
 # Pedido Schemas
 class PedidoCreate(BaseModel):
@@ -220,6 +738,80 @@ class MovimientoCajaOut(BaseModel):
 
     model_config = ConfigDict(from_attributes=True)
 
+
+# ==================== SCHEMAS: AUDITORIA ====================
+class AuditoriaOut(BaseModel):
+    id: int
+    accion: str
+    usuario: str
+    usuario_id: Optional[int] = None
+    ip_address: Optional[str] = None
+    recurso: Optional[str] = None
+    recurso_id: Optional[str] = None
+    detalle: Optional[str] = None
+    datos_previos: Optional[str] = None
+    datos_nuevos: Optional[str] = None
+    fecha: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class AuditoriaListOut(BaseModel):
+    total: int
+    items: List[AuditoriaOut]
+    acciones_disponibles: List[str] = Field(default_factory=list)
+    recursos_disponibles: List[str] = Field(default_factory=list)
+
+
+# ==================== SCHEMAS: LOGS ====================
+class LogEntryOut(BaseModel):
+    timestamp: Optional[str] = None
+    level: str
+    logger: str
+    message: str
+    raw: str
+
+
+class LogResponseOut(BaseModel):
+    file: str
+    size_kb: float
+    total_returned: int
+    logs: List[LogEntryOut]
+
+
+class LogStatsOut(BaseModel):
+    total_recent_events: int
+    counts_by_level: dict[str, int]
+    error_rate_percentage: float
+    app_log_size_kb: float
+    error_log_size_kb: float
+
+
+# ==================== SCHEMAS: BACKUPS ====================
+class BackupCreateRequest(BaseModel):
+    descripcion: Optional[str] = Field(default=None, max_length=255)
+
+
+class BackupOut(BaseModel):
+    filename: str
+    engine: str
+    created_at: str
+    created_by: str
+    description: Optional[str] = None
+    size_bytes: int
+    size_human: str
+    sha256: str
+    status: str
+
+
+class BackupRestoreResponse(BaseModel):
+    mensaje: str
+    checkpoint_previo: Optional[str] = None
+    tablas_restauradas: Optional[List[str]] = None
+    restaurado_por: str
+    timestamp: str
+
+
 class ArqueoTurnoInput(BaseModel):
     metodo_pago: Literal["Efectivo", "Pago Móvil", "Punto de Venta"]
     contado_usd: float = Field(ge=0, allow_inf_nan=False)
@@ -231,6 +823,80 @@ class ArqueoTurnoOut(BaseModel):
     diferencia_usd: float
 
     model_config = ConfigDict(from_attributes=True)
+
+
+# ==================== SCHEMAS: AUDITORIA ====================
+class AuditoriaOut(BaseModel):
+    id: int
+    accion: str
+    usuario: str
+    usuario_id: Optional[int] = None
+    ip_address: Optional[str] = None
+    recurso: Optional[str] = None
+    recurso_id: Optional[str] = None
+    detalle: Optional[str] = None
+    datos_previos: Optional[str] = None
+    datos_nuevos: Optional[str] = None
+    fecha: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class AuditoriaListOut(BaseModel):
+    total: int
+    items: List[AuditoriaOut]
+    acciones_disponibles: List[str] = Field(default_factory=list)
+    recursos_disponibles: List[str] = Field(default_factory=list)
+
+
+# ==================== SCHEMAS: LOGS ====================
+class LogEntryOut(BaseModel):
+    timestamp: Optional[str] = None
+    level: str
+    logger: str
+    message: str
+    raw: str
+
+
+class LogResponseOut(BaseModel):
+    file: str
+    size_kb: float
+    total_returned: int
+    logs: List[LogEntryOut]
+
+
+class LogStatsOut(BaseModel):
+    total_recent_events: int
+    counts_by_level: dict[str, int]
+    error_rate_percentage: float
+    app_log_size_kb: float
+    error_log_size_kb: float
+
+
+# ==================== SCHEMAS: BACKUPS ====================
+class BackupCreateRequest(BaseModel):
+    descripcion: Optional[str] = Field(default=None, max_length=255)
+
+
+class BackupOut(BaseModel):
+    filename: str
+    engine: str
+    created_at: str
+    created_by: str
+    description: Optional[str] = None
+    size_bytes: int
+    size_human: str
+    sha256: str
+    status: str
+
+
+class BackupRestoreResponse(BaseModel):
+    mensaje: str
+    checkpoint_previo: Optional[str] = None
+    tablas_restauradas: Optional[List[str]] = None
+    restaurado_por: str
+    timestamp: str
+
 
 class PedidoBaseOut(BaseModel):
     id: int
@@ -272,6 +938,80 @@ class PedidoBaseOut(BaseModel):
     detalles: List[DetallePedidoOut] = []
 
     model_config = ConfigDict(from_attributes=True)
+
+
+# ==================== SCHEMAS: AUDITORIA ====================
+class AuditoriaOut(BaseModel):
+    id: int
+    accion: str
+    usuario: str
+    usuario_id: Optional[int] = None
+    ip_address: Optional[str] = None
+    recurso: Optional[str] = None
+    recurso_id: Optional[str] = None
+    detalle: Optional[str] = None
+    datos_previos: Optional[str] = None
+    datos_nuevos: Optional[str] = None
+    fecha: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class AuditoriaListOut(BaseModel):
+    total: int
+    items: List[AuditoriaOut]
+    acciones_disponibles: List[str] = Field(default_factory=list)
+    recursos_disponibles: List[str] = Field(default_factory=list)
+
+
+# ==================== SCHEMAS: LOGS ====================
+class LogEntryOut(BaseModel):
+    timestamp: Optional[str] = None
+    level: str
+    logger: str
+    message: str
+    raw: str
+
+
+class LogResponseOut(BaseModel):
+    file: str
+    size_kb: float
+    total_returned: int
+    logs: List[LogEntryOut]
+
+
+class LogStatsOut(BaseModel):
+    total_recent_events: int
+    counts_by_level: dict[str, int]
+    error_rate_percentage: float
+    app_log_size_kb: float
+    error_log_size_kb: float
+
+
+# ==================== SCHEMAS: BACKUPS ====================
+class BackupCreateRequest(BaseModel):
+    descripcion: Optional[str] = Field(default=None, max_length=255)
+
+
+class BackupOut(BaseModel):
+    filename: str
+    engine: str
+    created_at: str
+    created_by: str
+    description: Optional[str] = None
+    size_bytes: int
+    size_human: str
+    sha256: str
+    status: str
+
+
+class BackupRestoreResponse(BaseModel):
+    mensaje: str
+    checkpoint_previo: Optional[str] = None
+    tablas_restauradas: Optional[List[str]] = None
+    restaurado_por: str
+    timestamp: str
+
 
 class PedidoOut(PedidoBaseOut):
     codigo_otp: Optional[str] = None
@@ -334,3 +1074,148 @@ class TurnoOut(BaseModel):
     esperado_por_metodo: dict[str, float] = Field(default_factory=dict)
 
     model_config = ConfigDict(from_attributes=True)
+# ==================== SCHEMAS: AUDITORIA ====================
+class AuditoriaOut(BaseModel):
+    id: int
+    accion: str
+    usuario: str
+    usuario_id: Optional[int] = None
+    ip_address: Optional[str] = None
+    recurso: Optional[str] = None
+    recurso_id: Optional[str] = None
+    detalle: Optional[str] = None
+    datos_previos: Optional[str] = None
+    datos_nuevos: Optional[str] = None
+    fecha: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class AuditoriaListOut(BaseModel):
+    total: int
+    items: List[AuditoriaOut]
+    acciones_disponibles: List[str] = Field(default_factory=list)
+    recursos_disponibles: List[str] = Field(default_factory=list)
+
+
+# ==================== SCHEMAS: LOGS ====================
+class LogEntryOut(BaseModel):
+    timestamp: Optional[str] = None
+    level: str
+    logger: str
+    message: str
+    raw: str
+
+
+class LogResponseOut(BaseModel):
+    file: str
+    size_kb: float
+    total_returned: int
+    logs: List[LogEntryOut]
+
+
+class LogStatsOut(BaseModel):
+    total_recent_events: int
+    counts_by_level: dict[str, int]
+    error_rate_percentage: float
+    app_log_size_kb: float
+    error_log_size_kb: float
+
+
+# ==================== SCHEMAS: BACKUPS ====================
+class BackupCreateRequest(BaseModel):
+    descripcion: Optional[str] = Field(default=None, max_length=255)
+
+
+class BackupOut(BaseModel):
+    filename: str
+    engine: str
+    created_at: str
+    created_by: str
+    description: Optional[str] = None
+    size_bytes: int
+    size_human: str
+    sha256: str
+    status: str
+
+
+class BackupRestoreResponse(BaseModel):
+    mensaje: str
+    checkpoint_previo: Optional[str] = None
+    tablas_restauradas: Optional[List[str]] = None
+    restaurado_por: str
+    timestamp: str
+
+
+# ==================== SCHEMAS: AUDITORIA ====================
+class AuditoriaOut(BaseModel):
+    id: int
+    accion: str
+    usuario: str
+    usuario_id: Optional[int] = None
+    ip_address: Optional[str] = None
+    recurso: Optional[str] = None
+    recurso_id: Optional[str] = None
+    detalle: Optional[str] = None
+    datos_previos: Optional[str] = None
+    datos_nuevos: Optional[str] = None
+    fecha: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class AuditoriaListOut(BaseModel):
+    total: int
+    items: List[AuditoriaOut]
+    acciones_disponibles: List[str] = Field(default_factory=list)
+    recursos_disponibles: List[str] = Field(default_factory=list)
+
+
+# ==================== SCHEMAS: LOGS ====================
+class LogEntryOut(BaseModel):
+    timestamp: Optional[str] = None
+    level: str
+    logger: str
+    message: str
+    raw: str
+
+
+class LogResponseOut(BaseModel):
+    file: str
+    size_kb: float
+    total_returned: int
+    logs: List[LogEntryOut]
+
+
+class LogStatsOut(BaseModel):
+    total_recent_events: int
+    counts_by_level: dict[str, int]
+    error_rate_percentage: float
+    app_log_size_kb: float
+    error_log_size_kb: float
+
+
+# ==================== SCHEMAS: BACKUPS ====================
+class BackupCreateRequest(BaseModel):
+    descripcion: Optional[str] = Field(default=None, max_length=255)
+
+
+class BackupOut(BaseModel):
+    filename: str
+    engine: str
+    created_at: str
+    created_by: str
+    description: Optional[str] = None
+    size_bytes: int
+    size_human: str
+    sha256: str
+    status: str
+
+
+class BackupRestoreResponse(BaseModel):
+    mensaje: str
+    checkpoint_previo: Optional[str] = None
+    tablas_restauradas: Optional[List[str]] = None
+    restaurado_por: str
+    timestamp: str
+

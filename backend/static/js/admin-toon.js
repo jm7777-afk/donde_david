@@ -161,6 +161,23 @@ function switchTab(tabId) {
   if (content) content.classList.add("active");
 
   closeAdminDrawer();
+
+  // Gestión de ciclos de vida por pestaña
+  if (tabId === "auditoria") {
+    loadAuditoria();
+  } else if (tabId === "logs") {
+    loadLogs();
+  } else if (tabId === "backups") {
+    loadBackups();
+  } else {
+    // Si sale de logs, apagar auto-refresco para ahorrar recursos
+    if (window._logAutoRefreshInterval) {
+      clearInterval(window._logAutoRefreshInterval);
+      window._logAutoRefreshInterval = null;
+      const toggle = document.getElementById("log-autorefresh-toggle");
+      if (toggle) toggle.checked = false;
+    }
+  }
 }
 
 function openModal(id) { document.getElementById(id).classList.add("open"); }
@@ -1516,4 +1533,493 @@ async function openRealtimeOpsModal() {
     console.error("No se pudieron cargar las operaciones actuales:", e);
     container.innerHTML = `<div role="alert" style="text-align: center; color: var(--neon-red); padding: 1rem;">No se pudieron cargar las operaciones. Intenta actualizar el panel.</div>`;
   }
+}
+
+
+/* ==========================================================================
+   MÓDULOS DE PRODUCCIÓN: AUDITORÍA, LOGS Y COPIAS DE SEGURIDAD (BACKUPS)
+   ========================================================================== */
+
+// Cache en memoria para detalles de auditoría
+window._auditRecordsCache = [];
+
+/**
+ * Carga y renderiza los registros de auditoría y trazabilidad con filtros activos.
+ */
+async function loadAuditoria() {
+  const tbody = document.getElementById("auditoria-tbody");
+  const countLabel = document.getElementById("auditoria-count-label");
+  if (!tbody) return;
+
+  tbody.innerHTML = `<tr><td colspan="7" class="u-text-align-center u-padding-2rem u-color-token-text-muted">Cargando eventos de auditoría...</td></tr>`;
+
+  const search = document.getElementById("audit-search-input")?.value?.trim() || "";
+  const accion = document.getElementById("audit-action-filter")?.value?.trim() || "";
+  const recurso = document.getElementById("audit-resource-filter")?.value?.trim() || "";
+
+  const queryParams = new URLSearchParams({ skip: "0", limit: "100" });
+  if (search) queryParams.set("search", search);
+  if (accion) queryParams.set("accion", accion);
+  if (recurso) queryParams.set("recurso", recurso);
+
+  try {
+    const res = await fetch(`/api/v1/admin/auditoria?${queryParams.toString()}`, {
+      headers: Auth.getHeaders()
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+    const data = await res.json();
+    window._auditRecordsCache = data.items || [];
+
+    // Llenar selectores de filtro si están vacíos
+    const actionSelect = document.getElementById("audit-action-filter");
+    if (actionSelect && actionSelect.options.length <= 1 && data.acciones_disponibles) {
+      data.acciones_disponibles.forEach(act => {
+        const opt = document.createElement("option");
+        opt.value = act;
+        opt.textContent = act;
+        actionSelect.appendChild(opt);
+      });
+      if (accion) actionSelect.value = accion;
+    }
+
+    const resSelect = document.getElementById("audit-resource-filter");
+    if (resSelect && resSelect.options.length <= 1 && data.recursos_disponibles) {
+      data.recursos_disponibles.forEach(rc => {
+        const opt = document.createElement("option");
+        opt.value = rc;
+        opt.textContent = rc.toUpperCase();
+        resSelect.appendChild(opt);
+      });
+      if (recurso) resSelect.value = recurso;
+    }
+
+    if (!data.items || data.items.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="7" class="u-text-align-center u-padding-2rem u-color-token-text-muted">No se encontraron eventos de auditoría con los filtros seleccionados.</td></tr>`;
+      if (countLabel) countLabel.textContent = `Total coincidencias: 0`;
+      return;
+    }
+
+    let rowsHtml = "";
+    data.items.forEach(item => {
+      const dateStr = item.fecha ? new Date(item.fecha).toLocaleString() : "N/D";
+      const act = (item.accion || "").toUpperCase();
+      let badgeClass = "audit-badge-info";
+      if (act.includes("CREATE") || act.includes("SUCCESS") || act.includes("REGISTER")) badgeClass = "audit-badge-create";
+      else if (act.includes("UPDATE") || act.includes("EDIT")) badgeClass = "audit-badge-update";
+      else if (act.includes("DELETE") || act.includes("FAIL") || act.includes("CANCEL")) badgeClass = "audit-badge-delete";
+      else if (act.includes("WARN") || act.includes("EXPENSE")) badgeClass = "audit-badge-warning";
+
+      const hasDiff = item.datos_previos || item.datos_nuevos;
+      const safeUser = escapeHtml(item.usuario || "sistema");
+      const safeDetail = escapeHtml(item.detalle || "-");
+      const safeResource = escapeHtml(item.recurso || "-");
+      const safeIp = escapeHtml(item.ip_address || "local");
+
+      rowsHtml += `
+        <tr class="u-border-bottom-1px-solid-token-toon-border">
+          <td class="u-padding-0-75rem u-font-size-0-8rem u-color-token-text-muted">${dateStr}</td>
+          <td class="u-padding-0-75rem"><strong class="u-color-token-gold-accent">${safeUser}</strong></td>
+          <td class="u-padding-0-75rem"><span class="audit-badge ${badgeClass}">${escapeHtml(act)}</span></td>
+          <td class="u-padding-0-75rem u-font-size-0-8rem">${safeResource}</td>
+          <td class="u-padding-0-75rem u-font-size-0-85rem">${safeDetail}</td>
+          <td class="u-padding-0-75rem u-font-size-0-8rem u-color-token-text-dim">${safeIp}</td>
+          <td class="u-padding-0-75rem">
+            ${hasDiff ? `<button class="btn-gold u-font-size-0-75rem" onclick="viewAuditDetail(${item.id})">🔍 Ver JSON</button>` : `<span class="u-color-token-text-dim u-font-size-0-75rem">-</span>`}
+          </td>
+        </tr>
+      `;
+    });
+
+    tbody.innerHTML = rowsHtml;
+    if (countLabel) countLabel.textContent = `Mostrando ${data.items.length} de ${data.total} eventos registrados`;
+  } catch (err) {
+    console.error("Error al cargar auditoría:", err);
+    tbody.innerHTML = `<tr><td colspan="7" class="u-text-align-center u-padding-2rem u-color-token-neon-red">Error al cargar la auditoría del sistema.</td></tr>`;
+  }
+}
+
+/**
+ * Abre el modal con la inspección profunda de datos JSON previos y nuevos de un evento.
+ */
+function viewAuditDetail(auditId) {
+  const item = (window._auditRecordsCache || []).find(r => r.id === auditId);
+  if (!item) {
+    showToast("No se encontraron los datos del evento", "error");
+    return;
+  }
+
+  const titleElem = document.getElementById("audit-modal-title");
+  const metaElem = document.getElementById("audit-modal-meta");
+  const prevElem = document.getElementById("audit-modal-prev");
+  const newElem = document.getElementById("audit-modal-new");
+
+  if (titleElem) titleElem.textContent = `Evento de Auditoría #${item.id} — ${item.accion}`;
+  if (metaElem) {
+    const d = item.fecha ? new Date(item.fecha).toLocaleString() : "";
+    metaElem.textContent = `Usuario: ${item.usuario} | Recurso: ${item.recurso || '-'} #${item.recurso_id || '-'} | IP: ${item.ip_address || '-'} | Fecha: ${d}`;
+  }
+
+  function formatJsonPayload(str) {
+    if (!str) return "Sin datos registrados.";
+    try {
+      const parsed = JSON.parse(str);
+      return JSON.stringify(parsed, null, 2);
+    } catch (e) {
+      return str;
+    }
+  }
+
+  if (prevElem) prevElem.textContent = formatJsonPayload(item.datos_previos);
+  if (newElem) newElem.textContent = formatJsonPayload(item.datos_nuevos);
+
+  openModal("audit-detail-modal");
+}
+
+/**
+ * Descarga los registros de auditoría en formato CSV para cumplimiento o respaldo legal.
+ */
+async function exportAuditoriaCSV() {
+  try {
+    showToast("Preparando exportación CSV...", "info");
+    const res = await fetch("/api/v1/admin/auditoria/export?limit=2000", {
+      headers: Auth.getHeaders()
+    });
+    if (!res.ok) throw new Error("No se pudo generar el archivo CSV.");
+
+    const blob = await res.blob();
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `auditoria_donde_david_${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    window.URL.revokeObjectURL(url);
+    showToast("Exportación CSV completada con éxito", "success");
+  } catch (e) {
+    console.error("Error al exportar CSV:", e);
+    showToast("Error al exportar registros de auditoría", "error");
+  }
+}
+
+/**
+ * Carga y renderiza el visor de logs del servidor y las métricas KPI.
+ */
+async function loadLogs() {
+  const terminal = document.getElementById("log-terminal-container");
+  if (!terminal) return;
+
+  const level = document.getElementById("log-level-filter")?.value || "ALL";
+  const search = document.getElementById("log-search-input")?.value?.trim() || "";
+  const limit = document.getElementById("log-limit-filter")?.value || "250";
+
+  const queryParams = new URLSearchParams({
+    level: level,
+    limit: limit
+  });
+  if (search) queryParams.set("search", search);
+
+  try {
+    // 1. Obtener logs
+    const resLogs = await fetch(`/api/v1/admin/logs?${queryParams.toString()}`, {
+      headers: Auth.getHeaders()
+    });
+    if (!resLogs.ok) throw new Error(`HTTP ${resLogs.status}`);
+    const logData = await resLogs.json();
+
+    // 2. Obtener estadísticas de observabilidad
+    const resStats = await fetch("/api/v1/admin/logs/stats", {
+      headers: Auth.getHeaders()
+    });
+    if (resStats.ok) {
+      const stats = await resStats.json();
+      const elTotal = document.getElementById("log-stat-total");
+      const elErrors = document.getElementById("log-stat-errors");
+      const elWarns = document.getElementById("log-stat-warnings");
+      const elRate = document.getElementById("log-stat-rate");
+
+      if (elTotal) elTotal.textContent = stats.total_recent_events || 0;
+      if (elErrors) elErrors.textContent = (stats.counts_by_level?.ERROR || 0) + (stats.counts_by_level?.CRITICAL || 0);
+      if (elWarns) elWarns.textContent = stats.counts_by_level?.WARNING || 0;
+      if (elRate) elRate.textContent = `${stats.error_rate_percentage || 0}%`;
+    }
+
+    // 3. Renderizar líneas terminal
+    if (!logData.logs || logData.logs.length === 0) {
+      terminal.innerHTML = `<div class="u-color-token-text-muted u-text-align-center u-padding-1rem">No hay registros que coincidan con los filtros seleccionados.</div>`;
+      return;
+    }
+
+    let terminalHtml = "";
+    logData.logs.forEach(entry => {
+      let lvlClass = "log-lvl-info";
+      if (entry.level === "WARNING") lvlClass = "log-lvl-warning";
+      else if (entry.level === "ERROR") lvlClass = "log-lvl-error";
+      else if (entry.level === "CRITICAL") lvlClass = "log-lvl-critical";
+
+      const timeStr = entry.timestamp ? `<span class="log-timestamp">[${escapeHtml(entry.timestamp)}]</span> ` : "";
+      const loggerStr = entry.logger ? `<span class="u-color-token-text-dim">(${escapeHtml(entry.logger)})</span> ` : "";
+
+      terminalHtml += `
+        <div class="log-line">
+          ${timeStr}<span class="${lvlClass}">[${escapeHtml(entry.level)}]</span> ${loggerStr}${escapeHtml(entry.message || entry.raw)}
+        </div>
+      `;
+    });
+
+    terminal.innerHTML = terminalHtml;
+  } catch (err) {
+    console.error("Error al cargar logs del servidor:", err);
+    terminal.innerHTML = `<div class="u-color-token-neon-red u-padding-1rem">Error al conectar con el servicio de observabilidad y logs.</div>`;
+  }
+}
+
+/**
+ * Controla el ciclo de refresco automático del visor de logs en vivo.
+ */
+function toggleLogAutoRefresh(enabled) {
+  if (window._logAutoRefreshInterval) {
+    clearInterval(window._logAutoRefreshInterval);
+    window._logAutoRefreshInterval = null;
+  }
+  if (enabled) {
+    window._logAutoRefreshInterval = setInterval(() => {
+      loadLogs();
+    }, 5000);
+    showToast("Auto-refresco de logs activado (5s)", "info");
+  } else {
+    showToast("Auto-refresco pausado", "info");
+  }
+}
+
+/**
+ * Descarga el archivo de registro en bruto ('app' o 'error').
+ */
+async function downloadLogs(tipo) {
+  try {
+    showToast(`Descargando archivo de logs (${tipo})...`, "info");
+    const res = await fetch(`/api/v1/admin/logs/download?tipo=${tipo}`, {
+      headers: Auth.getHeaders()
+    });
+    if (!res.ok) throw new Error("No se pudo descargar el archivo de registro.");
+
+    const blob = await res.blob();
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `donde_david_${tipo}_log_${new Date().toISOString().slice(0, 10)}.log`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    window.URL.revokeObjectURL(url);
+    showToast("Descarga de log completada", "success");
+  } catch (e) {
+    console.error("Error al descargar log:", e);
+    showToast("El archivo de log aún no contiene datos para descargar", "warning");
+  }
+}
+
+/**
+ * Solicita confirmación y limpia los archivos de registro activos.
+ */
+async function clearLogsPrompt() {
+  if (!confirm("⚠️ ¿Estás seguro de que deseas limpiar y reiniciar los archivos de log del servidor? Esta acción no se puede deshacer.")) {
+    return;
+  }
+  try {
+    const res = await fetch("/api/v1/admin/logs/clear", {
+      method: "DELETE",
+      headers: Auth.getHeaders()
+    });
+    if (!res.ok) throw new Error("No se pudieron reiniciar los logs.");
+    showToast("Logs del servidor reiniciados correctamente", "success");
+    loadLogs();
+  } catch (e) {
+    showToast("Error al reiniciar los logs del servidor", "error");
+  }
+}
+
+/**
+ * Carga y renderiza el listado de copias de seguridad de la base de datos.
+ */
+async function loadBackups() {
+  const tbody = document.getElementById("backups-tbody");
+  const countLabel = document.getElementById("backup-total-count");
+  const engineLabel = document.getElementById("backup-engine-label");
+  if (!tbody) return;
+
+  tbody.innerHTML = `<tr><td colspan="6" class="u-text-align-center u-padding-2rem u-color-token-text-muted">Cargando copias de seguridad...</td></tr>`;
+
+  try {
+    const res = await fetch("/api/v1/admin/backups", {
+      headers: Auth.getHeaders()
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+    const backups = await res.json();
+    if (countLabel) countLabel.textContent = backups.length;
+
+    if (backups.length > 0 && engineLabel && backups[0].engine) {
+      engineLabel.textContent = backups[0].engine;
+    }
+
+    if (!backups || backups.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="6" class="u-text-align-center u-padding-2rem u-color-token-text-muted">No hay copias de seguridad almacenadas todavía. Haz clic en 'Generar Respaldo Ahora'.</td></tr>`;
+      return;
+    }
+
+    let rowsHtml = "";
+    backups.forEach(b => {
+      const dateStr = b.created_at ? new Date(b.created_at).toLocaleString() : "N/D";
+      const shaShort = b.sha256 ? `${b.sha256.substring(0, 12)}...` : "N/D";
+      const safeDesc = escapeHtml(b.description || "Respaldo del sistema");
+
+      rowsHtml += `
+        <tr class="u-border-bottom-1px-solid-token-toon-border">
+          <td class="u-padding-0-75rem">
+            <strong class="u-color-token-gold-accent u-display-block">${escapeHtml(b.filename)}</strong>
+            <small class="u-color-token-text-muted">${safeDesc}</small>
+          </td>
+          <td class="u-padding-0-75rem"><span class="audit-badge audit-badge-info">${escapeHtml(b.engine || 'DB')}</span></td>
+          <td class="u-padding-0-75rem u-font-size-0-85rem u-color-token-text-muted">${dateStr}</td>
+          <td class="u-padding-0-75rem"><strong class="u-color-token-cyan-accent">${escapeHtml(b.size_human || '')}</strong></td>
+          <td class="u-padding-0-75rem u-font-size-0-8rem u-color-token-text-dim" title="${escapeHtml(b.sha256 || '')}">${shaShort}</td>
+          <td class="u-padding-0-75rem">
+            <div class="u-display-flex u-gap-0-5rem">
+              <button class="btn-gold u-font-size-0-75rem" onclick="downloadBackup('${escapeHtml(b.filename)}')">⬇️ Descargar</button>
+              <button class="btn-gold u-font-size-0-75rem u-background-rgba-255-188-13-0-1 u-color-token-color-yellow" onclick="promptRestoreBackup('${escapeHtml(b.filename)}')">🔄 Restaurar</button>
+              <button class="btn-gold u-font-size-0-75rem u-background-rgba-239-68-68-0-2 u-color-token-neon-red u-border-1px-solid-token-neon-red" onclick="deleteBackup('${escapeHtml(b.filename)}')">🗑️</button>
+            </div>
+          </td>
+        </tr>
+      `;
+    });
+
+    tbody.innerHTML = rowsHtml;
+  } catch (err) {
+    console.error("Error al cargar copias de seguridad:", err);
+    tbody.innerHTML = `<tr><td colspan="6" class="u-text-align-center u-padding-2rem u-color-token-neon-red">Error al cargar las copias de seguridad.</td></tr>`;
+  }
+}
+
+/**
+ * Solicita una descripción opcional y genera un nuevo respaldo consistente en caliente.
+ */
+async function promptCreateBackup() {
+  const desc = prompt("Ingresa un motivo o descripción para la copia de seguridad:", "Respaldo manual administrativo");
+  if (desc === null) return;
+
+  try {
+    showToast("Generando copia de seguridad consistente...", "info");
+    const res = await fetch("/api/v1/admin/backups/crear", {
+      method: "POST",
+      headers: { ...Auth.getHeaders(), "Content-Type": "application/json" },
+      body: JSON.stringify({ descripcion: desc || "Respaldo manual" })
+    });
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || "Error al crear el respaldo.");
+    }
+
+    const created = await res.json();
+    showToast(`Respaldo creado con éxito: ${created.size_human}`, "success");
+    loadBackups();
+  } catch (e) {
+    console.error("Error al generar copia de seguridad:", e);
+    showToast(e.message || "Error al generar la copia de seguridad", "error");
+  }
+}
+
+/**
+ * Descarga de manera autenticada el archivo de respaldo seleccionado.
+ */
+async function downloadBackup(filename) {
+  try {
+    showToast(`Descargando copia de seguridad '${filename}'...`, "info");
+    const res = await fetch(`/api/v1/admin/backups/${encodeURIComponent(filename)}/descargar`, {
+      headers: Auth.getHeaders()
+    });
+    if (!res.ok) throw new Error("No se pudo descargar el archivo de respaldo.");
+
+    const blob = await res.blob();
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    window.URL.revokeObjectURL(url);
+    showToast("Descarga de copia de seguridad completada", "success");
+  } catch (e) {
+    console.error("Error al descargar respaldo:", e);
+    showToast("Error al descargar la copia de seguridad", "error");
+  }
+}
+
+/**
+ * Confirma y ejecuta la restauración segura de la base de datos desde un archivo.
+ */
+async function promptRestoreBackup(filename) {
+  const confirmed = confirm(
+    `🚨 ATENCIÓN - ACCIÓN CRÍTICA:\n\n¿Estás completamente seguro de restaurar la base de datos desde '${filename}'?\n\nEl sistema creará un punto de control de seguridad automático antes de aplicar la restauración.\n\n¿Deseas continuar?`
+  );
+  if (!confirmed) return;
+
+  try {
+    showToast("Restaurando base de datos...", "warning");
+    const res = await fetch(`/api/v1/admin/backups/${encodeURIComponent(filename)}/restaurar`, {
+      method: "POST",
+      headers: Auth.getHeaders()
+    });
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || "Error durante la restauración.");
+    }
+
+    const result = await res.json();
+    alert(`✅ RESTAURACIÓN EXITOSA:\n\n${result.mensaje}\n\nPunto de seguridad previo guardado en: ${result.checkpoint_previo || 'Automático'}`);
+    loadBackups();
+  } catch (e) {
+    console.error("Error al restaurar respaldo:", e);
+    alert(`❌ ERROR DE RESTAURACIÓN:\n\n${e.message || 'No se pudo completar la restauración de la base de datos.'}`);
+  }
+}
+
+/**
+ * Confirma y elimina una copia de seguridad específica.
+ */
+async function deleteBackup(filename) {
+  if (!confirm(`¿Eliminar permanentemente la copia de seguridad '${filename}'?`)) {
+    return;
+  }
+  try {
+    const res = await fetch(`/api/v1/admin/backups/${encodeURIComponent(filename)}`, {
+      method: "DELETE",
+      headers: Auth.getHeaders()
+    });
+    if (!res.ok) throw new Error("No se pudo eliminar el archivo.");
+
+    showToast("Copia de seguridad eliminada", "success");
+    loadBackups();
+  } catch (e) {
+    console.error("Error al eliminar respaldo:", e);
+    showToast("Error al eliminar la copia de seguridad", "error");
+  }
+}
+
+/**
+ * Utilidad segura para escapar texto HTML y evitar inyecciones XSS en el DOM.
+ */
+function escapeHtml(str) {
+  if (str === null || str === undefined) return "";
+  return String(str)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
 }

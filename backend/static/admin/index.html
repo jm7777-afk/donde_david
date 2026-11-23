@@ -11,258 +11,8 @@
   <!-- Driver.js CSS para Onboarding Tour Interactivo -->
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/driver.js@1.3.1/dist/driver.css">
 
-  <style>
-    .tab-nav {
-      display: flex;
-      gap: 0.5rem;
-      border-bottom: 1px solid var(--toon-border);
-      margin-bottom: 1.5rem;
-      overflow-x: auto;
-    }
-    .tab-btn {
-      padding: 0.8rem 1.25rem;
-      background: transparent;
-      border: none;
-      border-bottom: 3px solid transparent;
-      color: var(--text-muted);
-      font-weight: 700;
-      font-size: 0.9rem;
-      cursor: pointer;
-      white-space: nowrap;
-      transition: all 0.2s;
-    }
-    .tab-btn.active {
-      color: var(--gold-accent);
-      border-bottom-color: var(--gold-accent);
-    }
-    .tab-content {
-      display: none;
-    }
-    .tab-content.active {
-      display: block;
-    }
-    .kpi-grid {
-      display: grid;
-      grid-template-columns: repeat(4, 1fr);
-      gap: 1.25rem;
-    }
-    @media (max-width: 900px) {
-      .kpi-grid { grid-template-columns: repeat(2, 1fr); }
-    }
-    @media (max-width: 600px) {
-      .kpi-grid { grid-template-columns: 1fr; }
-    }
-    .kpi-card {
-      background: var(--toon-card);
-      border: 1px solid var(--toon-border);
-      padding: 1.25rem;
-      border-radius: var(--radius-md);
-    }
-    .wizard-step {
-      display: none;
-    }
-    .wizard-step.active {
-      display: block;
-    }
-    .admin-drawer-overlay {
-      position: fixed;
-      inset: 0;
-      z-index: 1050;
-      display: none;
-      background: rgba(0, 0, 0, 0.6);
-      backdrop-filter: blur(4px);
-    }
-    .admin-drawer-overlay.open {
-      display: block;
-    }
-    .admin-menu-toggle {
-      display: flex;
-    }
-    .admin-sidebar-layout {
-      display: flex !important;
-      width: 100%;
-      max-width: none;
-      min-height: 0 !important;
-      margin: 0;
-      padding: 0;
-      flex-direction: column !important;
-      align-items: stretch !important;
-    }
-    .admin-sidebar {
-      position: fixed !important;
-      inset: 0 auto 0 0 !important;
-      width: min(340px, 88vw) !important;
-      max-width: 88vw !important;
-      height: 100vh !important;
-      height: 100dvh !important;
-      max-height: 100vh;
-      box-sizing: border-box;
-      overflow-y: auto;
-      overscroll-behavior: contain;
-      z-index: 1060 !important;
-      border-radius: 0 var(--radius-md) var(--radius-md) 0;
-      transform: translateX(-105%) !important;
-      visibility: hidden;
-      pointer-events: none;
-      transition: transform 0.28s ease, visibility 0.28s ease;
-    }
-    .admin-sidebar-group {
-      margin: 0.8rem 0 0.2rem;
-      padding: 0.3rem 0.75rem;
-      color: var(--text-muted);
-      font-size: 0.68rem;
-      font-weight: 900;
-      letter-spacing: 0.1em;
-      text-transform: uppercase;
-    }
-    .admin-sidebar-btn {
-      min-height: 44px;
-      box-sizing: border-box;
-    }
-    .admin-sidebar.open {
-      transform: translateX(0) !important;
-      visibility: visible;
-      pointer-events: auto;
-    }
-    .admin-sidebar-title {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 1rem;
-      padding-bottom: 0.85rem;
-      border-bottom: 1px solid var(--toon-border);
-    }
-    .admin-sidebar-close {
-      flex: 0 0 auto;
-      min-width: 42px;
-      min-height: 42px;
-      border: 1px solid var(--toon-border);
-      border-radius: 10px;
-      background: rgba(255, 255, 255, 0.06);
-      color: var(--text-primary);
-      font-size: 1.35rem;
-      cursor: pointer;
-    }
-    .admin-main-content {
-      width: 100% !important;
-      max-width: 1920px;
-      min-width: 0 !important;
-      margin: 0 auto;
-      padding: clamp(1rem, 2.5vw, 2.25rem) !important;
-      box-sizing: border-box;
-      overflow-x: clip;
-    }
-    .admin-main-content > .tab-content.active {
-      width: 100%;
-      min-width: 0;
-    }
-    #tab-dashboard > div[style*="grid-template-columns: 1fr 1fr"] {
-      grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr)) !important;
-    }
-    .admin-main-content .table-responsive {
-      width: 100%;
-      max-width: 100%;
-      overflow-x: auto;
-      overscroll-behavior-x: contain;
-      -webkit-overflow-scrolling: touch;
-    }
-    .product-editor-list {
-      display: grid;
-      gap: .45rem;
-      max-height: 180px;
-      overflow-y: auto;
-      margin: .5rem 0 1rem;
-    }
-    .product-editor-row {
-      display: grid;
-      grid-template-columns: minmax(0, 1fr) 100px auto;
-      gap: .45rem;
-      align-items: center;
-    }
-    .product-editor-row.media-row {
-      grid-template-columns: 90px minmax(0, 1fr) auto;
-    }
-    .product-editor-row input,
-    .product-editor-row select {
-      min-width: 0;
-    }
-    @media (max-width: 520px) {
-      .product-editor-row { grid-template-columns: minmax(0, 1fr) 82px auto; }
-      .product-editor-row.media-row { grid-template-columns: 85px minmax(0, 1fr) auto; }
-    }
-    @media (max-width: 760px) {
-      .admin-main-content {
-        padding: 1rem !important;
-      }
-      .kpi-grid {
-        grid-template-columns: repeat(auto-fit, minmax(min(100%, 210px), 1fr));
-      }
-      button {
-        min-height: 42px;
-      }
-      .tab-nav {
-        padding-bottom: .35rem;
-        -webkit-overflow-scrolling: touch;
-      }
-    }
-    .admin-sidebar-layout {
-      display: flex !important;
-      align-items: flex-start !important;
-      justify-content: flex-start !important;
-      min-height: 0 !important;
-      height: auto !important;
-      margin-top: 0 !important;
-      padding-top: 0 !important;
-    }
-    .admin-main-content {
-      align-self: flex-start !important;
-      margin-top: 0 !important;
-    }
-    #tab-mesas > div:first-child {
-      display: flex;
-      flex-wrap: wrap;
-      align-items: flex-start;
-      justify-content: space-between;
-      gap: 0.75rem;
-      margin-bottom: 1.25rem;
-    }
-    #tab-mesas > div:first-child h2 {
-      min-width: 0;
-      margin: 0;
-    }
-    #tab-mesas .mesas-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(min(100%, 190px), 1fr)) !important;
-      align-items: start;
-      gap: 1rem;
-    }
-    @media (max-width: 992px) {
-      .admin-sidebar-layout {
-        flex-direction: column !important;
-        align-items: stretch !important;
-        min-height: 0 !important;
-      }
-      .admin-main-content {
-        align-self: stretch !important;
-        margin: 0 !important;
-        padding-top: 1rem !important;
-      }
-      #tab-mesas > div:first-child {
-        flex-direction: column;
-        align-items: stretch;
-      }
-      #tab-mesas > div:first-child h2 {
-        font-size: clamp(1.15rem, 4vw, 1.5rem);
-      }
-      #tab-mesas > div:first-child .btn-gold {
-        width: 100%;
-        justify-content: center;
-      }
-      #tab-mesas .mesas-grid {
-        grid-template-columns: repeat(auto-fit, minmax(min(100%, 150px), 1fr)) !important;
-      }
-    }
-  </style>
+  <link rel="stylesheet" href="/static/css/pages/admin-index.css?v=1.0">
+  <link rel="stylesheet" href="/static/css/utilities.css?v=1.0">
 </head>
 <body class="toon-theme"><nav id="app-sidebar"></nav>
 
@@ -293,6 +43,10 @@
       <p class="admin-sidebar-group">Administración</p>
       <button class="admin-sidebar-btn" onclick="switchTab('portal')">🌐 Portal, Tasa & Historia</button>
       <button class="admin-sidebar-btn" onclick="switchTab('usuarios')">👥 Usuarios del Sistema</button>
+      <p class="admin-sidebar-group">Seguridad y Operaciones</p>
+      <button class="admin-sidebar-btn" onclick="switchTab('auditoria')">📜 Auditoría del Sistema</button>
+      <button class="admin-sidebar-btn" onclick="switchTab('logs')">📋 Logs del Servidor</button>
+      <button class="admin-sidebar-btn" onclick="switchTab('backups')">💾 Copias de Seguridad</button>
     </aside>
 
     <!-- Contenido Principal Administrador con Soporte Touch Swipe -->
@@ -302,20 +56,20 @@
     <div id="tab-dashboard" class="tab-content active">
       
       <!-- Barra de Filtros de Ventas por Categoría y Método de Pago (Estilo Cashea) -->
-      <div style="background: var(--toon-card); border: 1px solid var(--gold-accent); border-radius: var(--radius-md); padding: 1rem; margin-bottom: 1.25rem; display: flex; flex-wrap: wrap; gap: 1rem; align-items: center; justify-content: space-between;">
-        <div style="display: flex; align-items: center; gap: 0.5rem;">
-          <span style="font-size: 1.2rem;">🔍</span>
-          <strong style="color: var(--gold-accent); font-size: 0.95rem;">FILTROS DE RECAUDACIÓN Y VENTAS:</strong>
+      <div class="u-background-token-toon-card u-border-1px-solid-token-gold-accent u-border-radius-token-radius-md u-padding-1rem u-margin-bottom-1-25rem u-display-flex u-flex-wrap-wrap u-gap-1rem u-align-items-center u-justify-content-space-between">
+        <div class="u-display-flex u-align-items-center u-gap-0-5rem">
+          <span class="u-font-size-1-2rem">🔍</span>
+          <strong class="u-color-token-gold-accent u-font-size-0-95rem">FILTROS DE RECAUDACIÓN Y VENTAS:</strong>
         </div>
-        <div style="display: flex; gap: 0.75rem; flex-wrap: wrap;">
-          <select id="filter-metrics-category" class="form-control" style="width: auto; min-width: 180px; font-weight: 700;" onchange="applyAdminMetricFilters()">
+        <div class="u-display-flex u-gap-0-75rem u-flex-wrap-wrap">
+          <select id="filter-metrics-category" class="form-control u-width-auto u-min-width-180px u-font-weight-700" onchange="applyAdminMetricFilters()">
             <option value="todas">🍔 Categoría: Todas (Comida, Postres, Bebidas)</option>
             <option value="comidas">🍔 Solo Comidas Principal</option>
             <option value="postres">🍰 Solo Postres & Dulces</option>
             <option value="bebidas">🥤 Solo Bebidas & Refrescos</option>
           </select>
 
-          <select id="filter-metrics-payment" class="form-control" style="width: auto; min-width: 180px; font-weight: 700;" onchange="applyAdminMetricFilters()">
+          <select id="filter-metrics-payment" class="form-control u-width-auto u-min-width-180px u-font-weight-700" onchange="applyAdminMetricFilters()">
             <option value="todos">💵 Pago: Todos los Métodos</option>
             <option value="Efectivo">💵 Efectivo ($ USD / Bs.)</option>
             <option value="Pago Móvil">📱 Pago Móvil / Transferencia</option>
@@ -326,82 +80,82 @@
       </div>
 
       <!-- KPI Grid: Ventas de Hoy, Semanales, Mensuales y Recaudación Total -->
-      <div class="kpi-grid" style="margin-bottom: 1.5rem;">
+      <div class="kpi-grid u-margin-bottom-1-5rem">
         <div class="kpi-card">
-          <div style="font-size: 0.8rem; color: var(--text-muted); font-weight: 700;">☀️ VENTAS DE HOY</div>
-          <div style="font-size: 1.6rem; font-weight: 900; color: var(--gold-accent);" id="stat-sales-today">$0.00</div>
-          <small style="color: var(--neon-green); font-weight: 800;">⚡ Operaciones del día</small>
+          <div class="u-font-size-0-8rem u-color-token-text-muted u-font-weight-700">☀️ VENTAS DE HOY</div>
+          <div id="stat-sales-today" class="u-font-size-1-6rem u-font-weight-900 u-color-token-gold-accent">$0.00</div>
+          <small class="u-color-token-neon-green u-font-weight-800">⚡ Operaciones del día</small>
         </div>
 
         <div class="kpi-card">
-          <div style="font-size: 0.8rem; color: var(--text-muted); font-weight: 700;">📅 VENTAS DE LA SEMANA</div>
-          <div style="font-size: 1.6rem; font-weight: 900; color: #38bdf8;" id="stat-sales-week">$0.00</div>
-          <small style="color: var(--text-muted); font-weight: 800;" id="stat-pct-week">Sin datos comparables</small>
+          <div class="u-font-size-0-8rem u-color-token-text-muted u-font-weight-700">📅 VENTAS DE LA SEMANA</div>
+          <div id="stat-sales-week" class="u-font-size-1-6rem u-font-weight-900 u-color-hex-38bdf8">$0.00</div>
+          <small id="stat-pct-week" class="u-color-token-text-muted u-font-weight-800">Sin datos comparables</small>
         </div>
 
         <div class="kpi-card">
-          <div style="font-size: 0.8rem; color: var(--text-muted); font-weight: 700;">📊 VENTAS MENSUALES</div>
-          <div style="font-size: 1.6rem; font-weight: 900; color: #a855f7;" id="stat-sales-month">$0.00</div>
-          <small style="color: var(--text-muted); font-weight: 800;" id="stat-pct-month">Sin datos comparables</small>
+          <div class="u-font-size-0-8rem u-color-token-text-muted u-font-weight-700">📊 VENTAS MENSUALES</div>
+          <div id="stat-sales-month" class="u-font-size-1-6rem u-font-weight-900 u-color-hex-a855f7">$0.00</div>
+          <small id="stat-pct-month" class="u-color-token-text-muted u-font-weight-800">Sin datos comparables</small>
         </div>
 
         <div class="kpi-card">
-          <div style="font-size: 0.8rem; color: var(--text-muted); font-weight: 700;">💰 RECAUDACIÓN TOTAL</div>
-          <div style="font-size: 1.6rem; font-weight: 900; color: var(--neon-green);" id="stat-sales-total">$0.00</div>
-          <small style="color: var(--text-muted);">Acumulado histórico</small>
+          <div class="u-font-size-0-8rem u-color-token-text-muted u-font-weight-700">💰 RECAUDACIÓN TOTAL</div>
+          <div id="stat-sales-total" class="u-font-size-1-6rem u-font-weight-900 u-color-token-neon-green">$0.00</div>
+          <small class="u-color-token-text-muted">Acumulado histórico</small>
         </div>
       </div>
 
       <!-- Métricas Operativas & Resumen de Canales de Venta -->
-      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-bottom: 1.5rem;">
+      <div class="u-display-grid u-grid-template-columns-1fr-1fr u-gap-1-5rem u-margin-bottom-1-5rem">
         
-        <div style="background: var(--toon-card); border: 1px solid var(--toon-border); border-radius: var(--radius-md); padding: 1.25rem;">
-          <h3 style="font-size: 1.1rem; font-weight: 900; color: var(--gold-accent); margin-top: 0;">🛵 RESUMEN DE VENTAS POR CANAL Y PORCENTAJES</h3>
-          <div style="margin-top: 1rem;">
-            <div style="display: flex; justify-content: space-between; font-size: 0.88rem; margin-bottom: 0.3rem;">
+        <div class="u-background-token-toon-card u-border-1px-solid-token-toon-border u-border-radius-token-radius-md u-padding-1-25rem">
+          <h3 class="u-font-size-1-1rem u-font-weight-900 u-color-token-gold-accent u-margin-top-0">🛵 RESUMEN DE VENTAS POR CANAL Y PORCENTAJES</h3>
+          <div class="u-margin-top-1rem">
+            <div class="u-display-flex u-justify-content-space-between u-font-size-0-88rem u-margin-bottom-0-3rem">
               <span>🍽️ Ventas en Mesa (Vía QR)</span>
-              <strong style="color: var(--cyan-accent);" id="pct-canal-mesa">0%</strong>
+              <strong id="pct-canal-mesa" class="u-color-token-cyan-accent">0%</strong>
             </div>
-            <div style="background: rgba(255,255,255,0.08); height: 10px; border-radius: 5px; overflow: hidden; margin-bottom: 1rem;">
-              <div id="bar-canal-mesa" style="background: var(--cyan-accent); width: 0%; height: 100%;"></div>
+            <div class="u-background-rgba-255-255-255-0-08 u-height-10px u-border-radius-5px u-overflow-hidden u-margin-bottom-1rem">
+              <div id="bar-canal-mesa" class="u-background-token-cyan-accent u-width-0 u-height-100"></div>
             </div>
 
-            <div style="display: flex; justify-content: space-between; font-size: 0.88rem; margin-bottom: 0.3rem;">
+            <div class="u-display-flex u-justify-content-space-between u-font-size-0-88rem u-margin-bottom-0-3rem">
               <span>🛵 Pedidos por Delivery</span>
-              <strong style="color: var(--neon-red);" id="pct-canal-delivery">0%</strong>
+              <strong id="pct-canal-delivery" class="u-color-token-neon-red">0%</strong>
             </div>
-            <div style="background: rgba(255,255,255,0.08); height: 10px; border-radius: 5px; overflow: hidden; margin-bottom: 1rem;">
-              <div id="bar-canal-delivery" style="background: var(--neon-red); width: 0%; height: 100%;"></div>
+            <div class="u-background-rgba-255-255-255-0-08 u-height-10px u-border-radius-5px u-overflow-hidden u-margin-bottom-1rem">
+              <div id="bar-canal-delivery" class="u-background-token-neon-red u-width-0 u-height-100"></div>
             </div>
 
-            <div style="display: flex; justify-content: space-between; font-size: 0.88rem; margin-bottom: 0.3rem;">
+            <div class="u-display-flex u-justify-content-space-between u-font-size-0-88rem u-margin-bottom-0-3rem">
               <span>🛍️ Para Llevar / Mostrador</span>
-              <strong style="color: var(--gold-accent);" id="pct-canal-llevar">0%</strong>
+              <strong id="pct-canal-llevar" class="u-color-token-gold-accent">0%</strong>
             </div>
-            <div style="background: rgba(255,255,255,0.08); height: 10px; border-radius: 5px; overflow: hidden;">
-              <div id="bar-canal-llevar" style="background: var(--gold-accent); width: 0%; height: 100%;"></div>
+            <div class="u-background-rgba-255-255-255-0-08 u-height-10px u-border-radius-5px u-overflow-hidden">
+              <div id="bar-canal-llevar" class="u-background-token-gold-accent u-width-0 u-height-100"></div>
             </div>
           </div>
         </div>
 
-        <div style="background: var(--toon-card); border: 1px solid var(--toon-border); border-radius: var(--radius-md); padding: 1.25rem;">
-          <h3 style="font-size: 1.1rem; font-weight: 900; color: var(--gold-accent); margin-top: 0;">⚡ OPERACIONES EN TIEMPO REAL</h3>
-          <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.75rem; margin-top: 1rem;">
-            <div style="background: rgba(255,255,255,0.03); padding: 0.85rem; border-radius: 8px; border: 1px solid var(--toon-border);">
-              <small style="color: var(--text-muted);">Ingredientes en Stock Crítico</small>
-              <div style="font-size: 1.4rem; font-weight: 900; color: var(--neon-red);" id="stat-critical">3 insumos</div>
+        <div class="u-background-token-toon-card u-border-1px-solid-token-toon-border u-border-radius-token-radius-md u-padding-1-25rem">
+          <h3 class="u-font-size-1-1rem u-font-weight-900 u-color-token-gold-accent u-margin-top-0">⚡ OPERACIONES EN TIEMPO REAL</h3>
+          <div class="u-display-grid u-grid-template-columns-repeat-2-1fr u-gap-0-75rem u-margin-top-1rem">
+            <div class="u-background-rgba-255-255-255-0-03 u-padding-0-85rem u-border-radius-8px u-border-1px-solid-token-toon-border">
+              <small class="u-color-token-text-muted">Ingredientes en Stock Crítico</small>
+              <div id="stat-critical" class="u-font-size-1-4rem u-font-weight-900 u-color-token-neon-red">3 insumos</div>
             </div>
-            <div style="background: rgba(0, 245, 212, 0.08); padding: 0.85rem; border-radius: 8px; border: 1px solid var(--cyan-accent); cursor: pointer;" onclick="openRealtimeOpsModal()">
-              <small style="color: var(--cyan-accent); font-weight: 800;">⚡ Pedidos Activos (Toca para ver)</small>
-              <div style="font-size: 1.4rem; font-weight: 900; color: var(--cyan-accent);" id="stat-cocina">12 pedidos</div>
+            <div onclick="openRealtimeOpsModal()" class="u-background-rgba-0-245-212-0-08 u-padding-0-85rem u-border-radius-8px u-border-1px-solid-token-cyan-accent u-cursor-pointer">
+              <small class="u-color-token-cyan-accent u-font-weight-800">⚡ Pedidos Activos (Toca para ver)</small>
+              <div id="stat-cocina" class="u-font-size-1-4rem u-font-weight-900 u-color-token-cyan-accent">12 pedidos</div>
             </div>
-            <div style="background: rgba(255,255,255,0.03); padding: 0.85rem; border-radius: 8px; border: 1px solid var(--toon-border);">
-              <small style="color: var(--text-muted);">Mesas Ocupadas</small>
-              <div style="font-size: 1.4rem; font-weight: 900; color: var(--neon-green);" id="stat-mesas">0 / 0</div>
+            <div class="u-background-rgba-255-255-255-0-03 u-padding-0-85rem u-border-radius-8px u-border-1px-solid-token-toon-border">
+              <small class="u-color-token-text-muted">Mesas Ocupadas</small>
+              <div id="stat-mesas" class="u-font-size-1-4rem u-font-weight-900 u-color-token-neon-green">0 / 0</div>
             </div>
-            <div style="background: rgba(255,255,255,0.03); padding: 0.85rem; border-radius: 8px; border: 1px solid var(--toon-border);">
-              <small style="color: var(--text-muted);">Efectivo esperado en caja</small>
-              <div style="font-size: 1.4rem; font-weight: 900; color: var(--gold-accent);" id="stat-caja">$0.00</div>
+            <div class="u-background-rgba-255-255-255-0-03 u-padding-0-85rem u-border-radius-8px u-border-1px-solid-token-toon-border">
+              <small class="u-color-token-text-muted">Efectivo esperado en caja</small>
+              <div id="stat-caja" class="u-font-size-1-4rem u-font-weight-900 u-color-token-gold-accent">$0.00</div>
             </div>
           </div>
         </div>
@@ -410,67 +164,67 @@
 
   <!-- MODAL DE OPERACIONES EN TIEMPO REAL (PEDIDOS EN ESPERA, SALIDOS, TIEMPO, MESAS, MONTO EN CAJA) -->
   <div class="product-modal-backdrop" id="realtime-ops-modal">
-    <div class="product-modal-card" style="max-width: 520px; padding: 1.75rem;">
+    <div class="product-modal-card u-max-width-520px u-padding-1-75rem">
       <button class="modal-close-btn" onclick="closeModal('realtime-ops-modal')">&times;</button>
-      <div style="text-align: center; margin-bottom: 1rem;">
-        <span style="font-size: 2.5rem;">⚡</span>
-        <h3 style="font-size: 1.4rem; font-weight: 900; color: var(--cyan-accent); margin-top: 0.3rem;">OPERACIONES EN TIEMPO REAL</h3>
-        <p style="color: var(--text-muted); font-size: 0.85rem;">Monitoreo en vivo de comandas, tiempos de cocina, mesas ocupadas y saldo de caja.</p>
+      <div class="u-text-align-center u-margin-bottom-1rem">
+        <span class="u-font-size-2-5rem">⚡</span>
+        <h3 class="u-font-size-1-4rem u-font-weight-900 u-color-token-cyan-accent u-margin-top-0-3rem">OPERACIONES EN TIEMPO REAL</h3>
+        <p class="u-color-token-text-muted u-font-size-0-85rem">Monitoreo en vivo de comandas, tiempos de cocina, mesas ocupadas y saldo de caja.</p>
       </div>
 
-      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; margin-bottom: 1.25rem;">
-        <div style="background: rgba(255,255,255,0.05); padding: 0.75rem; border-radius: 8px; text-align: center; border: 1px solid var(--toon-border);">
-          <small style="color: var(--text-muted);">🍽️ Mesas Ocupadas</small>
-          <div style="font-size: 1.2rem; font-weight: 900; color: var(--neon-green);" id="modal-ops-mesas">0 / 0 Mesas</div>
+      <div class="u-display-grid u-grid-template-columns-1fr-1fr u-gap-0-75rem u-margin-bottom-1-25rem">
+        <div class="u-background-rgba-255-255-255-0-05 u-padding-0-75rem u-border-radius-8px u-text-align-center u-border-1px-solid-token-toon-border">
+          <small class="u-color-token-text-muted">🍽️ Mesas Ocupadas</small>
+          <div id="modal-ops-mesas" class="u-font-size-1-2rem u-font-weight-900 u-color-token-neon-green">0 / 0 Mesas</div>
         </div>
-        <div style="background: rgba(255,255,255,0.05); padding: 0.75rem; border-radius: 8px; text-align: center; border: 1px solid var(--toon-border);">
-          <small style="color: var(--text-muted);">💰 Monto en Caja</small>
-          <div style="font-size: 1.2rem; font-weight: 900; color: var(--gold-accent);" id="modal-ops-caja">$0.00</div>
+        <div class="u-background-rgba-255-255-255-0-05 u-padding-0-75rem u-border-radius-8px u-text-align-center u-border-1px-solid-token-toon-border">
+          <small class="u-color-token-text-muted">💰 Monto en Caja</small>
+          <div id="modal-ops-caja" class="u-font-size-1-2rem u-font-weight-900 u-color-token-gold-accent">$0.00</div>
         </div>
       </div>
 
-      <h4 style="font-size: 0.95rem; font-weight: 800; color: #fff; margin-bottom: 0.5rem;">🔥 DESGLOSE DE COMANDAS EN COCINA:</h4>
-      <div id="modal-ops-orders-list" style="max-height: 260px; overflow-y: auto; display: flex; flex-direction: column; gap: 0.6rem;">
+      <h4 class="u-font-size-0-95rem u-font-weight-800 u-color-hex-fff u-margin-bottom-0-5rem">🔥 DESGLOSE DE COMANDAS EN COCINA:</h4>
+      <div id="modal-ops-orders-list" class="u-max-height-260px u-overflow-y-auto u-display-flex u-flex-direction-column u-gap-0-6rem">
         <!-- Generado dinámicamente -->
       </div>
     </div>
   </div>
 
-      <div style="background: var(--toon-card); border: 1px solid var(--toon-border); border-radius: var(--radius-md); padding: 1.5rem;">
-        <h3 style="font-size: 1.2rem; font-weight: 900; color: var(--gold-accent); margin-top: 0;">🏆 Top Productos e Ingredientes Más Vendidos</h3>
+      <div class="u-background-token-toon-card u-border-1px-solid-token-toon-border u-border-radius-token-radius-md u-padding-1-5rem">
+        <h3 class="u-font-size-1-2rem u-font-weight-900 u-color-token-gold-accent u-margin-top-0">🏆 Top Productos e Ingredientes Más Vendidos</h3>
         <div id="top-products-container"></div>
       </div>
     </div>
 
     <!-- TAB 2: PRODUCTOS Y EDICION DE INGREDIENTES -->
     <div id="tab-productos" class="tab-content">
-      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.25rem;">
+      <div class="u-display-flex u-justify-content-space-between u-align-items-center u-margin-bottom-1-25rem">
         <h2>🍔 PRODUCTOS DEL CATÁLOGO & INGREDIENTES EDITABLES</h2>
         <button class="btn-gold" onclick="openProductModal()">➕ Crear Producto</button>
       </div>
-      <div style="display:flex;gap:.65rem;flex-wrap:wrap;margin-bottom:1rem">
-        <input id="products-search" class="form-control" style="flex:1;min-width:220px" type="search" placeholder="Buscar por producto o categoría" oninput="renderProducts()">
-        <select id="products-sort" class="form-control" style="width:auto;min-width:180px" onchange="renderProducts()" aria-label="Ordenar catálogo">
+      <div class="u-display-flex u-gap-0p65rem u-flex-wrap-wrap u-margin-bottom-1rem">
+        <input id="products-search" class="form-control u-flex-1 u-min-width-220px" type="search" placeholder="Buscar por producto o categoría" oninput="renderProducts()">
+        <select id="products-sort" class="form-control u-width-auto u-min-width-180px" onchange="renderProducts()" aria-label="Ordenar catálogo">
           <option value="category-name">Categoría y nombre</option>
           <option value="name">Nombre del producto</option>
           <option value="newest">Más recientes</option>
         </select>
       </div>
 
-      <div style="background: var(--toon-card); border: 1px solid var(--toon-border); border-radius: var(--radius-md); overflow-x: auto;">
-        <table style="width: 100%; border-collapse: collapse; text-align: left;">
+      <div class="u-background-token-toon-card u-border-1px-solid-token-toon-border u-border-radius-token-radius-md u-overflow-x-auto">
+        <table class="u-width-100 u-border-collapse-collapse u-text-align-left">
           <thead>
-            <tr style="border-bottom: 1px solid var(--toon-border); color: var(--text-muted);">
-              <th style="padding: 0.75rem;">Imagen</th>
-              <th style="padding: 0.75rem;">Categoría</th>
-              <th style="padding: 0.75rem;">Nombre</th>
-              <th style="padding: 0.75rem;">Precio ($ / Bs)</th>
-              <th style="padding: 0.75rem;">Ingredientes / Opciones</th>
-              <th style="padding: 0.75rem;">Alérgenos declarados</th>
-              <th style="padding: 0.75rem;">Puntos / unidad</th>
-              <th style="padding: 0.75rem;">Disponibilidad</th>
-              <th style="padding: 0.75rem;">Stock</th>
-              <th style="padding: 0.75rem;">Acciones</th>
+            <tr class="u-border-bottom-1px-solid-token-toon-border u-color-token-text-muted">
+              <th class="u-padding-0-75rem">Imagen</th>
+              <th class="u-padding-0-75rem">Categoría</th>
+              <th class="u-padding-0-75rem">Nombre</th>
+              <th class="u-padding-0-75rem">Precio ($ / Bs)</th>
+              <th class="u-padding-0-75rem">Ingredientes / Opciones</th>
+              <th class="u-padding-0-75rem">Alérgenos declarados</th>
+              <th class="u-padding-0-75rem">Puntos / unidad</th>
+              <th class="u-padding-0-75rem">Disponibilidad</th>
+              <th class="u-padding-0-75rem">Stock</th>
+              <th class="u-padding-0-75rem">Acciones</th>
             </tr>
           </thead>
           <tbody id="products-tbody"></tbody>
@@ -480,20 +234,20 @@
 
     <!-- TAB 3: PUBLICACIONES WEB -->
     <div id="tab-publicaciones" class="tab-content">
-      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.25rem;">
+      <div class="u-display-flex u-justify-content-space-between u-align-items-center u-margin-bottom-1-25rem">
         <h2>📰 PUBLICACIONES Y NOVEDADES WEB PÚBLICA</h2>
         <button class="btn-gold" onclick="openModal('add-publicacion-modal')">➕ Nueva Publicación</button>
       </div>
 
-      <div style="background: var(--toon-card); border: 1px solid var(--toon-border); border-radius: var(--radius-md); overflow-x: auto;">
-        <table style="width: 100%; border-collapse: collapse; text-align: left;">
+      <div class="u-background-token-toon-card u-border-1px-solid-token-toon-border u-border-radius-token-radius-md u-overflow-x-auto">
+        <table class="u-width-100 u-border-collapse-collapse u-text-align-left">
           <thead>
-            <tr style="border-bottom: 1px solid var(--toon-border); color: var(--text-muted);">
-              <th style="padding: 0.75rem;">Imagen</th>
-              <th style="padding: 0.75rem;">Título Anuncio</th>
-              <th style="padding: 0.75rem;">Contenido</th>
-              <th style="padding: 0.75rem;">Autor</th>
-              <th style="padding: 0.75rem;">Acción</th>
+            <tr class="u-border-bottom-1px-solid-token-toon-border u-color-token-text-muted">
+              <th class="u-padding-0-75rem">Imagen</th>
+              <th class="u-padding-0-75rem">Título Anuncio</th>
+              <th class="u-padding-0-75rem">Contenido</th>
+              <th class="u-padding-0-75rem">Autor</th>
+              <th class="u-padding-0-75rem">Acción</th>
             </tr>
           </thead>
           <tbody id="publicaciones-tbody"></tbody>
@@ -503,22 +257,22 @@
 
     <!-- TAB 4: PROMOCIONES ("BOOM! PROMO DEL DIA") -->
     <div id="tab-promociones" class="tab-content">
-      <div style="display: flex; justify-content: space-between; align-items: center; gap: .75rem; flex-wrap: wrap; margin-bottom: .5rem;">
+      <div class="u-display-flex u-justify-content-space-between u-align-items-center u-gap-0p75rem u-flex-wrap-wrap u-margin-bottom-0p5rem">
         <h2>🔥 PROMOCIONES DE CARRUSELES</h2>
         <button class="btn-gold" onclick="openNewPromoModal()">➕ Nueva promoción</button>
       </div>
-      <p style="color: var(--text-muted); margin: 0 0 1.25rem;">Las promociones activas se muestran en ambos carruseles: inicio del cliente (<code>home-promo-banner-container</code>) y portada web (<code>landing-hero-carousel-container</code>). Editar o desactivar aquí actualiza los dos.</p>
+      <p class="u-color-token-text-muted u-margin-0-0-1-25rem">Las promociones activas se muestran en ambos carruseles: inicio del cliente (<code>home-promo-banner-container</code>) y portada web (<code>landing-hero-carousel-container</code>). Editar o desactivar aquí actualiza los dos.</p>
 
-      <div style="background: var(--toon-card); border: 1px solid var(--toon-border); border-radius: var(--radius-md); overflow-x: auto;">
-        <table style="width: 100%; border-collapse: collapse; text-align: left;">
+      <div class="u-background-token-toon-card u-border-1px-solid-token-toon-border u-border-radius-token-radius-md u-overflow-x-auto">
+        <table class="u-width-100 u-border-collapse-collapse u-text-align-left">
           <thead>
-            <tr style="border-bottom: 1px solid var(--toon-border); color: var(--text-muted);">
-              <th style="padding: 0.75rem;">Banner</th>
-              <th style="padding: 0.75rem;">Título Promo</th>
-              <th style="padding: 0.75rem;">Descripción</th>
-              <th style="padding: 0.75rem;">Descuento</th>
-              <th style="padding: 0.75rem;">Código Cupon</th>
-              <th style="padding: 0.75rem;">Acciones</th>
+            <tr class="u-border-bottom-1px-solid-token-toon-border u-color-token-text-muted">
+              <th class="u-padding-0-75rem">Banner</th>
+              <th class="u-padding-0-75rem">Título Promo</th>
+              <th class="u-padding-0-75rem">Descripción</th>
+              <th class="u-padding-0-75rem">Descuento</th>
+              <th class="u-padding-0-75rem">Código Cupon</th>
+              <th class="u-padding-0-75rem">Acciones</th>
             </tr>
           </thead>
           <tbody id="promos-tbody"></tbody>
@@ -529,18 +283,18 @@
     <!-- TAB 6: PORTAL WEB & TASA DE CAMBIO -->
     <div id="tab-portal" class="tab-content">
       <h2>🌐 TASA DE CAMBIO DE REFERENCIA Y CONFIGURACIÓN DEL PORTAL</h2>
-      <div style="background: var(--toon-card); border: 1px solid var(--toon-border); border-radius: var(--radius-md); padding: clamp(1rem, 3vw, 1.5rem); margin-top: 1rem; max-width: 1100px;">
+      <div class="u-background-token-toon-card u-border-1px-solid-token-toon-border u-border-radius-token-radius-md u-padding-clamp-1rem-3vw-1-5rem u-margin-top-1rem u-max-width-1100px">
         
-        <div class="form-group" style="background: rgba(255, 188, 13, 0.1); border: 1px solid var(--gold-accent); padding: 1rem; border-radius: 10px; margin-bottom: 1.25rem;">
-          <label style="font-weight: 900; color: var(--gold-accent); font-size: 1rem;">💵 TASA DE CAMBIO (1 USD = Bs.)</label>
-          <input type="number" step="0.0001" id="cfg-tasa-cambio" class="form-control" style="font-size: 1.3rem; font-weight: 900; color: var(--gold-accent);" placeholder="Sin tasa guardada">
-          <small id="cfg-tasa-status" role="status" style="color: var(--text-muted); margin-top: 0.3rem; display: block;">Consulta externa con caché; puedes guardar manualmente si el proveedor no responde.</small>
+        <div class="form-group u-background-rgba-255-188-13-0-1 u-border-1px-solid-token-gold-accent u-padding-1rem u-border-radius-10px u-margin-bottom-1-25rem">
+          <label class="u-font-weight-900 u-color-token-gold-accent u-font-size-1rem">💵 TASA DE CAMBIO (1 USD = Bs.)</label>
+          <input type="number" step="0.0001" id="cfg-tasa-cambio" class="form-control u-font-size-1-3rem u-font-weight-900 u-color-token-gold-accent" placeholder="Sin tasa guardada">
+          <small id="cfg-tasa-status" role="status" class="u-color-token-text-muted u-margin-top-0-3rem u-display-block">Consulta externa con caché; puedes guardar manualmente si el proveedor no responde.</small>
         </div>
-        <button class="btn btn-outline" type="button" style="width: 100%; margin: 0 0 1rem;" onclick="refreshBcvRate()">🔄 Consultar tasa BCV ahora</button>
+        <button class="btn btn-outline u-width-100 u-margin-0-0-1rem" type="button" onclick="refreshBcvRate()">🔄 Consultar tasa BCV ahora</button>
 
         <h3>🏷️ Identidad y portada pública</h3>
-        <p style="color: var(--text-muted); font-size: .88rem;">Estos textos se muestran en el encabezado, la portada y el pie de página del sitio público. Usa el nombre comercial correcto y guarda los cambios para verlos publicados.</p>
-        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,260px),1fr));gap:0 1rem;">
+        <p class="u-color-token-text-muted u-font-size-0p88rem">Estos textos se muestran en el encabezado, la portada y el pie de página del sitio público. Usa el nombre comercial correcto y guarda los cambios para verlos publicados.</p>
+        <div class="u-display-grid u-grid-template-columns-repeat-auto-fit-minmax-min-100-260px-1fr u-gap-0-1rem">
           <div class="form-group">
             <label for="cfg-nombre-restaurante">Nombre visible del restaurante</label>
             <input type="text" id="cfg-nombre-restaurante" class="form-control" maxlength="80" placeholder="DONDE DAVID | FAST FOOD">
@@ -557,14 +311,14 @@
             <label for="cfg-historia">Descripción breve del restaurante</label>
             <textarea id="cfg-historia" class="form-control" rows="3" maxlength="300"></textarea>
           </div>
-          <div class="form-group" style="grid-column:1/-1;">
+          <div class="form-group u-grid-column-1-per-neg-1">
             <label for="cfg-landing-descripcion">Descripción de portada</label>
             <textarea id="cfg-landing-descripcion" class="form-control" rows="3" maxlength="300"></textarea>
           </div>
         </div>
 
         <h3>🔗 Enlaces y atención al cliente</h3>
-        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,240px),1fr));gap:0 1rem;">
+        <div class="u-display-grid u-grid-template-columns-repeat-auto-fit-minmax-min-100-240px-1fr u-gap-0-1rem">
           <div class="form-group">
             <label for="cfg-footer-enlaces-titulo">Título de enlaces</label>
             <input type="text" id="cfg-footer-enlaces-titulo" class="form-control" maxlength="48">
@@ -600,7 +354,7 @@
         </div>
 
         <h3>📞 Datos de contacto</h3>
-        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,240px),1fr));gap:0 1rem;">
+        <div class="u-display-grid u-grid-template-columns-repeat-auto-fit-minmax-min-100-240px-1fr u-gap-0-1rem">
           <div class="form-group">
             <label>Número WhatsApp Oficial</label>
             <input type="text" id="cfg-whatsapp" class="form-control">
@@ -625,15 +379,15 @@
         <div class="form-group">
           <label>Google Maps JavaScript API key (opcional)</label>
           <input type="password" id="cfg-google-maps-api-key" class="form-control" maxlength="500" autocomplete="off" placeholder="AIza...">
-          <small style="display:block;color:var(--text-muted);margin-top:.35rem">Google exige una clave pública de navegador. Restringe su uso por HTTP referrer a los dominios de tu web y habilita Maps JavaScript API en Google Cloud. Si se deja vacío, se usa OpenStreetMap.</small>
+          <small class="u-display-block u-color-token-text-muted u-margin-top-0p35rem">Google exige una clave pública de navegador. Restringe su uso por HTTP referrer a los dominios de tu web y habilita Maps JavaScript API en Google Cloud. Si se deja vacío, se usa OpenStreetMap.</small>
         </div>
         <h3>📱 Datos para Pago Móvil</h3>
-        <p style="color: var(--text-muted); font-size: .85rem;">Estos datos se muestran al cliente. No se guardan credenciales bancarias.</p>
+        <p class="u-color-token-text-muted u-font-size-0p85rem">Estos datos se muestran al cliente. No se guardan credenciales bancarias.</p>
         <div class="form-group"><label>Banco</label><input type="text" id="cfg-pm-banco" class="form-control" maxlength="100"></div>
         <div class="form-group"><label>Teléfono afiliado</label><input type="text" id="cfg-pm-telefono" class="form-control" maxlength="30"></div>
         <div class="form-group"><label>RIF / documento del titular</label><input type="text" id="cfg-pm-rif" class="form-control" maxlength="30"></div>
         <div class="form-group"><label>Titular</label><input type="text" id="cfg-pm-titular" class="form-control" maxlength="120"></div>
-        <button class="btn-gold" style="width: 100%; margin-top: 1rem; font-size: 1.05rem;" onclick="submitSavePortalConfigs()">💾 GUARDAR CONFIGURACIONES Y TASA DE CAMBIO</button>
+        <button class="btn-gold u-width-100 u-margin-top-1rem u-font-size-1-05rem" onclick="submitSavePortalConfigs()">💾 GUARDAR CONFIGURACIONES Y TASA DE CAMBIO</button>
       </div>
     </div>
 
@@ -641,7 +395,7 @@
 
     <!-- TAB 8: MESAS -->
     <div id="tab-mesas" class="tab-content">
-      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.25rem;">
+      <div class="u-display-flex u-justify-content-space-between u-align-items-center u-margin-bottom-1-25rem">
         <h2>🍽️ DISTRIBUCIÓN DE MESAS & CÓDIGOS QR</h2>
         <button class="btn-gold" onclick="openModal('add-mesa-modal')">➕ Agregar Nueva Mesa</button>
       </div>
@@ -650,20 +404,20 @@
 
     <!-- TAB 9: INVENTARIO -->
     <div id="tab-inventario" class="tab-content">
-      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.25rem;">
+      <div class="u-display-flex u-justify-content-space-between u-align-items-center u-margin-bottom-1-25rem">
         <h2>📦 CONTROL DE INSUMOS E INVENTARIO</h2>
         <button class="btn-gold" onclick="openModal('add-insumo-modal')">➕ Nuevo Insumo</button>
       </div>
-      <div style="background: var(--toon-card); border: 1px solid var(--toon-border); border-radius: var(--radius-md); overflow-x: auto;">
-        <table style="width: 100%; border-collapse: collapse; text-align: left;">
+      <div class="u-background-token-toon-card u-border-1px-solid-token-toon-border u-border-radius-token-radius-md u-overflow-x-auto">
+        <table class="u-width-100 u-border-collapse-collapse u-text-align-left">
           <thead>
-            <tr style="border-bottom: 1px solid var(--toon-border); color: var(--text-muted);">
-              <th style="padding: 0.75rem;">Insumo</th>
-              <th style="padding: 0.75rem;">Stock Actual</th>
-              <th style="padding: 0.75rem;">Stock Mínimo</th>
-              <th style="padding: 0.75rem;">Unidad</th>
-              <th style="padding: 0.75rem;">Estado</th>
-              <th style="padding: 0.75rem;">Acción</th>
+            <tr class="u-border-bottom-1px-solid-token-toon-border u-color-token-text-muted">
+              <th class="u-padding-0-75rem">Insumo</th>
+              <th class="u-padding-0-75rem">Stock Actual</th>
+              <th class="u-padding-0-75rem">Stock Mínimo</th>
+              <th class="u-padding-0-75rem">Unidad</th>
+              <th class="u-padding-0-75rem">Estado</th>
+              <th class="u-padding-0-75rem">Acción</th>
             </tr>
           </thead>
           <tbody id="insumos-tbody"></tbody>
@@ -673,18 +427,18 @@
 
     <!-- TAB 10: CATEGORIAS -->
     <div id="tab-categorias" class="tab-content">
-      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.25rem;">
+      <div class="u-display-flex u-justify-content-space-between u-align-items-center u-margin-bottom-1-25rem">
         <h2>📂 CATEGORÍAS CON FOTOS</h2>
         <button class="btn-gold" onclick="openModal('category-modal')">➕ Nueva Categoría</button>
       </div>
-      <div style="background: var(--toon-card); border: 1px solid var(--toon-border); border-radius: var(--radius-md); overflow-x: auto;">
-        <table style="width: 100%; border-collapse: collapse; text-align: left;">
+      <div class="u-background-token-toon-card u-border-1px-solid-token-toon-border u-border-radius-token-radius-md u-overflow-x-auto">
+        <table class="u-width-100 u-border-collapse-collapse u-text-align-left">
           <thead>
-            <tr style="border-bottom: 1px solid var(--toon-border); color: var(--text-muted);">
-              <th style="padding: 0.75rem;">Imagen</th>
-              <th style="padding: 0.75rem;">Nombre</th>
-              <th style="padding: 0.75rem;">Descripción</th>
-              <th style="padding: 0.75rem;">Acción</th>
+            <tr class="u-border-bottom-1px-solid-token-toon-border u-color-token-text-muted">
+              <th class="u-padding-0-75rem">Imagen</th>
+              <th class="u-padding-0-75rem">Nombre</th>
+              <th class="u-padding-0-75rem">Descripción</th>
+              <th class="u-padding-0-75rem">Acción</th>
             </tr>
           </thead>
           <tbody id="categories-tbody"></tbody>
@@ -694,22 +448,22 @@
 
     <!-- TAB 11: USUARIOS Y PERSONAL -->
     <div id="tab-usuarios" class="tab-content">
-      <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
-        <h2 style="margin: 0;">👥 USUARIOS Y PERSONAL DEL SISTEMA</h2>
+      <div class="u-display-flex u-justify-content-space-between u-align-items-center u-flex-wrap-wrap u-gap-1rem">
+        <h2 class="u-margin-0">👥 USUARIOS Y PERSONAL DEL SISTEMA</h2>
         <button class="btn-gold" onclick="openCreateUserModal()">➕ CREAR NUEVO USUARIO / PERSONAL</button>
       </div>
-      <div style="background: var(--toon-card); border: 1px solid var(--toon-border); border-radius: var(--radius-md); overflow-x: auto; margin-top: 1rem;">
-        <table style="width: 100%; border-collapse: collapse; text-align: left;">
+      <div class="u-background-token-toon-card u-border-1px-solid-token-toon-border u-border-radius-token-radius-md u-overflow-x-auto u-margin-top-1rem">
+        <table class="u-width-100 u-border-collapse-collapse u-text-align-left">
           <thead>
-            <tr style="border-bottom: 1px solid var(--toon-border); color: var(--text-muted);">
-              <th style="padding: 0.75rem;">ID</th>
-              <th style="padding: 0.75rem;">Nombre Completo</th>
-              <th style="padding: 0.75rem;">Usuario</th>
-              <th style="padding: 0.75rem;">Email</th>
-              <th style="padding: 0.75rem;">Teléfono</th>
-              <th style="padding: 0.75rem;">Rol</th>
-              <th style="padding: 0.75rem;">Estado</th>
-              <th style="padding: 0.75rem;">Acciones</th>
+            <tr class="u-border-bottom-1px-solid-token-toon-border u-color-token-text-muted">
+              <th class="u-padding-0-75rem">ID</th>
+              <th class="u-padding-0-75rem">Nombre Completo</th>
+              <th class="u-padding-0-75rem">Usuario</th>
+              <th class="u-padding-0-75rem">Email</th>
+              <th class="u-padding-0-75rem">Teléfono</th>
+              <th class="u-padding-0-75rem">Rol</th>
+              <th class="u-padding-0-75rem">Estado</th>
+              <th class="u-padding-0-75rem">Acciones</th>
             </tr>
           </thead>
           <tbody id="users-tbody"></tbody>
@@ -719,22 +473,22 @@
 
     <!-- TAB 12: CALIFICACIONES Y RESEÑAS ENVIADAS POR CLIENTES -->
     <div id="tab-resenas" class="tab-content">
-      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.25rem; flex-wrap: wrap; gap: 1rem;">
+      <div class="u-display-flex u-justify-content-space-between u-align-items-center u-margin-bottom-1-25rem u-flex-wrap-wrap u-gap-1rem">
         <div>
-          <h2 style="margin: 0; font-weight: 900; color: var(--gold-accent);">⭐ CALIFICACIONES Y RESEÑAS DE CLIENTES</h2>
-          <p style="color: var(--text-muted); font-size: 0.85rem; margin-top: 0.2rem;">Visualiza y gestiona las puntuaciones enviadas por los comensales al finalizar sus pedidos.</p>
+          <h2 class="u-margin-0 u-font-weight-900 u-color-token-gold-accent">⭐ CALIFICACIONES Y RESEÑAS DE CLIENTES</h2>
+          <p class="u-color-token-text-muted u-font-size-0-85rem u-margin-top-0-2rem">Visualiza y gestiona las puntuaciones enviadas por los comensales al finalizar sus pedidos.</p>
         </div>
         <button class="btn-gold" onclick="openModal('resena-modal')">➕ Nueva Reseña Destacada</button>
       </div>
 
-      <div style="background: var(--toon-card); border: 1px solid var(--toon-border); border-radius: var(--radius-md); overflow-x: auto;">
-        <table style="width: 100%; border-collapse: collapse; text-align: left;">
+      <div class="u-background-token-toon-card u-border-1px-solid-token-toon-border u-border-radius-token-radius-md u-overflow-x-auto">
+        <table class="u-width-100 u-border-collapse-collapse u-text-align-left">
           <thead>
-            <tr style="border-bottom: 1px solid var(--toon-border); color: var(--text-muted);">
-              <th style="padding: 0.75rem;">Cliente</th>
-              <th style="padding: 0.75rem;">Calificación</th>
-              <th style="padding: 0.75rem;">Comentario / Opinión</th>
-              <th style="padding: 0.75rem;">Acción</th>
+            <tr class="u-border-bottom-1px-solid-token-toon-border u-color-token-text-muted">
+              <th class="u-padding-0-75rem">Cliente</th>
+              <th class="u-padding-0-75rem">Calificación</th>
+              <th class="u-padding-0-75rem">Comentario / Opinión</th>
+              <th class="u-padding-0-75rem">Acción</th>
             </tr>
           </thead>
           <tbody id="resenas-tbody"></tbody>
@@ -742,55 +496,249 @@
       </div>
     </div>
 
+    <!-- TAB 13: AUDITORÍA Y TRAZABILIDAD DEL SISTEMA -->
+    <div id="tab-auditoria" class="tab-content">
+      <div class="u-display-flex u-justify-content-space-between u-align-items-center u-margin-bottom-1-25rem u-flex-wrap-wrap u-gap-1rem">
+        <div>
+          <h2 class="u-margin-0 u-font-weight-900 u-color-token-gold-accent">📜 AUDITORÍA Y TRAZABILIDAD</h2>
+          <p class="u-color-token-text-muted u-font-size-0-85rem u-margin-top-0-2rem">Registro permanente de acciones de usuarios, mutaciones de inventario y eventos de seguridad.</p>
+        </div>
+        <div class="u-display-flex u-gap-0-5rem u-flex-wrap-wrap">
+          <button class="btn-gold" onclick="loadAuditoria()">🔄 Actualizar</button>
+          <button class="btn-gold u-background-rgba-34-197-94-0-15 u-color-token-neon-green" onclick="exportAuditoriaCSV()">📥 Exportar CSV</button>
+        </div>
+      </div>
+
+      <div class="u-background-token-toon-card u-border-1px-solid-token-toon-border u-border-radius-token-radius-md u-padding-1rem u-margin-bottom-1-25rem u-display-flex u-flex-wrap-wrap u-gap-1rem u-align-items-center">
+        <div class="u-flex-1">
+          <label class="u-font-size-0-75rem u-color-token-text-muted u-display-block u-margin-bottom-0-25rem">Buscar término o usuario</label>
+          <input type="text" id="audit-search-input" class="product-modal-input" placeholder="Usuario, acción, IP..." onkeyup="if(event.key==='Enter') loadAuditoria()">
+        </div>
+        <div>
+          <label class="u-font-size-0-75rem u-color-token-text-muted u-display-block u-margin-bottom-0-25rem">Tipo de Acción</label>
+          <select id="audit-action-filter" class="product-modal-input" onchange="loadAuditoria()">
+            <option value="">Todas las acciones</option>
+          </select>
+        </div>
+        <div>
+          <label class="u-font-size-0-75rem u-color-token-text-muted u-display-block u-margin-bottom-0-25rem">Recurso Afectado</label>
+          <select id="audit-resource-filter" class="product-modal-input" onchange="loadAuditoria()">
+            <option value="">Todos los recursos</option>
+          </select>
+        </div>
+        <div class="u-align-self-flex-end">
+          <button class="btn-gold" onclick="loadAuditoria()">Filtrar</button>
+        </div>
+      </div>
+
+      <div class="u-background-token-toon-card u-border-1px-solid-token-toon-border u-border-radius-token-radius-md u-overflow-x-auto">
+        <table class="u-width-100 u-border-collapse-collapse u-text-align-left">
+          <thead>
+            <tr class="u-border-bottom-1px-solid-token-toon-border u-color-token-text-muted">
+              <th class="u-padding-0-75rem">Fecha (UTC)</th>
+              <th class="u-padding-0-75rem">Usuario</th>
+              <th class="u-padding-0-75rem">Acción</th>
+              <th class="u-padding-0-75rem">Recurso</th>
+              <th class="u-padding-0-75rem">Detalle</th>
+              <th class="u-padding-0-75rem">IP Origen</th>
+              <th class="u-padding-0-75rem">Trazabilidad</th>
+            </tr>
+          </thead>
+          <tbody id="auditoria-tbody"></tbody>
+        </table>
+      </div>
+      <div id="auditoria-count-label" class="u-font-size-0-8rem u-color-token-text-muted u-margin-top-0-75rem u-text-align-right"></div>
+    </div>
+
+    <!-- TAB 14: OBSERVABILIDAD Y LOGS DEL SISTEMA -->
+    <div id="tab-logs" class="tab-content">
+      <div class="u-display-flex u-justify-content-space-between u-align-items-center u-margin-bottom-1-25rem u-flex-wrap-wrap u-gap-1rem">
+        <div>
+          <h2 class="u-margin-0 u-font-weight-900 u-color-token-gold-accent">📋 OBSERVABILIDAD Y LOGS DEL SISTEMA</h2>
+          <p class="u-color-token-text-muted u-font-size-0-85rem u-margin-top-0-2rem">Transmisión de eventos de servidor, latencias HTTP y captura de excepciones en producción.</p>
+        </div>
+        <div class="u-display-flex u-gap-0-5rem u-flex-wrap-wrap">
+          <button class="btn-gold" onclick="loadLogs()">🔄 Refrescar</button>
+          <button class="btn-gold" onclick="downloadLogs('app')">⬇️ App Log</button>
+          <button class="btn-gold u-background-rgba-239-68-68-0-2 u-color-token-neon-red" onclick="downloadLogs('error')">⬇️ Error Log</button>
+          <button class="btn-gold u-background-rgba-239-68-68-0-2 u-color-token-neon-red" onclick="clearLogsPrompt()">🗑️ Limpiar</button>
+        </div>
+      </div>
+
+      <!-- KPI Grid para Métricas de Logs -->
+      <div class="kpi-grid u-margin-bottom-1-25rem">
+        <div class="kpi-card">
+          <small class="u-color-token-text-muted">Eventos Recientes</small>
+          <h2 class="u-font-size-1-8rem u-color-token-gold-accent u-margin-top-0-2rem" id="log-stat-total">0</h2>
+        </div>
+        <div class="kpi-card">
+          <small class="u-color-token-text-muted">Errores Críticos</small>
+          <h2 class="u-font-size-1-8rem u-color-token-neon-red u-margin-top-0-2rem" id="log-stat-errors">0</h2>
+        </div>
+        <div class="kpi-card">
+          <small class="u-color-token-text-muted">Advertencias (4xx)</small>
+          <h2 class="u-font-size-1-8rem u-color-token-color-yellow u-margin-top-0-2rem" id="log-stat-warnings">0</h2>
+        </div>
+        <div class="kpi-card">
+          <small class="u-color-token-text-muted">Tasa de Error Global</small>
+          <h2 class="u-font-size-1-8rem u-color-token-cyan-accent u-margin-top-0-2rem" id="log-stat-rate">0%</h2>
+        </div>
+      </div>
+
+      <!-- Barra de Filtros de Logs -->
+      <div class="u-background-token-toon-card u-border-1px-solid-token-toon-border u-border-radius-token-radius-md u-padding-1rem u-margin-bottom-1-25rem u-display-flex u-flex-wrap-wrap u-gap-1rem u-align-items-center">
+        <div class="u-flex-1">
+          <label class="u-font-size-0-75rem u-color-token-text-muted u-display-block u-margin-bottom-0-25rem">Buscar en logs</label>
+          <input type="text" id="log-search-input" class="product-modal-input" placeholder="Ruta, error, status, IP..." onkeyup="if(event.key==='Enter') loadLogs()">
+        </div>
+        <div>
+          <label class="u-font-size-0-75rem u-color-token-text-muted u-display-block u-margin-bottom-0-25rem">Nivel de Gravedad</label>
+          <select id="log-level-filter" class="product-modal-input" onchange="loadLogs()">
+            <option value="ALL">TODOS LOS NIVELES</option>
+            <option value="INFO">INFO</option>
+            <option value="WARNING">WARNING</option>
+            <option value="ERROR">ERROR</option>
+            <option value="CRITICAL">CRITICAL</option>
+          </select>
+        </div>
+        <div>
+          <label class="u-font-size-0-75rem u-color-token-text-muted u-display-block u-margin-bottom-0-25rem">Líneas</label>
+          <select id="log-limit-filter" class="product-modal-input" onchange="loadLogs()">
+            <option value="100">100 líneas</option>
+            <option value="250" selected>250 líneas</option>
+            <option value="500">500 líneas</option>
+            <option value="1000">1000 líneas</option>
+          </select>
+        </div>
+        <div class="u-display-flex u-align-items-center u-gap-0-5rem u-margin-top-auto">
+          <input type="checkbox" id="log-autorefresh-toggle" onchange="toggleLogAutoRefresh(this.checked)">
+          <label for="log-autorefresh-toggle" class="u-font-size-0-8rem u-color-token-text-muted">Auto-refrescar (5s)</label>
+        </div>
+      </div>
+
+      <!-- Ventana Terminal de Logs -->
+      <div class="log-terminal-window" id="log-terminal-container">
+        <div class="u-color-token-text-muted">Cargando registros del servidor...</div>
+      </div>
+    </div>
+
+    <!-- TAB 15: COPIAS DE SEGURIDAD Y RECUPERACIÓN (BACKUPS) -->
+    <div id="tab-backups" class="tab-content">
+      <div class="u-display-flex u-justify-content-space-between u-align-items-center u-margin-bottom-1-25rem u-flex-wrap-wrap u-gap-1rem">
+        <div>
+          <h2 class="u-margin-0 u-font-weight-900 u-color-token-gold-accent">💾 COPIAS DE SEGURIDAD (BACKUPS)</h2>
+          <p class="u-color-token-text-muted u-font-size-0-85rem u-margin-top-0-2rem">Creación de snapshots íntegros, descarga segura y restauración ante desastres.</p>
+        </div>
+        <button class="btn-gold" onclick="promptCreateBackup()">➕ Generar Respaldo Ahora</button>
+      </div>
+
+      <!-- Banner de Estado de Base de Datos -->
+      <div class="u-background-token-toon-card u-border-1px-solid-token-toon-border u-border-radius-token-radius-md u-padding-1rem u-margin-bottom-1-25rem u-display-flex u-justify-content-space-between u-align-items-center u-flex-wrap-wrap u-gap-1rem">
+        <div>
+          <span class="u-font-size-0-75rem u-color-token-text-muted u-display-block">Motor de Datos Activo</span>
+          <strong class="u-font-size-1-1rem u-color-token-cyan-accent" id="backup-engine-label">SQLite / PostgreSQL</strong>
+        </div>
+        <div>
+          <span class="u-font-size-0-75rem u-color-token-text-muted u-display-block">Almacenamiento Local</span>
+          <strong class="u-font-size-0-9rem u-color-token-text-muted">backend/backups/</strong>
+        </div>
+        <div>
+          <span class="u-font-size-0-75rem u-color-token-text-muted u-display-block">Política de Retención</span>
+          <strong class="u-font-size-0-9rem u-color-token-gold-accent">15 respaldos rotativos</strong>
+        </div>
+        <div>
+          <span class="u-font-size-0-75rem u-color-token-text-muted u-display-block">Total de Respaldos</span>
+          <strong class="u-font-size-1-1rem u-color-token-gold-accent" id="backup-total-count">0</strong>
+        </div>
+      </div>
+
+      <div class="u-background-token-toon-card u-border-1px-solid-token-toon-border u-border-radius-token-radius-md u-overflow-x-auto">
+        <table class="u-width-100 u-border-collapse-collapse u-text-align-left">
+          <thead>
+            <tr class="u-border-bottom-1px-solid-token-toon-border u-color-token-text-muted">
+              <th class="u-padding-0-75rem">Archivo de Respaldo</th>
+              <th class="u-padding-0-75rem">Motor</th>
+              <th class="u-padding-0-75rem">Fecha de Creación</th>
+              <th class="u-padding-0-75rem">Tamaño</th>
+              <th class="u-padding-0-75rem">Checksum SHA-256</th>
+              <th class="u-padding-0-75rem">Acciones</th>
+            </tr>
+          </thead>
+          <tbody id="backups-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+
   </main>
 </div>
 
+  <!-- MODAL: DETALLES DE AUDITORÍA Y TRAZABILIDAD -->
+  <div class="product-modal-backdrop" id="audit-detail-modal">
+    <div class="product-modal-card u-max-width-580px u-padding-1-5rem">
+      <button class="modal-close-btn" onclick="closeModal('audit-detail-modal')">&times;</button>
+      <h3 class="u-margin-0 u-font-weight-900 u-color-token-gold-accent u-margin-bottom-1rem" id="audit-modal-title">Detalle de Auditoría</h3>
+      <div id="audit-modal-meta" class="u-font-size-0-85rem u-color-token-text-muted u-margin-bottom-1rem"></div>
+      
+      <div class="u-margin-bottom-1rem">
+        <label class="u-font-size-0-8rem u-color-token-text-muted u-display-block u-margin-bottom-0-3rem">Datos / Estado Previo (JSON):</label>
+        <div class="audit-diff-viewer" id="audit-modal-prev">Sin datos previos registrados.</div>
+      </div>
+
+      <div class="u-margin-bottom-1-5rem">
+        <label class="u-font-size-0-8rem u-color-token-text-muted u-display-block u-margin-bottom-0-3rem">Datos / Estado Nuevo (JSON):</label>
+        <div class="audit-diff-viewer" id="audit-modal-new">Sin datos nuevos registrados.</div>
+      </div>
+
+      <button class="btn-gold u-width-100" onclick="closeModal('audit-detail-modal')">Cerrar Detalle</button>
+    </div>
+  </div>
+
   <!-- MODAL WIZARD: ASISTENTE DE CONFIGURACIÓN INICIAL -->
   <div class="product-modal-backdrop" id="wizard-modal">
-    <div class="product-modal-card" style="max-width: 580px; padding: 2rem;">
+    <div class="product-modal-card u-max-width-580px u-padding-2rem">
       <button class="modal-close-btn" onclick="closeModal('wizard-modal')">&times;</button>
 
-      <div style="text-align: center; margin-bottom: 1.5rem;">
-        <span style="font-size: 2.5rem;">🚀</span>
-        <h2 style="font-size: 1.5rem; font-weight: 900; color: var(--gold-accent); margin: 0.3rem 0 0 0;">CONFIGURACIÓN INICIAL DEL RESTAURANTE</h2>
-        <div style="font-size: 0.85rem; color: var(--text-muted);" id="wizard-step-title">Paso 1 de 4: Identidad y Moneda</div>
+      <div class="u-text-align-center u-margin-bottom-1-5rem">
+        <span class="u-font-size-2-5rem">🚀</span>
+        <h2 class="u-font-size-1-5rem u-font-weight-900 u-color-token-gold-accent u-margin-0-3rem-0-0-0">CONFIGURACIÓN INICIAL DEL RESTAURANTE</h2>
+        <div id="wizard-step-title" class="u-font-size-0-85rem u-color-token-text-muted">Paso 1 de 4: Identidad y Moneda</div>
       </div>
 
       <!-- Paso 1: Identidad -->
       <div class="wizard-step active" id="wiz-step-1">
         <div class="form-group"><label>Nombre del Restaurante / Negocio</label><input type="text" id="wiz-nombre" class="form-control" value="DONDE DAVID | FAST FOOD"></div>
         <div class="form-group"><label>Descripción pública corta</label><textarea id="wiz-historia" class="form-control" rows="2">Las mejores hamburguesas artesanales de res 100% preparadas al instante.</textarea></div>
-        <div style="display: flex; gap: 1rem;">
-          <div class="form-group" style="flex: 1;"><label>Tasa manual opcional (Bs. por USD)</label><input type="number" step="0.0001" id="wiz-tasa" class="form-control" placeholder="Opcional"></div>
-          <div class="form-group" style="flex: 1;"><label>WhatsApp Oficial</label><input type="text" id="wiz-whatsapp" class="form-control" value="+502 4112 5554"></div>
+        <div class="u-display-flex u-gap-1rem">
+          <div class="form-group u-flex-1"><label>Tasa manual opcional (Bs. por USD)</label><input type="number" step="0.0001" id="wiz-tasa" class="form-control" placeholder="Opcional"></div>
+          <div class="form-group u-flex-1"><label>WhatsApp Oficial</label><input type="text" id="wiz-whatsapp" class="form-control" value="+502 4112 5554"></div>
         </div>
       </div>
 
       <!-- Paso 2: Menú y Productos -->
       <div class="wizard-step" id="wiz-step-2">
-        <h4 style="color: var(--gold-accent); margin-top: 0;">🍔 CATÁLOGO DE MENÚ Y EXTRAS</h4>
-        <p style="font-size: 0.85rem; color: var(--text-muted);">Puedes precargar los productos iniciales o agregar el primer plato estrella de tu menú:</p>
+        <h4 class="u-color-token-gold-accent u-margin-top-0">🍔 CATÁLOGO DE MENÚ Y EXTRAS</h4>
+        <p class="u-font-size-0-85rem u-color-token-text-muted">Puedes precargar los productos iniciales o agregar el primer plato estrella de tu menú:</p>
 
         <div class="form-group"><label>Nombre del Plato Principal</label><input type="text" id="wiz-prod-name" class="form-control" value="Hamburguesa Clásica"></div>
-        <div style="display: flex; gap: 1rem;">
-          <div class="form-group" style="flex: 1;"><label>Precio ($ USD)</label><input type="number" step="0.5" id="wiz-prod-price" class="form-control" value="42.00"></div>
-          <div class="form-group" style="flex: 1;"><label>Ingredientes</label><input type="text" id="wiz-prod-ings" class="form-control" value="Carne 150g, Queso Cheddar, Tomate, Cebolla"></div>
+        <div class="u-display-flex u-gap-1rem">
+          <div class="form-group u-flex-1"><label>Precio ($ USD)</label><input type="number" step="0.5" id="wiz-prod-price" class="form-control" value="42.00"></div>
+          <div class="form-group u-flex-1"><label>Ingredientes</label><input type="text" id="wiz-prod-ings" class="form-control" value="Carne 150g, Queso Cheddar, Tomate, Cebolla"></div>
         </div>
       </div>
 
       <!-- Paso 3: Mesas y QR -->
       <div class="wizard-step" id="wiz-step-3">
-        <h4 style="color: var(--gold-accent); margin-top: 0;">🍽️ DISTRIBUCIÓN DE MESAS Y CÓDIGOS QR</h4>
-        <p style="font-size: 0.85rem; color: var(--text-muted);">El sistema creará los códigos QR automáticos para tus mesas de salón:</p>
+        <h4 class="u-color-token-gold-accent u-margin-top-0">🍽️ DISTRIBUCIÓN DE MESAS Y CÓDIGOS QR</h4>
+        <p class="u-font-size-0-85rem u-color-token-text-muted">El sistema creará los códigos QR automáticos para tus mesas de salón:</p>
         <div class="form-group"><label>Número de Mesas a Generar en Salón</label><input type="number" id="wiz-num-mesas" class="form-control" value="20"></div>
       </div>
 
       <!-- Paso 4: Usuarios del Sistema -->
       <div class="wizard-step" id="wiz-step-4">
-        <h4 style="color: var(--gold-accent); margin-top: 0;">👥 USUARIOS Y ROLES DEL SISTEMA</h4>
-        <p style="font-size: 0.85rem; color: var(--text-muted);">Se crearán automáticamente las cuentas de prueba para tu personal:</p>
+        <h4 class="u-color-token-gold-accent u-margin-top-0">👥 USUARIOS Y ROLES DEL SISTEMA</h4>
+        <p class="u-font-size-0-85rem u-color-token-text-muted">Se crearán automáticamente las cuentas de prueba para tu personal:</p>
 
-        <div style="background: rgba(0,0,0,0.3); border: 1px solid var(--toon-border); padding: 1rem; border-radius: 8px; font-size: 0.85rem;">
+        <div class="u-background-rgba-0-0-0-0-3 u-border-1px-solid-token-toon-border u-padding-1rem u-border-radius-8px u-font-size-0-85rem">
           <div>⚙️ <strong>Admin:</strong> admin / admin123</div>
           <div>💰 <strong>Caja POS:</strong> caja1 / caja123</div>
           <div>👨‍🍳 <strong>Cocina KDS:</strong> cocina1 / cocina123</div>
@@ -798,8 +746,8 @@
         </div>
       </div>
 
-      <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 1.5rem;">
-        <button class="btn-gold" style="background: transparent; border: 1px solid var(--text-muted); color: var(--text-muted);" id="wiz-btn-prev" onclick="wizardNav(-1)">← Anterior</button>
+      <div class="u-display-flex u-justify-content-space-between u-align-items-center u-margin-top-1-5rem">
+        <button class="btn-gold u-background-transparent u-border-1px-solid-token-text-muted u-color-token-text-muted" id="wiz-btn-prev" onclick="wizardNav(-1)">← Anterior</button>
         <button class="btn-gold" id="wiz-btn-next" onclick="wizardNav(1)">Siguiente →</button>
       </div>
     </div>
@@ -807,9 +755,9 @@
 
   <!-- Modal Crear Publicación Web -->
   <div class="product-modal-backdrop" id="add-publicacion-modal">
-    <div class="product-modal-card" style="max-width: 480px; padding: 1.5rem;">
+    <div class="product-modal-card u-max-width-480px u-padding-1-5rem">
       <button class="modal-close-btn" onclick="closeModal('add-publicacion-modal')">&times;</button>
-      <h3 style="color: var(--gold-accent); margin-top: 0;">📰 NUEVA PUBLICACIÓN PARA LA WEB PÚBLICA</h3>
+      <h3 class="u-color-token-gold-accent u-margin-top-0">📰 NUEVA PUBLICACIÓN PARA LA WEB PÚBLICA</h3>
       <div class="form-group"><label>Título del Anuncio</label><input type="text" id="pub-titulo" class="form-control" placeholder="Ej. ¡Gran Inauguración de Nueva Sucursal!" required></div>
       <div class="form-group"><label>Contenido / Detalles</label><textarea id="pub-contenido" class="form-control" rows="4" placeholder="Escribe aquí el contenido para los clientes..." required></textarea></div>
       <div class="form-group">
@@ -817,15 +765,15 @@
         <input type="file" accept="image/*" class="form-control" onchange="uploadLocalFile(event, 'pub-img')">
       </div>
       <div class="form-group"><label>URL Imagen</label><input type="text" id="pub-img" class="form-control"></div>
-      <button class="btn-gold" style="width: 100%; margin-top: 1rem;" onclick="submitCreatePublicacion()">PUBLICAR EN LA WEB PÚBLICA</button>
+      <button class="btn-gold u-width-100 u-margin-top-1rem" onclick="submitCreatePublicacion()">PUBLICAR EN LA WEB PÚBLICA</button>
     </div>
   </div>
 
   <!-- Modal Editar Producto e Ingredientes -->
   <div class="product-modal-backdrop" id="edit-product-modal">
-    <div class="product-modal-card" style="max-width: 480px; padding: 1.5rem;">
+    <div class="product-modal-card u-max-width-480px u-padding-1-5rem">
       <button class="modal-close-btn" onclick="closeModal('edit-product-modal')">&times;</button>
-      <h3 style="color: var(--gold-accent); margin-top: 0;">✏️ EDITAR PRODUCTO E INGREDIENTES</h3>
+      <h3 class="u-color-token-gold-accent u-margin-top-0">✏️ EDITAR PRODUCTO E INGREDIENTES</h3>
       <input type="hidden" id="edit-prod-id">
       <div class="form-group"><label>Nombre del Producto</label><input type="text" id="edit-prod-name" class="form-control" required></div>
       <div class="form-group"><label>Categoría</label><select id="edit-prod-cat-select" class="form-control" required></select></div>
@@ -850,15 +798,15 @@
         <input type="file" accept="image/*" class="form-control" onchange="uploadLocalFile(event, 'edit-prod-img')">
       </div>
       <div class="form-group"><label>URL Imagen</label><input type="text" id="edit-prod-img" class="form-control"></div>
-      <button class="btn-gold" style="width: 100%; margin-top: 1rem;" onclick="submitUpdateProduct()">GUARDAR CAMBIOS EN EL PRODUCTO</button>
+      <button class="btn-gold u-width-100 u-margin-top-1rem" onclick="submitUpdateProduct()">GUARDAR CAMBIOS EN EL PRODUCTO</button>
     </div>
   </div>
 
   <!-- Modal Crear/Editar Promoción -->
   <div class="product-modal-backdrop" id="promo-modal">
-    <div class="product-modal-card" style="max-width: 450px; padding: 1.5rem;">
+    <div class="product-modal-card u-max-width-450px u-padding-1-5rem">
       <button class="modal-close-btn" onclick="closeModal('promo-modal')">&times;</button>
-      <h3 id="promo-modal-title" style="color: var(--gold-accent); margin-top: 0;">🔥 NUEVA PROMOCIÓN</h3>
+      <h3 id="promo-modal-title" class="u-color-token-gold-accent u-margin-top-0">🔥 NUEVA PROMOCIÓN</h3>
       <div class="form-group"><label>Título Promocional</label><input type="text" id="promo-titulo" class="form-control" maxlength="150" placeholder="Ej. COMBO EXPLOSIVO TOON" required></div>
       <div class="form-group"><label>Descripción</label><input type="text" id="promo-desc" class="form-control" maxlength="255" placeholder="2 Hamburguesas + Papas + 2 Refrescos"></div>
       <div class="form-group"><label>Porcentaje Descuento (%)</label><input type="number" id="promo-pct" class="form-control" value="20"></div>
@@ -868,16 +816,16 @@
         <input type="file" accept="image/*" class="form-control" onchange="uploadLocalFile(event, 'promo-img')">
       </div>
       <div class="form-group"><label>Ruta Imagen</label><input type="text" id="promo-img" class="form-control" maxlength="500" placeholder="/static/uploads/banner.jpg"></div>
-      <label style="display:flex;align-items:center;gap:.5rem;"><input type="checkbox" id="promo-activo" checked> Visible en ambos carruseles</label>
-      <button id="promo-submit-btn" class="btn-gold" style="width: 100%; margin-top: 1rem;" onclick="submitCreatePromo()">GUARDAR PROMOCIÓN</button>
+      <label class="u-display-flex u-align-items-center u-gap-0p5rem"><input type="checkbox" id="promo-activo" checked> Visible en ambos carruseles</label>
+      <button id="promo-submit-btn" class="btn-gold u-width-100 u-margin-top-1rem" onclick="submitCreatePromo()">GUARDAR PROMOCIÓN</button>
     </div>
   </div>
 
   <!-- Modal Agregar Elemento a la Guía / Carrusel -->
   <div class="product-modal-backdrop" id="add-guia-modal">
-    <div class="product-modal-card" style="max-width: 480px; padding: 1.5rem;">
+    <div class="product-modal-card u-max-width-480px u-padding-1-5rem">
       <button class="modal-close-btn" onclick="closeModal('add-guia-modal')">&times;</button>
-      <h3 style="color: var(--gold-accent); margin-top: 0;">🎬 NUEVA DIAPOSITIVA GUÍA</h3>
+      <h3 class="u-color-token-gold-accent u-margin-top-0">🎬 NUEVA DIAPOSITIVA GUÍA</h3>
       <div class="form-group"><label>Título</label><input type="text" id="guia-titulo" class="form-control" placeholder="Ej. Paso 1: Escanea tu QR" required></div>
       <div class="form-group"><label>Descripción / Instrucciones</label><textarea id="guia-desc" class="form-control" rows="2" placeholder="Explicación detallada..."></textarea></div>
       <div class="form-group">
@@ -900,15 +848,15 @@
           <option value="delivery">🛵 Solo en Delivery</option>
         </select>
       </div>
-      <button class="btn-gold" style="width: 100%; margin-top: 1rem;" onclick="submitCreateGuia()">GUARDAR EN LA GUÍA INTERACTIVA</button>
+      <button class="btn-gold u-width-100 u-margin-top-1rem" onclick="submitCreateGuia()">GUARDAR EN LA GUÍA INTERACTIVA</button>
     </div>
   </div>
 
   <!-- Modal Crear/Editar Usuario del Personal (REQUERIMIENTO #1) -->
   <div class="product-modal-backdrop" id="user-modal">
-    <div class="product-modal-card" style="max-width: 480px; padding: 1.5rem;">
+    <div class="product-modal-card u-max-width-480px u-padding-1-5rem">
       <button class="modal-close-btn" onclick="closeModal('user-modal')">&times;</button>
-      <h3 style="color: var(--gold-accent); margin-top: 0;" id="user-modal-title">👤 CREAR NUEVO USUARIO / PERSONAL</h3>
+      <h3 id="user-modal-title" class="u-color-token-gold-accent u-margin-top-0">👤 CREAR NUEVO USUARIO / PERSONAL</h3>
       <input type="hidden" id="user-edit-id">
       <div class="form-group"><label>Nombre</label><input type="text" id="user-nombre" class="form-control" placeholder="Ej. Juan" required></div>
       <div class="form-group"><label>Apellido</label><input type="text" id="user-apellido" class="form-control" placeholder="Ej. Pérez" required></div>
@@ -928,61 +876,61 @@
         </select>
       </div>
       <div class="form-group"><label id="user-pwd-label">Contraseña</label><input type="password" id="user-password" class="form-control" placeholder="Mínimo 12 caracteres" minlength="12" maxlength="72"></div>
-      <button class="btn-gold" style="width: 100%; margin-top: 1rem;" onclick="submitUserForm()">💾 GUARDAR USUARIO</button>
+      <button class="btn-gold u-width-100 u-margin-top-1rem" onclick="submitUserForm()">💾 GUARDAR USUARIO</button>
     </div>
   </div>
 
   <!-- Modal Ver QR Mesa -->
   <div class="product-modal-backdrop" id="qr-modal">
-    <div class="product-modal-card" style="max-width: 380px; text-align: center; padding: 1.5rem;">
+    <div class="product-modal-card u-max-width-380px u-text-align-center u-padding-1-5rem">
       <button class="modal-close-btn" onclick="closeModal('qr-modal')">&times;</button>
-      <h3 style="color: var(--gold-accent); margin-top: 0;" id="qr-modal-title">CÓDIGO QR MESA #1</h3>
-      <img id="qr-modal-img" src="" style="width: 220px; height: 220px; border-radius: 12px; margin: 1rem 0; border: 2px solid var(--gold-accent);">
-      <div style="font-size: 0.8rem; color: var(--text-muted); word-break: break-all;" id="qr-modal-url"></div>
-      <button class="btn-gold" style="width: 100%; margin-top: 1rem;" onclick="window.print()">🖨️ IMPRIMIR CÓDIGO QR MESA</button>
+      <h3 id="qr-modal-title" class="u-color-token-gold-accent u-margin-top-0">CÓDIGO QR MESA #1</h3>
+      <img id="qr-modal-img" src="" class="u-width-220px u-height-220px u-border-radius-12px u-margin-1rem-0 u-border-2px-solid-token-gold-accent">
+      <div id="qr-modal-url" class="u-font-size-0-8rem u-color-token-text-muted u-word-break-break-all"></div>
+      <button class="btn-gold u-width-100 u-margin-top-1rem" onclick="window.print()">🖨️ IMPRIMIR CÓDIGO QR MESA</button>
     </div>
   </div>
 
   <!-- Modal Agregar Mesa -->
   <div class="product-modal-backdrop" id="add-mesa-modal">
-    <div class="product-modal-card" style="max-width: 400px; padding: 1.5rem;">
+    <div class="product-modal-card u-max-width-400px u-padding-1-5rem">
       <button class="modal-close-btn" onclick="closeModal('add-mesa-modal')">&times;</button>
-      <h3 style="color: var(--gold-accent); margin-top: 0;">➕ AGREGAR NUEVA MESA</h3>
+      <h3 class="u-color-token-gold-accent u-margin-top-0">➕ AGREGAR NUEVA MESA</h3>
       <div class="form-group"><label>Número de Mesa</label><input type="number" id="new-mesa-num" class="form-control" placeholder="Ej. 21"></div>
       <div class="form-group"><label>Capacidad (personas)</label><input type="number" id="new-mesa-cap" class="form-control" value="4"></div>
-      <button class="btn-gold" style="width: 100%; margin-top: 1rem;" onclick="submitCreateMesa()">AGREGAR Y GENERAR QR</button>
+      <button class="btn-gold u-width-100 u-margin-top-1rem" onclick="submitCreateMesa()">AGREGAR Y GENERAR QR</button>
     </div>
   </div>
 
   <!-- Modal Ingreso Insumo -->
   <div class="product-modal-backdrop" id="ingreso-insumo-modal">
-    <div class="product-modal-card" style="max-width: 400px; padding: 1.5rem;">
+    <div class="product-modal-card u-max-width-400px u-padding-1-5rem">
       <button class="modal-close-btn" onclick="closeModal('ingreso-insumo-modal')">&times;</button>
-      <h3 style="color: var(--gold-accent); margin-top: 0;">➕ REGISTRAR INGRESO DE INSUMO</h3>
-      <p id="ingreso-insumo-title" style="color: #fff; font-weight: 700;"></p>
+      <h3 class="u-color-token-gold-accent u-margin-top-0">➕ REGISTRAR INGRESO DE INSUMO</h3>
+      <p id="ingreso-insumo-title" class="u-color-hex-fff u-font-weight-700"></p>
       <div class="form-group"><label>Cantidad a Ingresar</label><input type="number" step="0.1" id="ingreso-cant-input" class="form-control" placeholder="Ej. 10.0"></div>
-      <button class="btn-gold" style="width: 100%; margin-top: 1rem;" onclick="submitIngresoInsumo()">CONFIRMAR INGRESO AL STOCK</button>
+      <button class="btn-gold u-width-100 u-margin-top-1rem" onclick="submitIngresoInsumo()">CONFIRMAR INGRESO AL STOCK</button>
     </div>
   </div>
 
   <!-- Modal Agregar Insumo -->
   <div class="product-modal-backdrop" id="add-insumo-modal">
-    <div class="product-modal-card" style="max-width: 400px; padding: 1.5rem;">
+    <div class="product-modal-card u-max-width-400px u-padding-1-5rem">
       <button class="modal-close-btn" onclick="closeModal('add-insumo-modal')">&times;</button>
-      <h3 style="color: var(--gold-accent); margin-top: 0;">➕ NUEVO INSUMO</h3>
+      <h3 class="u-color-token-gold-accent u-margin-top-0">➕ NUEVO INSUMO</h3>
       <div class="form-group"><label>Nombre</label><input type="text" id="ins-nombre" class="form-control" placeholder="Ej. Tomates frescos"></div>
       <div class="form-group"><label>Stock Inicial</label><input type="number" step="0.1" id="ins-stock" class="form-control" value="10.0"></div>
       <div class="form-group"><label>Stock Mínimo</label><input type="number" step="0.1" id="ins-min" class="form-control" value="5.0"></div>
       <div class="form-group"><label>Unidad de Medida</label><input type="text" id="ins-unidad" class="form-control" value="kg"></div>
-      <button class="btn-gold" style="width: 100%; margin-top: 1rem;" onclick="submitCreateInsumo()">GUARDAR INSUMO</button>
+      <button class="btn-gold u-width-100 u-margin-top-1rem" onclick="submitCreateInsumo()">GUARDAR INSUMO</button>
     </div>
   </div>
 
   <!-- Modal Crear Producto -->
   <div class="product-modal-backdrop" id="product-modal">
-    <div class="product-modal-card" style="max-width: 450px; padding: 1.5rem;">
+    <div class="product-modal-card u-max-width-450px u-padding-1-5rem">
       <button class="modal-close-btn" onclick="closeModal('product-modal')">&times;</button>
-      <h3 style="color: var(--gold-accent); margin-top: 0;">➕ CREAR NUEVO PRODUCTO</h3>
+      <h3 class="u-color-token-gold-accent u-margin-top-0">➕ CREAR NUEVO PRODUCTO</h3>
       <div class="form-group"><label>Nombre del Producto</label><input type="text" id="prod-name" class="form-control" required></div>
       <div class="form-group"><label>Categoría</label><select id="prod-cat-select" class="form-control" required></select></div>
       <div class="form-group"><label>Descripción</label><input type="text" id="prod-desc" class="form-control"></div>
@@ -1005,15 +953,15 @@
         <input type="file" accept="image/*" class="form-control" onchange="uploadLocalFile(event, 'prod-img')">
       </div>
       <div class="form-group"><label>Ruta / URL de la Imagen</label><input type="text" id="prod-img" class="form-control" placeholder="/static/uploads/..." required></div>
-      <button class="btn-gold" style="width: 100%; margin-top: 1rem;" onclick="submitCreateProduct()">GUARDAR PRODUCTO EN EL CATÁLOGO</button>
+      <button class="btn-gold u-width-100 u-margin-top-1rem" onclick="submitCreateProduct()">GUARDAR PRODUCTO EN EL CATÁLOGO</button>
     </div>
   </div>
 
   <!-- Modal Crear Categoría -->
   <div class="product-modal-backdrop" id="category-modal">
-    <div class="product-modal-card" style="max-width: 450px; padding: 1.5rem;">
+    <div class="product-modal-card u-max-width-450px u-padding-1-5rem">
       <button class="modal-close-btn" onclick="closeModal('category-modal')">&times;</button>
-      <h3 style="color: var(--gold-accent); margin-top: 0;">➕ CREAR NUEVA CATEGORÍA</h3>
+      <h3 class="u-color-token-gold-accent u-margin-top-0">➕ CREAR NUEVA CATEGORÍA</h3>
       <div class="form-group"><label>Nombre</label><input type="text" id="cat-name" class="form-control" required></div>
       <div class="form-group"><label>Descripción</label><input type="text" id="cat-desc" class="form-control"></div>
       <div class="form-group">
@@ -1021,19 +969,19 @@
         <input type="file" accept="image/*" class="form-control" onchange="uploadLocalFile(event, 'cat-img')">
       </div>
       <div class="form-group"><label>Ruta / URL Imagen Categoría</label><input type="text" id="cat-img" class="form-control" placeholder="/static/uploads/..." required></div>
-      <button class="btn-gold" style="width: 100%; margin-top: 1rem;" onclick="submitCreateCategory()">GUARDAR CATEGORÍA EN EL SERVIDOR</button>
+      <button class="btn-gold u-width-100 u-margin-top-1rem" onclick="submitCreateCategory()">GUARDAR CATEGORÍA EN EL SERVIDOR</button>
     </div>
   </div>
 
   <!-- Modal Crear Reseña -->
   <div class="product-modal-backdrop" id="resena-modal">
-    <div class="product-modal-card" style="max-width: 440px; padding: 1.5rem;">
+    <div class="product-modal-card u-max-width-440px u-padding-1-5rem">
       <button class="modal-close-btn" onclick="closeModal('resena-modal')">&times;</button>
-      <h3 style="color: var(--gold-accent); margin-top: 0;">⭐ AGREGAR RESEÑA DESTACADA</h3>
+      <h3 class="u-color-token-gold-accent u-margin-top-0">⭐ AGREGAR RESEÑA DESTACADA</h3>
       <div class="form-group"><label>Nombre del Cliente</label><input type="text" id="res-nombre" class="form-control" placeholder="Ej. Ana María"></div>
       <div class="form-group"><label>Estrellas (1 a 5)</label><input type="number" min="1" max="5" id="res-estrellas" class="form-control" value="5"></div>
       <div class="form-group"><label>Comentario / Opinión</label><textarea id="res-comentario" class="form-control" rows="3" placeholder="Excelente atención..."></textarea></div>
-      <button class="btn-gold" style="width: 100%; margin-top: 1rem;" onclick="submitCreateResena()">GUARDAR RESEÑA EN EL SISTEMA</button>
+      <button class="btn-gold u-width-100 u-margin-top-1rem" onclick="submitCreateResena()">GUARDAR RESEÑA EN EL SISTEMA</button>
     </div>
   </div>
 

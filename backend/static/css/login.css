@@ -1,0 +1,113 @@
+body.login-portal-body {
+  background: var(--color-navy);
+  background-image: radial-gradient(circle at 50% 30%, rgba(8, 121, 232, 0.2), transparent 70%);
+  color: #FFFFFF;
+  font-family: var(--font-sans);
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+  margin: 0;
+}
+
+.portal-card {
+  background: var(--color-dark);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  max-width: 440px;
+  width: 100%;
+  padding: 2.5rem 2rem;
+  box-shadow: var(--shadow-lg);
+  position: relative;
+  animation: slideInDown var(--transition-smooth);
+}
+
+.login-brand {
+  text-align: center;
+  margin-bottom: 2rem;
+}
+
+.login-brand-logo {
+  width: 84px;
+  height: 84px;
+  border-radius: 50%;
+  border: 3px solid var(--color-yellow);
+  box-shadow: var(--shadow-orange);
+}
+
+.login-brand-title {
+  font-size: 1.6rem;
+  font-weight: 900;
+  font-family: var(--font-display);
+  color: var(--color-yellow);
+  margin-top: 0.75rem;
+  margin-bottom: 0.2rem;
+}
+
+.login-brand-subtitle {
+  color: var(--color-text-secondary);
+  font-size: 0.85rem;
+  margin: 0;
+}
+
+.login-submit-button {
+  width: 100%;
+  margin-top: 1.25rem;
+  font-size: 1.05rem;
+}
+
+.login-demo-panel {
+  margin-top: 2rem;
+  border-top: 1px dashed var(--color-border);
+  padding-top: 1.25rem;
+}
+
+.login-demo-title {
+  font-size: 0.8rem;
+  color: var(--color-text-secondary);
+  text-align: center;
+  margin-bottom: 0.75rem;
+  font-weight: 700;
+}
+
+.login-demo-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 0.5rem;
+}
+
+.demo-role-btn {
+  padding: 0.6rem 0.8rem;
+  font-size: 0.82rem;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  color: #FFFFFF;
+  cursor: pointer;
+  font-weight: 700;
+  transition: all var(--transition-fast);
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+}
+
+.demo-role-btn:hover {
+  border-color: var(--color-orange);
+  background: rgba(255, 122, 0, 0.15);
+  color: var(--color-yellow);
+  transform: translateY(-2px);
+}
+
+.login-footer {
+  text-align: center;
+  margin-top: 1.5rem;
+}
+
+.login-footer-link {
+  color: var(--color-text-secondary);
+  font-size: 0.82rem;
+  text-decoration: none;
+}

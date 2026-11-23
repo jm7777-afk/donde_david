@@ -1,0 +1,43 @@
+.admin-layout {
+  display: grid;
+  grid-template-columns: 240px 1fr;
+  min-height: 100vh;
+}
+.sidebar {
+  background: rgba(14, 9, 38, 0.95);
+  border-right: 1px solid var(--toon-border);
+  padding: 1.5rem 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+.sidebar-btn {
+  padding: 0.75rem 1rem;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--text-muted);
+  font-weight: 700;
+  font-size: 0.9rem;
+  text-align: left;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  transition: all 0.2s;
+}
+.sidebar-btn.active, .sidebar-btn:hover {
+  background: var(--toon-card-hover);
+  border-color: var(--gold-accent);
+  color: var(--gold-accent);
+}
+.admin-content {
+  padding: 2rem;
+  overflow-y: auto;
+}
+.panel-section {
+  display: none;
+}
+.panel-section.active {
+  display: block;
+}

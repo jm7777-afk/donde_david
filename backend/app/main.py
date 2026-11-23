@@ -21,17 +21,17 @@ from sqlalchemy import text
 from backend.app.core.config import settings
 from backend.app.core.database import Base, engine, SessionLocal
 from backend.app.core.rate_limit import limiter
+from backend.app.core.logging_config import setup_logging
+from backend.app.core.logging_middleware import RequestLoggingMiddleware
 from backend.app import models
 from backend.app.models.usuario import Usuario
-from backend.app.api import auth, cliente, cocina, caja, admin, mesero, setup, delivery, gerencia
+from backend.app.api import auth, cliente, cocina, caja, admin, mesero, setup, delivery, gerencia, admin_auditoria, admin_logs, admin_backups
 from backend.app.api.setup import check_system_installed, LOCK_FILE_PATH
 from backend.app.websockets.manager import ws_manager
 from backend.scripts.seed_data import seed
 
-logging.basicConfig(
-    level=os.getenv("LOG_LEVEL", "INFO").upper(),
-    format="%(asctime)s %(levelname)s %(name)s %(message)s"
-)
+# Inicializar logging centralizado con rotación de archivos
+setup_logging(level=os.getenv("LOG_LEVEL", "INFO"))
 logger = logging.getLogger(__name__)
 
 
@@ -56,6 +56,9 @@ app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 # GZip Middleware para compresión ultrarrápida de respuestas HTTP
 app.add_middleware(GZipMiddleware, minimum_size=500)
 
+# Middleware de registro estructurado y métricas de latencia HTTP
+app.add_middleware(RequestLoggingMiddleware)
+
 # CORS Middleware configurado dinámicamente según entorno
 app.add_middleware(
     CORSMiddleware,
@@ -72,6 +75,9 @@ app.include_router(cliente.router, prefix=settings.API_V1_STR)
 app.include_router(cocina.router, prefix=settings.API_V1_STR)
 app.include_router(caja.router, prefix=settings.API_V1_STR)
 app.include_router(admin.router, prefix=settings.API_V1_STR)
+app.include_router(admin_auditoria.router, prefix=settings.API_V1_STR)
+app.include_router(admin_logs.router, prefix=settings.API_V1_STR)
+app.include_router(admin_backups.router, prefix=settings.API_V1_STR)
 app.include_router(mesero.router, prefix=settings.API_V1_STR)
 app.include_router(delivery.router, prefix=settings.API_V1_STR)
 app.include_router(gerencia.router, prefix=settings.API_V1_STR)

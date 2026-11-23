@@ -1,6 +1,7 @@
 from sqlalchemy import Column, Integer, String, DateTime, ForeignKey
 from datetime import datetime, timezone
 from backend.app.core.database import Base
+from backend.app.models.auditoria import Auditoria
 
 class PuntosLog(Base):
     __tablename__ = "puntos_log"
@@ -12,11 +13,4 @@ class PuntosLog(Base):
     pedido_id = Column(Integer, ForeignKey("pedidos.id"), nullable=True)
     fecha = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
-class Auditoria(Base):
-    __tablename__ = "auditoria"
-
-    id = Column(Integer, primary_key=True, index=True)
-    accion = Column(String(100), nullable=False)
-    usuario = Column(String(100), nullable=False)
-    detalle = Column(String(255), nullable=True)
-    fecha = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+__all__ = ["PuntosLog", "Auditoria"]

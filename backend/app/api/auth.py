@@ -6,6 +6,7 @@ from backend.app.core.rate_limit import limiter
 from backend.app.core.security import verify_password, create_access_token, get_current_user, get_password_hash
 from backend.app.models.usuario import Usuario
 from backend.app.schemas.schemas import LoginRequest, Token, UsuarioOut
+from backend.app.services.audit_service import record_audit
 
 router = APIRouter(prefix="/auth", tags=["Autenticación"])
 
@@ -28,13 +29,32 @@ def login(request: Request, response: Response, login_data: LoginRequest, db: Se
         Usuario.activo == True
     ).first()
     
+    client_ip = request.client.host if request.client else None
     if not user or not verify_password(login_data.password, user.contraseña_hash):
+        record_audit(
+            db=db,
+            accion="LOGIN_FAILED",
+            usuario=login_data.nombre_usuario,
+            ip_address=client_ip,
+            recurso="auth",
+            detalle=f"Intento fallido de inicio de sesión para el usuario '{login_data.nombre_usuario}'"
+        )
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Usuario o contraseña incorrectos",
             headers={"WWW-Authenticate": "Bearer"},
         )
     
+    record_audit(
+        db=db,
+        accion="LOGIN_SUCCESS",
+        usuario=user.nombre_usuario,
+        usuario_id=user.id,
+        ip_address=client_ip,
+        recurso="auth",
+        detalle=f"Inicio de sesión exitoso con rol '{user.rol}'"
+    )
+
     access_token = create_access_token(data={"sub": user.nombre_usuario, "rol": user.rol})
     return {
         "access_token": access_token,
@@ -74,6 +94,18 @@ def register(request: Request, response: Response, data: RegisterRequest, db: Se
     db.add(nuevo)
     db.commit()
     db.refresh(nuevo)
+
+    client_ip = request.client.host if request.client else None
+    record_audit(
+        db=db,
+        accion="USER_REGISTER",
+        usuario=nuevo.nombre_usuario,
+        usuario_id=nuevo.id,
+        ip_address=client_ip,
+        recurso="usuarios",
+        recurso_id=str(nuevo.id),
+        detalle="Registro de nuevo cliente con bono de bienvenida"
+    )
 
     token = create_access_token(data={"sub": nuevo.nombre_usuario, "rol": nuevo.rol})
     return {

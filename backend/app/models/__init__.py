@@ -9,6 +9,7 @@ from backend.app.models.promocion import Promocion
 from backend.app.models.configuracion import Configuracion
 from backend.app.models.turno import Turno
 from backend.app.models.puntos_log import PuntosLog
+from backend.app.models.auditoria import Auditoria
 from backend.app.models.guia_item import GuiaItem
 from backend.app.models.resena import Resena
 from backend.app.models.publicacion import Publicacion
@@ -29,6 +30,7 @@ __all__ = [
     "Configuracion",
     "Turno",
     "PuntosLog",
+    "Auditoria",
     "GuiaItem",
     "Resena",
     "Publicacion",

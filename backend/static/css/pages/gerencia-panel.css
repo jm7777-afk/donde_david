@@ -1,0 +1,6 @@
+.manager-page { max-width: 1280px; margin: auto; padding: 1.25rem; }
+.manager-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 1rem; }
+.manager-card { background: var(--toon-card); border: 1px solid var(--toon-border); border-radius: var(--radius-md); padding: 1.1rem; }
+.manager-value { color: var(--gold-accent); font-size: clamp(1.5rem, 4vw, 2rem); font-weight: 900; margin-top: .5rem; }
+.manager-alert { padding: .75rem; border-bottom: 1px solid var(--toon-border); }
+@media (max-width: 600px) { .manager-page { padding: .75rem; } }

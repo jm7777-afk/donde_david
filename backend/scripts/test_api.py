@@ -60,6 +60,7 @@ class TestRestauranteAPI(unittest.TestCase):
             "numero_mesa": "Mesa 5",
             "codigo_qr": "QR_MESA_5",
             "tipo": "mesa",
+            "modo_pago": "PAGAR_DESPUES",
             "observaciones": "Sin cebolla por favor",
             "detalles": [
                 {

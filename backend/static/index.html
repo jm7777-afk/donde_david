@@ -17,156 +17,8 @@
   <link rel="stylesheet" href="/static/css/global.css?v=2.0">
   <link rel="stylesheet" href="/static/css/toon-theme.css?v=2.7">
 
-  <style>
-    /* Estilos Específicos para la Landing Page Donde David */
-    .landing-hero {
-      position: relative;
-      padding: clamp(2rem, 5vw, 4rem) 1.25rem;
-      background: radial-gradient(circle at 70% 20%, rgba(255, 183, 3, 0.12) 0%, transparent 60%),
-                  radial-gradient(circle at 20% 80%, rgba(0, 245, 212, 0.08) 0%, transparent 60%),
-                  var(--toon-bg);
-      border-bottom: 2px solid var(--gold-accent);
-    }
-    .landing-container {
-      max-width: 1280px;
-      margin: 0 auto;
-    }
-    .landing-hero-grid {
-      display: grid;
-      grid-template-columns: 1.1fr 0.9fr;
-      gap: clamp(1.5rem, 4vw, 3rem);
-      align-items: center;
-    }
-    @media (max-width: 992px) {
-      .landing-hero-grid {
-        grid-template-columns: 1fr;
-        text-align: center;
-      }
-    }
-    .landing-badge-trust {
-      display: inline-flex;
-      align-items: center;
-      gap: 0.5rem;
-      background: rgba(255, 188, 13, 0.12);
-      border: 1px solid var(--gold-accent);
-      border-radius: 30px;
-      padding: 0.4rem 1.1rem;
-      margin-bottom: 1.25rem;
-    }
-    .landing-hero-title {
-      font-family: var(--font-display);
-      font-size: clamp(2.2rem, 5vw, 3.8rem);
-      font-weight: 900;
-      line-height: 1.08;
-      color: #ffffff;
-      margin-bottom: 1rem;
-      text-shadow: 0 4px 15px rgba(0,0,0,0.8);
-    }
-    .landing-hero-title span {
-      background: var(--gold-gradient);
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-    }
-
-    /* Standard Web Footer Links Styling */
-    .standard-footer-links {
-      list-style: none;
-      padding: 0;
-      margin: 0;
-      display: flex;
-      flex-direction: column;
-      gap: 0.6rem;
-    }
-    .standard-footer-links a {
-      color: var(--text-dim);
-      text-decoration: none;
-      font-size: 0.88rem;
-      font-weight: 600;
-      transition: color 0.2s ease;
-    }
-    .standard-footer-links a:hover {
-      color: var(--gold-accent);
-    }
-    .landing-footer {
-      background: linear-gradient(160deg, #0d1421, #060910 75%);
-      border-top: 2px solid var(--gold-accent);
-      padding: 3rem 1.25rem 1.5rem;
-      color: var(--text-dim);
-      font-size: 0.9rem;
-    }
-    .landing-footer-grid {
-      display: grid;
-      grid-template-columns: minmax(0, 1.35fr) repeat(2, minmax(0, 1fr));
-      gap: clamp(1.25rem, 3vw, 2.5rem);
-      margin-bottom: 2.25rem;
-    }
-    .landing-footer-column {
-      min-width: 0;
-      padding: clamp(1rem, 2vw, 1.4rem);
-      border: 1px solid rgba(255,255,255,0.08);
-      border-radius: 18px;
-      background: rgba(255,255,255,0.025);
-    }
-    .landing-footer-brand {
-      color: var(--gold-accent);
-      font-family: var(--font-display);
-      font-size: clamp(1.1rem, 2vw, 1.4rem);
-      font-weight: 900;
-      line-height: 1.25;
-      margin-bottom: 0.8rem;
-      overflow-wrap: anywhere;
-    }
-    .landing-footer-title {
-      display: block;
-      color: #fff;
-      font-size: 0.88rem;
-      letter-spacing: 0.08em;
-      margin-bottom: 1rem;
-    }
-    .landing-footer-copy {
-      line-height: 1.7;
-      margin: 0 0 0.85rem;
-      overflow-wrap: anywhere;
-    }
-    .landing-footer-detail {
-      margin: 0 0 0.65rem;
-      line-height: 1.6;
-      overflow-wrap: anywhere;
-    }
-    .landing-footer-payments {
-      color: var(--gold-accent);
-      font-size: 0.82rem;
-      font-weight: 800;
-      line-height: 1.6;
-      overflow-wrap: anywhere;
-    }
-    .landing-footer-copyright {
-      border-top: 1px solid rgba(255,255,255,0.1);
-      padding-top: 1.25rem;
-      text-align: center;
-      font-size: 0.78rem;
-      line-height: 1.6;
-    }
-    @media (max-width: 760px) {
-      .landing-footer-grid {
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-      }
-      .landing-footer-brand-column {
-        grid-column: 1 / -1;
-      }
-    }
-    @media (max-width: 520px) {
-      .landing-footer-grid {
-        grid-template-columns: minmax(0, 1fr);
-      }
-      .landing-footer-brand-column {
-        grid-column: auto;
-      }
-      .landing-footer-column {
-        padding: 1rem;
-      }
-    }
-  </style>
+  <link rel="stylesheet" href="/static/css/pages/index.css?v=1.0">
+  <link rel="stylesheet" href="/static/css/utilities.css?v=1.0">
 </head>
 <body class="toon-theme">
 
@@ -179,12 +31,12 @@
       <div class="landing-container">
         
         <!-- Tarjeta de Puntos de Regalo por Registro -->
-        <div class="points-welcome-card" style="margin-bottom: 1.5rem;">
+        <div class="points-welcome-card u-margin-bottom-1-5rem">
           <div>
-            <div style="font-size: 0.78rem; color: var(--gold-accent); font-weight: 800; text-transform: uppercase;">¡BIENVENIDO A DONDE DAVID!</div>
-            <div style="font-size: 0.95rem; font-weight: 900; color: #fff; margin-top: 0.15rem;">🎁 Regístrate gratis y gana +50 Puntos de Regalo para tu próximo pedido</div>
+            <div class="u-font-size-0-78rem u-color-token-gold-accent u-font-weight-800 u-text-transform-uppercase">¡BIENVENIDO A DONDE DAVID!</div>
+            <div class="u-font-size-0-95rem u-font-weight-900 u-color-hex-fff u-margin-top-0-15rem">🎁 Regístrate gratis y gana +50 Puntos de Regalo para tu próximo pedido</div>
           </div>
-          <a href="/static/cliente/app.html#screen-perfil" class="btn-gold" style="font-size: 0.8rem; padding: 0.45rem 0.9rem; text-decoration: none;">
+          <a href="/static/cliente/app.html#screen-perfil" class="btn-gold u-font-size-0-8rem u-padding-0-45rem-0-9rem u-text-decoration-none">
             +50 PTS 🎁
           </a>
         </div>
@@ -194,54 +46,54 @@
           <div>
             <div class="landing-badge-trust">
               <span>⭐⭐⭐⭐⭐</span>
-              <strong style="font-size: 0.85rem; color: #ffffff;">Preparado al momento • Pedidos por QR</strong>
+              <strong class="u-font-size-0-85rem u-color-hex-ffffff">Preparado al momento • Pedidos por QR</strong>
             </div>
 
             <h1 class="landing-hero-title" id="landing-title">¡BUEN SABOR, RÁPIDO Y RECIÉN HECHO!</h1>
 
-            <p id="landing-description" style="font-size: clamp(1rem, 2vw, 1.15rem); color: var(--text-dim); line-height: 1.7; margin-bottom: 1.75rem; font-weight: 500; max-width: 60ch;">
+            <p id="landing-description" class="u-font-size-clamp-1rem-2vw-1-15rem u-color-token-text-dim u-line-height-1-7 u-margin-bottom-1-75rem u-font-weight-500 u-max-width-60ch">
               Hamburguesas artesanales de carne 100% res, perros calientes con toppings crocantes y malteadas heladas. Pide por QR en mesa o solicita delivery.
             </p>
 
-            <div style="display: flex; gap: 0.85rem; flex-wrap: wrap; margin-bottom: 1.5rem;">
-              <a href="/static/cliente/app.html?mesa=5" class="btn-gold" style="font-size: 1.05rem; padding: 0.85rem 1.8rem;">
+            <div class="u-display-flex u-gap-0-85rem u-flex-wrap-wrap u-margin-bottom-1-5rem">
+              <a href="/static/cliente/app.html?mesa=5" class="btn-gold u-font-size-1-05rem u-padding-0-85rem-1-8rem">
                 🚀 ORDENAR AHORA (APP QR)
               </a>
-              <a href="/static/cliente/app.html?login=1" class="btn btn-outline" style="font-size: 1.05rem; padding: 0.85rem 1.8rem;">
+              <a href="/static/cliente/app.html?login=1" class="btn btn-outline u-font-size-1-05rem u-padding-0-85rem-1-8rem">
                 👤 INICIAR SESIÓN CLIENTE
               </a>
-              <a href="#menu" class="btn btn-outline" style="font-size: 1.05rem; padding: 0.85rem 1.8rem; border-color: var(--gold-accent); color: var(--gold-accent);">
+              <a href="#menu" class="btn btn-outline u-font-size-1-05rem u-padding-0-85rem-1-8rem u-border-color-token-gold-accent u-color-token-gold-accent">
                 📋 EXPLORAR MENÚ
               </a>
             </div>
 
             <!-- Badges de Garantía -->
-            <div style="display: flex; gap: 0.5rem; overflow-x: auto; padding-bottom: 0.2rem;">
-              <span style="background: rgba(255,255,255,0.05); border: 1px solid var(--toon-border); padding: 0.3rem 0.7rem; border-radius: 20px; font-size: 0.75rem; font-weight: 800; color: #fff;">🥩 Carne 100% Res</span>
-              <span style="background: rgba(255,255,255,0.05); border: 1px solid var(--toon-border); padding: 0.3rem 0.7rem; border-radius: 20px; font-size: 0.75rem; font-weight: 800; color: #fff;">⚡ Preparado al momento</span>
-              <span style="background: rgba(255,255,255,0.05); border: 1px solid var(--toon-border); padding: 0.3rem 0.7rem; border-radius: 20px; font-size: 0.75rem; font-weight: 800; color: #fff;">📱 QR y delivery</span>
+            <div class="u-display-flex u-gap-0-5rem u-overflow-x-auto u-padding-bottom-0-2rem">
+              <span class="u-background-rgba-255-255-255-0-05 u-border-1px-solid-token-toon-border u-padding-0-3rem-0-7rem u-border-radius-20px u-font-size-0-75rem u-font-weight-800 u-color-hex-fff">🥩 Carne 100% Res</span>
+              <span class="u-background-rgba-255-255-255-0-05 u-border-1px-solid-token-toon-border u-padding-0-3rem-0-7rem u-border-radius-20px u-font-size-0-75rem u-font-weight-800 u-color-hex-fff">⚡ Preparado al momento</span>
+              <span class="u-background-rgba-255-255-255-0-05 u-border-1px-solid-token-toon-border u-padding-0-3rem-0-7rem u-border-radius-20px u-font-size-0-75rem u-font-weight-800 u-color-hex-fff">📱 QR y delivery</span>
             </div>
           </div>
 
           <!-- Columna Derecha: Carrusel Interactivo de Fotos HD -->
           <div id="landing-hero-carousel-container">
-            <div style="position: relative; border-radius: 20px; overflow: hidden; height: 280px; border: 2px solid var(--gold-accent); box-shadow: 0 12px 35px rgba(255,183,3,0.4); cursor: pointer;" onclick="window.location.href='/static/cliente/app.html'">
-              <img src="https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=1000" style="width: 100%; height: 100%; object-fit: cover; filter: brightness(0.88);" alt="Hamburguesa de Donde David">
-              <div style="position: absolute; inset: 0; padding: 1.25rem; display: flex; flex-direction: column; justify-content: space-between; background: linear-gradient(0deg, rgba(8,12,20,0.92) 0%, rgba(8,12,20,0.2) 50%, rgba(0,0,0,0.4) 100%);">
-                <div style="display: flex; justify-content: space-between; align-items: center;">
-                  <span style="font-size: 0.78rem; font-weight: 900; background: var(--gold-gradient); color: #000; padding: 0.3rem 0.85rem; border-radius: 20px;">
+            <div onclick="window.location.href='/static/cliente/app.html'" class="u-position-relative u-border-radius-20px u-overflow-hidden u-height-280px u-border-2px-solid-token-gold-accent u-box-shadow-0-12px-35px-rgba-255-183-3-0-4 u-cursor-pointer">
+              <img src="https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=1000" alt="Hamburguesa de Donde David" class="u-width-100 u-height-100 u-object-fit-cover u-filter-brightness-0-88">
+              <div class="u-position-absolute u-inset-0 u-padding-1-25rem u-display-flex u-flex-direction-column u-justify-content-space-between u-background-linear-gradient-0deg-rgba-8-12-20-0-92-0-rgba-8-12-20-0-2-50-rgba-0-0-0-0-4-100">
+                <div class="u-display-flex u-justify-content-space-between u-align-items-center">
+                  <span class="u-font-size-0-78rem u-font-weight-900 u-background-token-gold-gradient u-color-hex-000 u-padding-0-3rem-0-85rem u-border-radius-20px">
                     ⭐ PLATILLO ESTRELLA EN VIVO
                   </span>
-                  <span style="font-size: 0.78rem; background: rgba(0,0,0,0.7); backdrop-filter: blur(8px); border: 1px solid var(--cyan-accent); color: var(--cyan-accent); padding: 0.3rem 0.75rem; border-radius: 20px; font-weight: 900;">
+                  <span class="u-font-size-0-78rem u-background-rgba-0-0-0-0-7 u-backdrop-filter-blur-8px u-border-1px-solid-token-cyan-accent u-color-token-cyan-accent u-padding-0-3rem-0-75rem u-border-radius-20px u-font-weight-900">
                     Toca para Pedir ⚡
                   </span>
                 </div>
                 <div>
-                  <h3 style="font-size: 1.55rem; font-weight: 900; color: #fff; margin: 0 0 0.3rem 0; text-shadow: 0 3px 10px rgba(0,0,0,0.9);">HAMBURGUESA DOBLE DAVID</h3>
-                  <p style="font-size: 0.88rem; color: #e2e8f0; margin: 0 0 0.75rem 0; font-weight: 600; text-shadow: 0 2px 6px rgba(0,0,0,0.9);">Carne 100% res jugosa, doble queso cheddar fundido, tocino crocante y salsa secreta.</p>
-                  <div style="display: flex; justify-content: space-between; align-items: center; background: rgba(0,0,0,0.65); backdrop-filter: blur(10px); padding: 0.6rem 0.9rem; border-radius: 14px; border: 1px solid rgba(255,255,255,0.15);">
-                    <div style="font-size: 1.25rem; font-weight: 900; color: var(--gold-accent);">$15.00 <span style="font-size: 0.8rem; color: var(--text-dim); font-weight: 700;">(Bs. 547.50)</span></div>
-                    <button class="btn-gold" style="padding: 0.45rem 1rem; font-size: 0.85rem;">🛒 PEDIR EN APP</button>
+                  <h3 class="u-font-size-1-55rem u-font-weight-900 u-color-hex-fff u-margin-0-0-0-3rem-0 u-text-shadow-0-3px-10px-rgba-0-0-0-0-9">HAMBURGUESA DOBLE DAVID</h3>
+                  <p class="u-font-size-0-88rem u-color-hex-e2e8f0 u-margin-0-0-0-75rem-0 u-font-weight-600 u-text-shadow-0-2px-6px-rgba-0-0-0-0-9">Carne 100% res jugosa, doble queso cheddar fundido, tocino crocante y salsa secreta.</p>
+                  <div class="u-display-flex u-justify-content-space-between u-align-items-center u-background-rgba-0-0-0-0-65 u-backdrop-filter-blur-10px u-padding-0-6rem-0-9rem u-border-radius-14px u-border-1px-solid-rgba-255-255-255-0-15">
+                    <div class="u-font-size-1-25rem u-font-weight-900 u-color-token-gold-accent">$15.00 <span class="u-font-size-0-8rem u-color-token-text-dim u-font-weight-700">(Bs. 547.50)</span></div>
+                    <button class="btn-gold u-padding-0-45rem-1rem u-font-size-0-85rem">🛒 PEDIR EN APP</button>
                   </div>
                 </div>
               </div>
@@ -253,30 +105,30 @@
     </section>
 
     <!-- 3. CATEGORÍAS DESLIZABLES INTEGRADAS AL TEMA OSCURO -->
-    <section style="padding: 2.5rem 1.25rem; background: var(--toon-card); border-bottom: 1px solid var(--toon-border);" id="menu">
+    <section id="menu" class="u-padding-2-5rem-1-25rem u-background-token-toon-card u-border-bottom-1px-solid-token-toon-border">
       <div class="landing-container">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
-          <h2 style="font-size: 1.3rem; font-weight: 900; color: var(--gold-accent); margin: 0; letter-spacing: 0.5px;">🍔 EXPLORAR CATEGORÍAS DEL MENÚ</h2>
-          <a href="/static/cliente/app.html" style="color: var(--cyan-accent); font-weight: 800; text-decoration: none; font-size: 0.85rem;">Ir a la App →</a>
+        <div class="u-display-flex u-justify-content-space-between u-align-items-center u-margin-bottom-1rem">
+          <h2 class="u-font-size-1-3rem u-font-weight-900 u-color-token-gold-accent u-margin-0 u-letter-spacing-0-5px">🍔 EXPLORAR CATEGORÍAS DEL MENÚ</h2>
+          <a href="/static/cliente/app.html" class="u-color-token-cyan-accent u-font-weight-800 u-text-decoration-none u-font-size-0-85rem">Ir a la App →</a>
         </div>
         
-        <div style="display: flex; gap: 0.65rem; overflow-x: auto; padding-bottom: 0.5rem; -webkit-overflow-scrolling: touch; scrollbar-width: none;">
-          <a href="/static/cliente/app.html" style="background: var(--gold-gradient); color: #000; padding: 0.55rem 1.15rem; border-radius: 25px; font-weight: 900; font-size: 0.85rem; text-decoration: none; white-space: nowrap; display: flex; align-items: center; gap: 0.4rem; box-shadow: 0 4px 15px rgba(255,188,13,0.4);">
+        <div class="u-display-flex u-gap-0-65rem u-overflow-x-auto u-padding-bottom-0-5rem u-webkit-overflow-scrolling-touch u-scrollbar-width-none">
+          <a href="/static/cliente/app.html" class="u-background-token-gold-gradient u-color-hex-000 u-padding-0-55rem-1-15rem u-border-radius-25px u-font-weight-900 u-font-size-0-85rem u-text-decoration-none u-white-space-nowrap u-display-flex u-align-items-center u-gap-0-4rem u-box-shadow-0-4px-15px-rgba-255-188-13-0-4">
             <span>🔥</span> <span>TODOS LOS PLATILLOS</span>
           </a>
-          <a href="/static/cliente/app.html?cat=1" style="background: rgba(255,255,255,0.05); color: #fff; border: 1px solid var(--toon-border); padding: 0.55rem 1.15rem; border-radius: 25px; font-weight: 800; font-size: 0.85rem; text-decoration: none; white-space: nowrap; display: flex; align-items: center; gap: 0.4rem;">
+          <a href="/static/cliente/app.html?cat=1" class="u-background-rgba-255-255-255-0-05 u-color-hex-fff u-border-1px-solid-token-toon-border u-padding-0-55rem-1-15rem u-border-radius-25px u-font-weight-800 u-font-size-0-85rem u-text-decoration-none u-white-space-nowrap u-display-flex u-align-items-center u-gap-0-4rem">
             <span>🍔</span> <span>HAMBURGUESAS</span>
           </a>
-          <a href="/static/cliente/app.html?cat=2" style="background: rgba(255,255,255,0.05); color: #fff; border: 1px solid var(--toon-border); padding: 0.55rem 1.15rem; border-radius: 25px; font-weight: 800; font-size: 0.85rem; text-decoration: none; white-space: nowrap; display: flex; align-items: center; gap: 0.4rem;">
+          <a href="/static/cliente/app.html?cat=2" class="u-background-rgba-255-255-255-0-05 u-color-hex-fff u-border-1px-solid-token-toon-border u-padding-0-55rem-1-15rem u-border-radius-25px u-font-weight-800 u-font-size-0-85rem u-text-decoration-none u-white-space-nowrap u-display-flex u-align-items-center u-gap-0-4rem">
             <span>🌭</span> <span>HOT DOGS</span>
           </a>
-          <a href="/static/cliente/app.html?cat=3" style="background: rgba(255,255,255,0.05); color: #fff; border: 1px solid var(--toon-border); padding: 0.55rem 1.15rem; border-radius: 25px; font-weight: 800; font-size: 0.85rem; text-decoration: none; white-space: nowrap; display: flex; align-items: center; gap: 0.4rem;">
+          <a href="/static/cliente/app.html?cat=3" class="u-background-rgba-255-255-255-0-05 u-color-hex-fff u-border-1px-solid-token-toon-border u-padding-0-55rem-1-15rem u-border-radius-25px u-font-weight-800 u-font-size-0-85rem u-text-decoration-none u-white-space-nowrap u-display-flex u-align-items-center u-gap-0-4rem">
             <span>🍟</span> <span>PAPAS</span>
           </a>
-          <a href="/static/cliente/app.html?cat=4" style="background: rgba(255,255,255,0.05); color: #fff; border: 1px solid var(--toon-border); padding: 0.55rem 1.15rem; border-radius: 25px; font-weight: 800; font-size: 0.85rem; text-decoration: none; white-space: nowrap; display: flex; align-items: center; gap: 0.4rem;">
+          <a href="/static/cliente/app.html?cat=4" class="u-background-rgba-255-255-255-0-05 u-color-hex-fff u-border-1px-solid-token-toon-border u-padding-0-55rem-1-15rem u-border-radius-25px u-font-weight-800 u-font-size-0-85rem u-text-decoration-none u-white-space-nowrap u-display-flex u-align-items-center u-gap-0-4rem">
             <span>🥤</span> <span>BEBIDAS</span>
           </a>
-          <a href="/static/cliente/app.html?cat=5" style="background: rgba(255,255,255,0.05); color: #fff; border: 1px solid var(--toon-border); padding: 0.55rem 1.15rem; border-radius: 25px; font-weight: 800; font-size: 0.85rem; text-decoration: none; white-space: nowrap; display: flex; align-items: center; gap: 0.4rem;">
+          <a href="/static/cliente/app.html?cat=5" class="u-background-rgba-255-255-255-0-05 u-color-hex-fff u-border-1px-solid-token-toon-border u-padding-0-55rem-1-15rem u-border-radius-25px u-font-weight-800 u-font-size-0-85rem u-text-decoration-none u-white-space-nowrap u-display-flex u-align-items-center u-gap-0-4rem">
             <span>🍰</span> <span>POSTRES</span>
           </a>
         </div>
@@ -284,11 +136,11 @@
     </section>
 
     <!-- 4. FAVORITOS DESTACADOS DINÁMICOS DE BACKEND -->
-    <section style="padding: 3.5rem 1.25rem;">
+    <section class="u-padding-3-5rem-1-25rem">
       <div class="landing-container">
-        <div style="text-align: center; margin-bottom: 2.5rem;">
-          <h2 style="font-size: clamp(1.8rem, 3.5vw, 2.5rem); font-family: var(--font-display); font-weight: 900; color: #ffffff;">🔥 ALGO RICO PARA HOY</h2>
-          <p style="color: var(--text-dim); font-size: 0.95rem;">Explora algunos de los productos disponibles en nuestro menú</p>
+        <div class="u-text-align-center u-margin-bottom-2-5rem">
+          <h2 class="u-font-size-clamp-1-8rem-3-5vw-2-5rem u-font-family-token-font-display u-font-weight-900 u-color-hex-ffffff">🔥 ALGO RICO PARA HOY</h2>
+          <p class="u-color-token-text-dim u-font-size-0-95rem">Explora algunos de los productos disponibles en nuestro menú</p>
         </div>
 
         <div class="product-toon-grid" id="landing-featured-grid">
@@ -298,14 +150,14 @@
     </section>
 
     <!-- 5. RESEÑAS REALES DE CLIENTES -->
-    <section style="padding: 3.5rem 1.25rem; background: rgba(16, 23, 38, 0.6); border-t: 1px solid var(--toon-border);">
+    <section class="u-padding-3-5rem-1-25rem u-background-rgba-16-23-38-0-6 u-border-t-1px-solid-token-toon-border">
       <div class="landing-container">
-        <div style="text-align: center; margin-bottom: 2.5rem;">
-          <h2 style="font-size: clamp(1.8rem, 3.5vw, 2.5rem); font-family: var(--font-display); font-weight: 900; color: #ffffff;">🌟 RESEÑAS DE NUESTROS CLIENTES</h2>
-          <p style="color: var(--text-dim);">Experiencias compartidas por nuestros clientes</p>
+        <div class="u-text-align-center u-margin-bottom-2-5rem">
+          <h2 class="u-font-size-clamp-1-8rem-3-5vw-2-5rem u-font-family-token-font-display u-font-weight-900 u-color-hex-ffffff">🌟 RESEÑAS DE NUESTROS CLIENTES</h2>
+          <p class="u-color-token-text-dim">Experiencias compartidas por nuestros clientes</p>
         </div>
 
-        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1.25rem;" id="landing-reviews-grid">
+        <div id="landing-reviews-grid" class="u-display-grid u-grid-template-columns-repeat-auto-fit-minmax-280px-1fr u-gap-1-25rem">
           <!-- Creados dinámicamente -->
         </div>
       </div>
@@ -318,7 +170,7 @@
         <div class="landing-footer-column landing-footer-brand-column">
           <div class="landing-footer-brand" id="footer-brand-name">DONDE DAVID | FAST FOOD</div>
           <p class="landing-footer-copy" id="footer-brand-description">Las mejores hamburguesas artesanales de res 100% preparadas al instante.</p>
-          <div class="landing-footer-detail" style="color:var(--cyan-accent);font-size:.84rem;font-weight:800;" id="footer-location">📍 Valencia • Sede Principal</div>
+          <div class="landing-footer-detail u-color-token-cyan-accent u-font-size-0p84rem u-font-weight-800" id="footer-location">📍 Valencia • Sede Principal</div>
         </div>
 
         <div class="landing-footer-column">
@@ -332,7 +184,7 @@
 
         <div class="landing-footer-column">
           <strong class="landing-footer-title" id="footer-service-title">HORARIO &amp; ATENCIÓN</strong>
-          <p class="landing-footer-detail" style="color:#fff;">🕒 <span id="footer-hours">Todos los días: 11:00 AM - 11:00 PM</span></p>
+          <p class="landing-footer-detail u-color-hex-fff">🕒 <span id="footer-hours">Todos los días: 11:00 AM - 11:00 PM</span></p>
           <p class="landing-footer-detail">📱 <span id="footer-service">Delivery directo &amp; Pedidos QR en mesa</span></p>
           <div class="landing-footer-payments">💳 <span id="footer-payment-methods">Pago Móvil • Zelle • Tarjetas • Efectivo</span></div>
         </div>
