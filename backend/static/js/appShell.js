@@ -76,8 +76,8 @@ function renderUniversalHeader() {
     rightActions = ``;
   } else if (role === "cliente") {
     rightActions = `
-      <a onclick="showScreen('screen-carrito')" class="btn btn-outline" style="padding: 0.3rem 0.7rem; font-size: 0.8rem; cursor: pointer;">
-        🛒 <span id="nav-cart-badge-hdr" class="badge badge-PENDIENTE" style="font-size: 0.7rem;">0</span>
+      <a onclick="showScreen('screen-carrito')" class="universal-cart-trigger" aria-label="Ver carrito">
+        🛒 <span id="nav-cart-badge-hdr" class="badge">0</span>
       </a>
     `;
   } else if (role === "landing") {
