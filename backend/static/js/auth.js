@@ -13,6 +13,25 @@ const Auth = {
     if (token) localStorage.setItem("token", token);
     if (user) localStorage.setItem("user", JSON.stringify(user));
   },
+  isAdmin() {
+    const u = this.getUser();
+    return !!(u && (u.rol === "admin" || u.rol === "supervisor"));
+  },
+  requireRole(allowedRoles) {
+    const u = this.getUser();
+    if (!u) {
+      window.location.replace("/login");
+      return false;
+    }
+    // El Administrador tiene acceso universal a todas las pantallas del sistema con credenciales activas
+    if (this.isAdmin()) return true;
+    const roles = Array.isArray(allowedRoles) ? allowedRoles : [allowedRoles];
+    if (!roles.includes(u.rol)) {
+      window.location.replace("/login");
+      return false;
+    }
+    return true;
+  },
   logout() {
     localStorage.removeItem("token");
     localStorage.removeItem("user");

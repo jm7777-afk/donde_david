@@ -57,6 +57,8 @@ function productEditorListValue(jsonValue, kind) {
 }
 
 document.addEventListener("DOMContentLoaded", () => {
+  if (!Auth.requireRole("admin")) return;
+
   loadDashboardStats();
   loadGuiaAdmin();
   loadMesas();

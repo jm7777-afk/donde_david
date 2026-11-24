@@ -11,6 +11,8 @@ function escapeMeseroHtml(value) {
 }
 
 document.addEventListener("DOMContentLoaded", () => {
+  if (!Auth.requireRole("mesero")) return;
+
   loadConfigPublica();
   loadMeseroData();
 

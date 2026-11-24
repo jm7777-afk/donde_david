@@ -17,11 +17,7 @@ let lastCourierPositionSentAt = 0;
 let courierLocationWarningShown = false;
 
 document.addEventListener("DOMContentLoaded", () => {
-  const user = Auth.getUser();
-  if (!user || user.rol !== "repartidor") {
-    window.location.replace("/login");
-    return;
-  }
+  if (!Auth.requireRole("repartidor")) return;
   loadCourierOrders();
   new WSClient((event) => {
     if (event === "DELIVERY_ACTUALIZADO" || event === "CAMBIO_ESTADO_PEDIDO") loadCourierOrders();

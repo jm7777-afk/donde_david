@@ -41,6 +41,8 @@ let currentCustomizingProduct = null;
 let currentCustomizingQty = 1;
 
 document.addEventListener("DOMContentLoaded", () => {
+  if (!Auth.requireRole("caja")) return;
+
   loadPosConfig().catch(error => {
     console.error("No se pudo cargar la tasa de cambio:", error);
     showToast("Tasa en bolívares no disponible. Los cobros en USD siguen habilitados.", "warning");

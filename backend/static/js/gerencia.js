@@ -1,6 +1,5 @@
-const managerUser = Auth.getUser();
-if (!managerUser || managerUser.rol !== "gerente") {
-  window.location.replace("/login");
+if (!Auth.requireRole("gerente")) {
+  // Redirigido a /login por falta de privilegios
 } else {
   loadManagerDashboard();
   window.setInterval(loadManagerDashboard, 60000);

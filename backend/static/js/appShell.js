@@ -93,9 +93,19 @@ function renderUniversalHeader() {
     `;
   }
 
+  // Si el usuario autenticado es Administrador, tiene acceso directo a Pantallas en cualquier vista
+  const isAdminUser = typeof Auth !== "undefined" && typeof Auth.isAdmin === "function" && Auth.isAdmin();
+  if (isAdminUser && role !== "admin" && role !== "gerente") {
+    rightActions = `
+      <button class="btn btn-outline" style="padding: 0.35rem 0.65rem; font-size: 0.78rem; border-color: var(--cyan-accent); color: var(--cyan-accent);" onclick="openAdminScreensModal()" title="Acceso directo del Administrador a todas las pantallas">
+        🖥️ Pantallas
+      </button>
+    ` + rightActions;
+  }
+
   // Botón de Cerrar Sesión para Personal
   let logoutBtn = "";
-  if (role !== "landing" && role !== "cliente" && role !== "caja") {
+  if (isAdminUser || (role !== "landing" && role !== "cliente" && role !== "caja")) {
     logoutBtn = `
       <button class="btn btn-cta universal-header-logout" type="button" aria-label="Cerrar sesión" title="Cerrar sesión" style="padding: 0.35rem 0.75rem; font-size: 0.78rem; background: rgba(255,71,87,0.2); border: 1px solid var(--neon-red); color: var(--neon-red);" onclick="typeof Auth !== 'undefined' ? Auth.logout() : (window.location.href='/login')">
         🚪 <span>Salir</span>
@@ -356,6 +366,15 @@ function createUniversalMobileDrawerDOM() {
     <div style="flex: 1;">
       <div style="font-size: 0.72rem; font-weight: 900; text-transform: uppercase; color: var(--cyan-accent); letter-spacing: 1px; margin-bottom: 0.6rem;">OPCIONES DEL MÓDULO</div>
       ${roleItems}
+      ${(typeof Auth !== "undefined" && typeof Auth.isAdmin === "function" && Auth.isAdmin()) ? `
+        <div style="font-size: 0.72rem; font-weight: 900; text-transform: uppercase; color: var(--gold-accent); letter-spacing: 1px; margin: 1.25rem 0 0.6rem 0;">PANTALLAS DEL SISTEMA (ADMIN)</div>
+        <div class="drawer-nav-item" onclick="closeUniversalMobileDrawer(); window.location.href='/static/admin/index.html';">⚙️ Panel Administrador</div>
+        <div class="drawer-nav-item" onclick="closeUniversalMobileDrawer(); window.location.href='/static/caja/panel.html';">💰 Caja POS / Cobro</div>
+        <div class="drawer-nav-item" onclick="closeUniversalMobileDrawer(); window.location.href='/static/cocina/monitor.html';">👨‍🍳 Monitor KDS Cocina</div>
+        <div class="drawer-nav-item" onclick="closeUniversalMobileDrawer(); window.location.href='/static/mesero/panel.html';">🍽️ Meseros & Salón</div>
+        <div class="drawer-nav-item" onclick="closeUniversalMobileDrawer(); window.location.href='/static/delivery/panel.html';">🛵 Despacho Delivery</div>
+        <div class="drawer-nav-item" onclick="closeUniversalMobileDrawer(); window.location.href='/static/gerencia/panel.html';">📈 Panel de Gerencia</div>
+      ` : ''}
     </div>
 
     <div style="border-top: 1px solid var(--toon-border); padding-top: 1rem; margin-top: 1rem;">

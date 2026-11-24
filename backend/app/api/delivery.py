@@ -97,17 +97,17 @@ def listar_mis_pedidos(
     db: Session = Depends(get_db),
     user=Depends(require_roles(["repartidor"])),
 ):
-    return (
+    query = (
         db.query(Pedido)
         .filter(
-            Pedido.repartidor_id == user.id,
             Pedido.tipo == "delivery",
             Pedido.estado_delivery != "ENTREGADO",
             Pedido.estado != "CANCELADO",
         )
-        .order_by(Pedido.fecha_creacion.asc())
-        .all()
     )
+    if user.rol not in ["admin", "supervisor"]:
+        query = query.filter(Pedido.repartidor_id == user.id)
+    return query.order_by(Pedido.fecha_creacion.asc()).all()
 
 
 @router.post("/pedidos/{pedido_id}/estado")
@@ -117,11 +117,13 @@ async def actualizar_estado_delivery(
     db: Session = Depends(get_db),
     user=Depends(require_roles(["repartidor"])),
 ):
-    pedido = db.query(Pedido).filter(
+    query = db.query(Pedido).filter(
         Pedido.id == pedido_id,
-        Pedido.repartidor_id == user.id,
         Pedido.tipo == "delivery",
-    ).with_for_update().first()
+    )
+    if user.rol not in ["admin", "supervisor"]:
+        query = query.filter(Pedido.repartidor_id == user.id)
+    pedido = query.with_for_update().first()
     if not pedido:
         raise HTTPException(status_code=404, detail="El pedido no está asignado a este repartidor.")
 
@@ -153,11 +155,13 @@ def actualizar_ubicacion_repartidor(
     db: Session = Depends(get_db),
     user=Depends(require_roles(["repartidor"])),
 ):
-    pedido = db.query(Pedido).filter(
+    query = db.query(Pedido).filter(
         Pedido.id == pedido_id,
-        Pedido.repartidor_id == user.id,
         Pedido.tipo == "delivery",
-    ).with_for_update().first()
+    )
+    if user.rol not in ["admin", "supervisor"]:
+        query = query.filter(Pedido.repartidor_id == user.id)
+    pedido = query.with_for_update().first()
     if not pedido:
         raise HTTPException(status_code=404, detail="El pedido no está asignado a este repartidor.")
     if pedido.estado_delivery != "EN_CAMINO":
@@ -180,11 +184,13 @@ async def confirmar_entrega_delivery(
     db: Session = Depends(get_db),
     user=Depends(require_roles(["repartidor"])),
 ):
-    pedido = db.query(Pedido).filter(
+    query = db.query(Pedido).filter(
         Pedido.id == pedido_id,
-        Pedido.repartidor_id == user.id,
         Pedido.tipo == "delivery",
-    ).with_for_update().first()
+    )
+    if user.rol not in ["admin", "supervisor"]:
+        query = query.filter(Pedido.repartidor_id == user.id)
+    pedido = query.with_for_update().first()
     if not pedido:
         raise HTTPException(status_code=404, detail="El pedido no está asignado a este repartidor.")
     if pedido.estado_delivery != "EN_CAMINO":

@@ -82,10 +82,11 @@ def get_current_user(
 
 def require_roles(allowed_roles: list[str]):
     def role_checker(current_user: Any = Depends(get_current_user)):
-        if current_user.rol not in allowed_roles:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail=f"Permisos insuficientes. Se requiere rol: {', '.join(allowed_roles)}"
-            )
-        return current_user
+        # El rol Administrador (y Supervisor) posee acceso universal a todos los módulos y pantallas
+        if current_user.rol in ["admin", "supervisor"] or current_user.rol in allowed_roles:
+            return current_user
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=f"Permisos insuficientes. Se requiere rol: {', '.join(allowed_roles)}"
+        )
     return role_checker

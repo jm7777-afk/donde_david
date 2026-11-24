@@ -5,11 +5,7 @@ let kdsSearchTerm = "";
 
 document.addEventListener("DOMContentLoaded", () => {
   // Check auth
-  const user = Auth.getUser();
-  if (!user || (user.rol !== "cocina" && user.rol !== "admin" && user.rol !== "supervisor")) {
-    window.location.href = "/static/index.html";
-    return;
-  }
+  if (!Auth.requireRole("cocina")) return;
 
   loadKDSOrders();
 
