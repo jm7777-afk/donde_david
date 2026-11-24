@@ -209,6 +209,10 @@ def validate_configuracion(data: ConfiguracionUpdate) -> None:
                 detail=f"El valor de {data.clave} no puede superar {max_length} caracteres.",
             )
 
+    if data.clave == "iva_activo":
+        if str(data.valor).lower() not in {"true", "false", "1", "0"}:
+            raise HTTPException(status_code=422, detail="El valor de iva_activo debe ser 'true' o 'false'.")
+
     numeric_limits = {
         "impuesto_porcentaje": (0.0, 100.0),
         "costo_delivery": (0.0, None),

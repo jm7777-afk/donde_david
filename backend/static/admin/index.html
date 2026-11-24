@@ -4,15 +4,15 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Donde David - Panel de Administración General</title>
-  <link rel="stylesheet" href="/static/css/global.css?v=4.0">
-  <link rel="stylesheet" href="/static/css/toon-theme.css?v=4.0">
-  <link rel="stylesheet" href="/static/css/index.css?v=4.0">
+  <link rel="stylesheet" href="/static/css/global.css?v=5.0">
+  <link rel="stylesheet" href="/static/css/toon-theme.css?v=5.0">
+  <link rel="stylesheet" href="/static/css/index.css?v=5.0">
   
   <!-- Driver.js CSS para Onboarding Tour Interactivo -->
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/driver.js@1.3.1/dist/driver.css">
 
-  <link rel="stylesheet" href="/static/css/pages/admin-index.css?v=4.0">
-  <link rel="stylesheet" href="/static/css/utilities.css?v=4.0">
+  <link rel="stylesheet" href="/static/css/pages/admin-index.css?v=5.0">
+  <link rel="stylesheet" href="/static/css/utilities.css?v=5.0">
 </head>
 <body class="toon-theme"><nav id="app-sidebar"></nav>
 
@@ -32,7 +32,14 @@
       <p class="admin-sidebar-group">Operación</p>
       <button class="admin-sidebar-btn active" id="btn-orders-panel" onclick="switchTab('dashboard')">📊 Dashboard & Métricas</button>
       <button class="admin-sidebar-btn" onclick="switchTab('mesas')">🍽️ Mesas & QR</button>
+      <p class="admin-sidebar-group">Pantallas del Sistema</p>
+      <button class="admin-sidebar-btn" onclick="window.location.href='/static/caja/panel.html'">💰 Caja POS / Cobro</button>
+      <button class="admin-sidebar-btn" onclick="window.location.href='/static/cocina/monitor.html'">👨‍🍳 Monitor KDS Cocina</button>
+      <button class="admin-sidebar-btn" onclick="window.location.href='/static/mesero/panel.html'">🍽️ Meseros & Salón</button>
       <button class="admin-sidebar-btn" onclick="window.location.href='/static/delivery/panel.html'">🛵 Despacho Delivery</button>
+      <button class="admin-sidebar-btn" onclick="window.location.href='/static/gerencia/panel.html'">📈 Panel de Gerencia</button>
+      <button class="admin-sidebar-btn" onclick="window.location.href='/static/cliente/app.html'">📱 Menú Clientes (PWA)</button>
+      <button class="admin-sidebar-btn" onclick="window.location.href='/static/index.html'">🌐 Portada Web Oficial</button>
       <p class="admin-sidebar-group">Menú y contenido</p>
       <button class="admin-sidebar-btn" id="nav-menu-items" onclick="switchTab('productos')">🍔 Productos & Ingredientes</button>
       <button class="admin-sidebar-btn" onclick="switchTab('inventario')">📦 Insumos e Inventario</button>
@@ -381,6 +388,22 @@
           <input type="password" id="cfg-google-maps-api-key" class="form-control" maxlength="500" autocomplete="off" placeholder="AIza...">
           <small class="u-display-block u-color-token-text-muted u-margin-top-0p35rem">Google exige una clave pública de navegador. Restringe su uso por HTTP referrer a los dominios de tu web y habilita Maps JavaScript API en Google Cloud. Si se deja vacío, se usa OpenStreetMap.</small>
         </div>
+        <h3>🧾 Impuesto al Valor Agregado (IVA)</h3>
+        <p class="u-color-token-text-muted u-font-size-0p85rem">Activa o desactiva el cobro de IVA en la caja y en los pedidos de clientes, y ajusta el porcentaje legal aplicable.</p>
+        <div class="u-display-grid u-grid-template-columns-repeat-auto-fit-minmax-min-100-240px-1fr u-gap-0-1rem">
+          <div class="form-group">
+            <label for="cfg-iva-activo">Estado del IVA</label>
+            <select id="cfg-iva-activo" class="form-control">
+              <option value="true">🟢 Activo (Cobrar IVA)</option>
+              <option value="false">🔴 Desactivado (0% IVA)</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="cfg-impuesto-porcentaje">Porcentaje de IVA (%)</label>
+            <input type="number" step="0.1" min="0" max="100" id="cfg-impuesto-porcentaje" class="form-control" placeholder="16.0">
+          </div>
+        </div>
+
         <h3>📱 Datos para Pago Móvil</h3>
         <p class="u-color-token-text-muted u-font-size-0p85rem">Estos datos se muestran al cliente. No se guardan credenciales bancarias.</p>
         <div class="form-group"><label>Banco</label><input type="text" id="cfg-pm-banco" class="form-control" maxlength="100"></div>
@@ -987,10 +1010,10 @@
 
   <!-- Driver.js Library script -->
   <script src="https://cdn.jsdelivr.net/npm/driver.js@1.3.1/dist/driver.js.iife.js"></script>
-  <script src="/static/js/auth.js?v=4.0"></script>
-  <script src="/static/js/appShell.js?v=4.0"></script>
-  <script src="/static/js/websocket.js?v=4.0"></script>
-  <script src="/static/js/admin-toon.js?v=4.0"></script>
+  <script src="/static/js/auth.js?v=5.0"></script>
+  <script src="/static/js/appShell.js?v=5.0"></script>
+  <script src="/static/js/websocket.js?v=5.0"></script>
+  <script src="/static/js/admin-toon.js?v=5.0"></script>
 
   <!-- Script para Autodisparo del Tour Interactivo Driver.js -->
   <script>

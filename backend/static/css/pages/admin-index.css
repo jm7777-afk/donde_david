@@ -26,6 +26,9 @@
 }
 .tab-content.active {
   display: block;
+  animation: none !important;
+  transform: none !important;
+  transition: none !important;
 }
 .kpi-grid {
   display: grid;

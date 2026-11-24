@@ -325,16 +325,34 @@ document.addEventListener("DOMContentLoaded", () => {
   if (mesaParam && /^[1-9]\d*$/.test(mesaParam)) {
     currentDetectedMesa = mesaParam;
     isTableQrSession = true;
+    selectedModality = "mesa";
+    try {
+      localStorage.setItem("dd-current-mesa", mesaParam);
+      localStorage.setItem("dd-is-table-qr", "true");
+    } catch(e){}
     const checkoutType = document.getElementById("checkout-type");
     if (checkoutType) checkoutType.value = "mesa";
     const tableActions = document.getElementById("table-service-actions");
     if (tableActions) tableActions.style.display = "flex";
     if (document.getElementById("current-table-indicator")) {
-      document.getElementById("current-table-indicator").innerText = `📱 QR MESA #${currentDetectedMesa}`;
+      document.getElementById("current-table-indicator").innerText = `🍽️ MESA #${currentDetectedMesa} (CONECTADA)`;
     }
     if (document.getElementById("checkout-mesa-name")) {
       document.getElementById("checkout-mesa-name").innerText = `Mesa #${currentDetectedMesa}`;
     }
+    const hdrTableBadge = document.getElementById("header-table-badge");
+    if (hdrTableBadge) {
+      hdrTableBadge.innerText = `🍽️ MESA #${currentDetectedMesa}`;
+    }
+    // Auto-login mesa como cliente de sala para realizar pedidos directamente
+    if (typeof Auth !== "undefined" && !Auth.getUser()) {
+      Auth.setUser({ id: 0, nombre: `Cliente Mesa #${currentDetectedMesa}`, rol: "cliente" });
+    }
+    // Entrar directamente al menú interactivo
+    showScreen("screen-home");
+    setTimeout(() => {
+      showToast(`🍽️ ¡Mesa #${currentDetectedMesa} conectada con éxito! Puedes ordenar directamente tus platos.`, "success");
+    }, 250);
   } else {
     currentDetectedMesa = "1";
   }
@@ -784,6 +802,8 @@ function openProductModal(prodId) {
     allergenInfo.style.display = "block";
   }
   if (document.getElementById("modal-product-notes")) document.getElementById("modal-product-notes").value = "";
+  const masterConTodoCheck = document.getElementById("modal-con-todo-check");
+  if (masterConTodoCheck) masterConTodoCheck.checked = true;
 
   // 1. Renderizar Todos los Ingredientes del Producto (para remover / mantener)
   const ingContainer = document.getElementById("modal-ingredients-list");
@@ -803,8 +823,8 @@ function openProductModal(prodId) {
     defaultIngredients.forEach((ing, i) => {
       ingHtml += `
         <label class="ing-toggle-item">
-          <span>✔️ Con ${ing}</span>
-          <input type="checkbox" class="dyn-ing-check" data-name="${ing}" checked>
+          <span>✔️ Con ${escapeClientHtml(ing)}</span>
+          <input type="checkbox" class="dyn-ing-check" data-name="${escapeClientHtml(ing)}" checked onchange="handleIngredientChange()">
         </label>
       `;
     });
@@ -859,6 +879,19 @@ function closeProductModal() {
   if (addButton) addButton.textContent = "🛒 AGREGAR AL CARRITO";
 }
 
+function toggleConTodoIngredients(isConTodo) {
+  document.querySelectorAll(".dyn-ing-check").forEach(cb => {
+    cb.checked = Boolean(isConTodo);
+  });
+}
+
+function handleIngredientChange() {
+  const allChecks = Array.from(document.querySelectorAll(".dyn-ing-check"));
+  const allChecked = allChecks.length > 0 && allChecks.every(cb => cb.checked);
+  const masterCheck = document.getElementById("modal-con-todo-check");
+  if (masterCheck) masterCheck.checked = allChecked;
+}
+
 function adjustModalQty(val) {
   currentModalQty = Math.max(1, currentModalQty + val);
   document.getElementById("modal-qty-val").innerText = currentModalQty;
@@ -872,11 +905,17 @@ function addModalProductToCart() {
   let opts = [];
   const selectedExtras = [];
 
-  // Registrar ingredientes removidos (desmarcados)
-  document.querySelectorAll(".dyn-ing-check:not(:checked)").forEach(cb => {
-    const ingName = cb.getAttribute("data-name");
-    opts.push(`Sin ${ingName}`);
-  });
+  // Registrar estado de ingredientes: ¡Con Todo! o ingredientes específicos removidos
+  const masterCheck = document.getElementById("modal-con-todo-check");
+  const uncheckedIngs = Array.from(document.querySelectorAll(".dyn-ing-check:not(:checked)"));
+  if (masterCheck && masterCheck.checked && uncheckedIngs.length === 0) {
+    opts.push("🔥 ¡CON TODO!");
+  } else {
+    uncheckedIngs.forEach(cb => {
+      const ingName = cb.getAttribute("data-name");
+      opts.push(`Sin ${ingName}`);
+    });
+  }
 
   // Registrar extras agregados (marcados)
   document.querySelectorAll(".dyn-extra-check:checked").forEach(cb => {
@@ -1989,15 +2028,17 @@ function initLeafletDeliveryMap(container = document.getElementById("leaflet-map
 }
 
 function updateCustomerDeliveryLocation(lat, lng) {
-  selectedDeliveryCoords = { lat: Number(lat), lng: Number(lng) };
+  const numLat = Number(lat);
+  const numLng = Number(lng);
+  selectedDeliveryCoords = { lat: numLat, lng: numLng };
   currentCustomerGPS = { ...selectedDeliveryCoords };
   const mapAddress = document.getElementById("map-address-input");
   if (mapAddress && !mapAddress.value.trim()) mapAddress.value = "Punto seleccionado en el mapa";
-  const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${selectedDeliveryCoords.lat},${selectedDeliveryCoords.lng}`;
+  const mapsUrl = `https://www.google.com/maps?q=${selectedDeliveryCoords.lat.toFixed(6)},${selectedDeliveryCoords.lng.toFixed(6)}`;
   const badge = document.getElementById("gps-status-badge");
   if (badge) {
     badge.style.display = "block";
-    badge.innerHTML = `📍 Ubicación seleccionada · ${selectedDeliveryCoords.lat.toFixed(6)}, ${selectedDeliveryCoords.lng.toFixed(6)} · <a href="${mapsUrl}" target="_blank" rel="noopener noreferrer" style="color:var(--gold-accent);font-weight:800">Ver ruta</a>`;
+    badge.innerHTML = `📍 Ubicación seleccionada · ${selectedDeliveryCoords.lat.toFixed(6)}, ${selectedDeliveryCoords.lng.toFixed(6)} · <a href="${mapsUrl}" target="_blank" rel="noopener noreferrer" style="color:var(--gold-accent);font-weight:800">Ver en Google Maps</a>`;
   }
   persistClientProgress();
 }
@@ -2050,17 +2091,23 @@ function initDeliveryInteractiveMap(initialLat = 10.4806, initialLng = -66.9036)
   deliveryMarker = L.marker([initialLat, initialLng], { draggable: true, icon: customIcon }).addTo(deliveryMap);
 
   function updateAddressFromMarker(lat, lng) {
-    const mapsUrl = `https://maps.google.com/?q=${parseFloat(lat).toFixed(6)},${parseFloat(lng).toFixed(6)}`;
-    const textVal = `📍 GPS: Lat ${parseFloat(lat).toFixed(6)}, Lng ${parseFloat(lng).toFixed(6)} (${mapsUrl})`;
+    const numLat = parseFloat(lat);
+    const numLng = parseFloat(lng);
+    currentCustomerGPS = { lat: numLat, lng: numLng };
+    selectedDeliveryCoords = { lat: numLat, lng: numLng };
+    const mapsUrl = `https://www.google.com/maps?q=${numLat.toFixed(6)},${numLng.toFixed(6)}`;
     
     const input = document.getElementById("deliv-direccion");
-    if (input) input.value = textVal;
+    if (input && (!input.value.trim() || input.value.startsWith("Ubicación GPS") || input.value.startsWith("📍"))) {
+      input.value = `Ubicación GPS seleccionada (${numLat.toFixed(5)}, ${numLng.toFixed(5)})`;
+    }
 
     const badge = document.getElementById("gps-status-badge");
     if (badge) {
       badge.style.display = "block";
-      badge.innerHTML = `🌐 <strong>GPS Google Maps:</strong> Lat ${parseFloat(lat).toFixed(6)}, Lng ${parseFloat(lng).toFixed(6)} • <a href="${mapsUrl}" target="_blank" style="color: var(--gold-accent); text-decoration: underline; font-weight: 800;">Probar en Google Maps</a>`;
+      badge.innerHTML = `🌐 <strong>GPS Google Maps:</strong> ${numLat.toFixed(6)}, ${numLng.toFixed(6)} • <a href="${mapsUrl}" target="_blank" rel="noopener noreferrer" style="color: var(--gold-accent); text-decoration: underline; font-weight: 800;">📍 Abrir en Google Maps</a>`;
     }
+    persistClientProgress();
   }
 
   deliveryMarker.on('dragend', function (e) {
@@ -2087,13 +2134,23 @@ function getDeviceGPSLocation() {
 
   navigator.geolocation.getCurrentPosition(
     (position) => {
-      const lat = position.coords.latitude.toFixed(6);
-      const lng = position.coords.longitude.toFixed(6);
+      const lat = parseFloat(position.coords.latitude);
+      const lng = parseFloat(position.coords.longitude);
+      currentCustomerGPS = { lat, lng };
+      selectedDeliveryCoords = { lat, lng };
       updateCustomerDeliveryLocation(lat, lng);
 
       const dirInput = document.getElementById("deliv-direccion");
-      if (dirInput) {
-        dirInput.value = `Ubicación GPS: ${lat}, ${lng}`;
+      if (dirInput && (!dirInput.value.trim() || dirInput.value.startsWith("Ubicación GPS") || dirInput.value.startsWith("📍"))) {
+        dirInput.value = `Ubicación GPS actual (${lat.toFixed(5)}, ${lng.toFixed(5)})`;
+      }
+
+      const mapsUrl = `https://www.google.com/maps?q=${lat.toFixed(6)},${lng.toFixed(6)}`;
+      const badge = document.getElementById("gps-status-badge");
+      if (badge) {
+        badge.style.display = "block";
+        badge.innerHTML = `✅ <strong>Ubicación GPS obtenida:</strong> ${lat.toFixed(6)}, ${lng.toFixed(6)} • <a href="${mapsUrl}" target="_blank" rel="noopener noreferrer" style="color: var(--gold-accent); text-decoration: underline; font-weight: 800;">📍 Abrir en Google Maps</a>`;
+      }
       }
 
       const badge = document.getElementById("gps-status-badge");

@@ -43,6 +43,7 @@ def seed():
         # 1. Configuración por defecto "Donde David"
         configs = [
             ("nombre_restaurante", "DONDE DAVID | FAST FOOD", "Nombre del negocio"),
+            ("iva_activo", "true", "Cobro de IVA habilitado"),
             ("impuesto_porcentaje", "16.0", "Porcentaje IVA"),
             ("costo_delivery", "10.00", "Costo estándar de envío a domicilio"),
             ("costo_empaque", "3.00", "Costo adicional por empaque para llevar"),

@@ -426,8 +426,10 @@ async def crear_y_cobrar_rapido(
     if data.metodo_pago == "Pago Móvil" and data.moneda_pago != "VES":
         raise HTTPException(status_code=422, detail="Pago Móvil debe cobrarse en bolívares.")
 
+    iva_active_cfg = db.query(Configuracion).filter(Configuracion.clave == "iva_activo").first()
+    is_iva_active = iva_active_cfg.valor.lower() in ("true", "1") if iva_active_cfg else True
     tax_config = db.query(Configuracion).filter(Configuracion.clave == "impuesto_porcentaje").first()
-    tax_rate = float(tax_config.valor) if tax_config else 16.0
+    tax_rate = (float(tax_config.valor) if tax_config else 16.0) if is_iva_active else 0.0
     delivery_config = db.query(Configuracion).filter(Configuracion.clave == "costo_delivery").first()
     package_config = db.query(Configuracion).filter(Configuracion.clave == "costo_empaque").first()
     delivery_fee = float(delivery_config.valor) if delivery_config else 5.0

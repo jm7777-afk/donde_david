@@ -87,6 +87,8 @@ def get_configuraciones_publicas(db: Session = Depends(get_db)):
     res["google_maps_api_key"] = res.get("google_maps_api_key", "").strip()
     if "impuesto_porcentaje" not in res:
         res["impuesto_porcentaje"] = "16.00"
+    if "iva_activo" not in res:
+        res["iva_activo"] = "true"
         
     return res
 
@@ -162,8 +164,10 @@ async def crear_pedido(
     if not pedido_in.detalles or len(pedido_in.detalles) == 0:
         raise HTTPException(status_code=400, detail="El pedido debe contener productos.")
     
+    iva_active_cfg = db.query(Configuracion).filter(Configuracion.clave == "iva_activo").first()
+    is_iva_active = iva_active_cfg.valor.lower() in ("true", "1") if iva_active_cfg else True
     tax_config = db.query(Configuracion).filter(Configuracion.clave == "impuesto_porcentaje").first()
-    tax_rate = float(tax_config.valor) if tax_config else 16.0
+    tax_rate = (float(tax_config.valor) if tax_config else 16.0) if is_iva_active else 0.0
 
     delivery_config = db.query(Configuracion).filter(Configuracion.clave == "costo_delivery").first()
     delivery_fee = float(delivery_config.valor) if pedido_in.tipo == "delivery" and delivery_config else (5.0 if pedido_in.tipo == "delivery" else 0.0)

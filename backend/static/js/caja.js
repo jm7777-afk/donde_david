@@ -78,7 +78,8 @@ async function loadPosConfig() {
   const cfg = await res.json();
   const rate = Number(cfg.tasa_cambio_bs);
   tasaCambioBs = Number.isFinite(rate) && rate > 0 ? rate : null;
-  posTaxRate = Number.isFinite(Number(cfg.impuesto_porcentaje)) ? Number(cfg.impuesto_porcentaje) : 16;
+  const ivaActivo = cfg.iva_activo !== "false" && cfg.iva_activo !== false;
+  posTaxRate = ivaActivo && Number.isFinite(Number(cfg.impuesto_porcentaje)) ? Number(cfg.impuesto_porcentaje) : (ivaActivo ? 16 : 0);
   posDeliveryFee = Number.isFinite(Number(cfg.costo_delivery)) ? Number(cfg.costo_delivery) : 5;
   posPackageFee = Number.isFinite(Number(cfg.costo_empaque)) ? Number(cfg.costo_empaque) : 3;
   tasaFuente = cfg.tasa_fuente || "";
@@ -98,7 +99,7 @@ async function loadPosConfig() {
       : "Tasa no disponible; solo se permiten cobros en USD.";
   }
   const taxLabel = document.getElementById("pos-tax-label");
-  if (taxLabel) taxLabel.textContent = `IVA (${posTaxRate}%):`;
+  if (taxLabel) taxLabel.textContent = ivaActivo ? `IVA (${posTaxRate}%):` : "IVA (Desactivado 0%):";
   if (rateInfo) {
     if (tasaCambioBs === null) {
       rateInfo.textContent = "Tasa no disponible; solo se permiten cobros en USD.";
@@ -423,7 +424,8 @@ async function renderDeliverysQueue() {
   }
 
   container.innerHTML = deliveryOrders.map(o => {
-    const mapsUrl = `https://maps.google.com/?q=${encodeURIComponent(o.direccion_delivery || "")}`;
+    const hasGps = o.delivery_lat !== null && o.delivery_lat !== undefined && o.delivery_lng !== null && o.delivery_lng !== undefined && Number.isFinite(Number(o.delivery_lat)) && Number.isFinite(Number(o.delivery_lng));
+    const mapsUrl = hasGps ? `https://www.google.com/maps?q=${o.delivery_lat},${o.delivery_lng}` : `https://maps.google.com/?q=${encodeURIComponent(o.direccion_delivery || "")}`;
     const assignedCourier = deliveryCouriers.find(c => c.id === o.repartidor_id);
     const courierOptions = deliveryCouriers.map(c =>
       `<option value="${Number(c.id)}" ${c.id === o.repartidor_id ? "selected" : ""}>${escapeCajaHtml(c.nombre)}</option>`

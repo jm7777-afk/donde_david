@@ -55,10 +55,25 @@ async function loadCourierOrders() {
       return;
     }
     container.innerHTML = orders.map(order => {
-      const destination = Number.isFinite(Number(order.delivery_lat)) && Number.isFinite(Number(order.delivery_lng))
-        ? `${Number(order.delivery_lat)},${Number(order.delivery_lng)}`
-        : String(order.direccion_delivery || "").trim();
-      const mapsUrl = `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(destination)}`;
+      let lat = Number.isFinite(Number(order.delivery_lat)) ? Number(order.delivery_lat) : null;
+      let lng = Number.isFinite(Number(order.delivery_lng)) ? Number(order.delivery_lng) : null;
+      if ((lat === null || lng === null) && order.direccion_delivery) {
+        const coordMatch = String(order.direccion_delivery).match(/(-?\d{1,3}\.\d{3,})\s*,\s*(-?\d{1,3}\.\d{3,})/);
+        if (coordMatch) {
+          lat = parseFloat(coordMatch[1]);
+          lng = parseFloat(coordMatch[2]);
+        }
+      }
+      const hasCoords = lat !== null && lng !== null && Number.isFinite(lat) && Number.isFinite(lng);
+      const cleanAddr = String(order.direccion_delivery || "")
+        .replace(/📍|🌐|✅|GPS:?|Lat:?|Lng:?|\(https?:\/\/[^)]+\)/gi, "")
+        .trim();
+      const mapsUrl = hasCoords
+        ? `https://www.google.com/maps?q=${lat},${lng}`
+        : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(cleanAddr || "Valencia")}`;
+      const dirUrl = hasCoords
+        ? `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`
+        : mapsUrl;
       const elapsedMinutes = order.fecha_creacion
         ? Math.max(0, Math.floor((Date.now() - new Date(order.fecha_creacion).getTime()) / 60000))
         : null;
@@ -88,7 +103,12 @@ async function loadCourierOrders() {
         <p><strong>Cliente:</strong> ${escapeDeliveryText(order.nombre_cliente_delivery || "Cliente")}</p>
         <p><strong>Teléfono:</strong> ${order.telefono_delivery ? `<a href="tel:${escapeDeliveryText(order.telefono_delivery)}">${escapeDeliveryText(order.telefono_delivery)}</a>` : "No indicado"}</p>
         <p><strong>Dirección:</strong> ${escapeDeliveryText(order.direccion_delivery || "Sin dirección")}</p>
-        ${destination ? `<a class="btn btn-outline" href="${mapsUrl}" target="_blank" rel="noopener noreferrer">📍 Abrir ruta en Google Maps</a>` : '<p role="status" style="color:var(--neon-red)">Falta la dirección de entrega.</p>'}
+        ${(hasCoords || cleanAddr) ? `
+          <div style="display:flex;gap:0.4rem;flex-wrap:wrap;margin:0.5rem 0;">
+            <a class="btn btn-outline" href="${mapsUrl}" target="_blank" rel="noopener noreferrer">📍 Ver punto en Google Maps</a>
+            <a class="btn btn-cta" href="${dirUrl}" target="_blank" rel="noopener noreferrer">🧭 Iniciar navegación GPS</a>
+          </div>
+        ` : '<p role="status" style="color:var(--neon-red)">Falta la dirección de entrega.</p>'}
         <ul>${details}</ul>
         <div class="delivery-actions">
           ${canPickup ? `<button class="btn btn-cta" onclick="updateCourierStatus(${order.id}, 'RECOGIDO')">Confirmar recogida</button>` : ""}

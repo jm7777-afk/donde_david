@@ -718,6 +718,8 @@ async function loadPortalConfigsAdmin() {
       if (document.getElementById("cfg-tiktok")) document.getElementById("cfg-tiktok").value = cfg.tiktok_link || '';
       if (document.getElementById("cfg-costo-delivery")) document.getElementById("cfg-costo-delivery").value = cfg.costo_delivery || '5.00';
       if (document.getElementById("cfg-costo-empaque")) document.getElementById("cfg-costo-empaque").value = cfg.costo_empaque || '3.00';
+      if (document.getElementById("cfg-iva-activo")) document.getElementById("cfg-iva-activo").value = (cfg.iva_activo === "false" || cfg.iva_activo === false) ? "false" : "true";
+      if (document.getElementById("cfg-impuesto-porcentaje")) document.getElementById("cfg-impuesto-porcentaje").value = Number.isFinite(Number(cfg.impuesto_porcentaje)) ? cfg.impuesto_porcentaje : "16.0";
       if (document.getElementById("cfg-pm-banco")) document.getElementById("cfg-pm-banco").value = cfg.pago_movil_banco || '';
       if (document.getElementById("cfg-pm-telefono")) document.getElementById("cfg-pm-telefono").value = cfg.pago_movil_telefono || '';
       if (document.getElementById("cfg-pm-rif")) document.getElementById("cfg-pm-rif").value = cfg.pago_movil_rif || '';
@@ -761,6 +763,8 @@ async function submitSavePortalConfigs() {
     { clave: "tiktok_link", valor: document.getElementById("cfg-tiktok").value },
     { clave: "costo_delivery", valor: document.getElementById("cfg-costo-delivery").value },
     { clave: "costo_empaque", valor: document.getElementById("cfg-costo-empaque").value },
+    { clave: "iva_activo", valor: document.getElementById("cfg-iva-activo") ? document.getElementById("cfg-iva-activo").value : "true" },
+    { clave: "impuesto_porcentaje", valor: document.getElementById("cfg-impuesto-porcentaje") ? document.getElementById("cfg-impuesto-porcentaje").value.trim() : "16.0" },
     { clave: "pago_movil_banco", valor: document.getElementById("cfg-pm-banco").value.trim() },
     { clave: "pago_movil_telefono", valor: document.getElementById("cfg-pm-telefono").value.trim() },
     { clave: "pago_movil_rif", valor: document.getElementById("cfg-pm-rif").value.trim() },
@@ -1440,45 +1444,7 @@ async function toggleUserActive(userId, newActive) {
   }
 }
 
-/* ==================== NAVEGACIÓN TÁCTIL Y FILTROS ==================== */
-let touchStartX = 0;
-let touchEndX = 0;
-
-document.addEventListener("DOMContentLoaded", () => {
-  const container = document.getElementById("admin-main-container");
-  if (container) {
-    container.addEventListener("touchstart", e => {
-      touchStartX = e.changedTouches[0].screenX;
-    }, false);
-
-    container.addEventListener("touchend", e => {
-      touchEndX = e.changedTouches[0].screenX;
-      handleAdminSwipe();
-    }, false);
-  }
-});
-
-function handleAdminSwipe() {
-  const diff = touchEndX - touchStartX;
-  const tabs = ["dashboard", "productos", "inventario", "promociones", "publicaciones", "portal", "mesas", "categorias", "usuarios"];
-  const activeBtn = document.querySelector(".admin-sidebar-btn.active");
-  if (!activeBtn) return;
-  
-  const onclickAttr = activeBtn.getAttribute("onclick");
-  if (!onclickAttr) return;
-  
-  const match = onclickAttr.match(/'([^']+)'/);
-  if (!match) return;
-  
-  const currentTab = match[1];
-  let idx = tabs.indexOf(currentTab);
-  
-  if (diff < -80 && idx < tabs.length - 1) {
-    switchTab(tabs[idx + 1]);
-  } else if (diff > 80 && idx > 0) {
-    switchTab(tabs[idx - 1]);
-  }
-}
+/* ==================== FILTROS Y BÚSQUEDAS ==================== */
 
 function applyAdminMetricFilters() {
   const cat = document.getElementById("filter-metrics-category")?.value || "todas";

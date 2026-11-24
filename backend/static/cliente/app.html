@@ -6,9 +6,9 @@
   <title>DONDE DAVID - Fresh & Tasty!</title>
   <link rel="manifest" href="/static/manifest.json">
   <meta name="theme-color" content="#FFBC0D">
-  <link rel="stylesheet" href="/static/css/global.css?v=4.0">
-  <link rel="stylesheet" href="/static/css/toon-theme.css?v=4.0">
-  <link rel="stylesheet" href="/static/css/index.css?v=4.0">
+  <link rel="stylesheet" href="/static/css/global.css?v=5.0">
+  <link rel="stylesheet" href="/static/css/toon-theme.css?v=5.0">
+  <link rel="stylesheet" href="/static/css/index.css?v=5.0">
   
   <!-- Leaflet Maps CSS & JS para Ubicación Exacta de Delivery -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
@@ -18,8 +18,8 @@
   <!-- HTML5 QR Code Scanner para Cámara Real -->
   <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 
-  <link rel="stylesheet" href="/static/css/pages/cliente-app.css?v=4.0">
-  <link rel="stylesheet" href="/static/css/utilities.css?v=4.0">
+  <link rel="stylesheet" href="/static/css/pages/cliente-app.css?v=5.0">
+  <link rel="stylesheet" href="/static/css/utilities.css?v=5.0">
 </head>
 <body class="toon-theme"><nav id="app-sidebar"></nav>
 
@@ -687,7 +687,17 @@
         <div id="modal-product-allergens" role="note" class="u-display-none u-margin-bottom-1rem u-padding-0p7rem u-border-1px-solid-token-gold-accent u-border-radius-8px u-color-token-gold-accent u-font-size-0p82rem"></div>
 
         <!-- 1. Sección Ingredientes del Producto (Toca para remover) -->
-        <div class="option-group-title">🛠️ INGREDIENTES INCLUIDOS EN ESTE PLATO (REMOVER):</div>
+        <div class="option-group-title">🛠️ INGREDIENTES INCLUIDOS EN ESTE PLATO:</div>
+        <div class="con-todo-box">
+          <label class="u-display-flex u-align-items-center u-gap-0-6rem u-cursor-pointer u-width-100" for="modal-con-todo-check">
+            <span class="u-font-size-1-35rem">🔥</span>
+            <div class="u-flex-1">
+              <strong class="u-color-token-gold-accent u-font-size-0-95rem u-display-block">¡CON TODO! (Recomendado)</strong>
+              <small class="u-color-token-text-muted u-font-size-0-75rem">Incluye todos los ingredientes, vegetales y salsas de la casa</small>
+            </div>
+            <input type="checkbox" id="modal-con-todo-check" checked onchange="toggleConTodoIngredients(this.checked)">
+          </label>
+        </div>
         <div id="modal-ingredients-list" class="u-margin-bottom-1-25rem">
           <!-- Generados dinámicamente con checkboxes -->
         </div>
@@ -751,13 +761,13 @@
   <!-- Driver.js Library script para Tour Interactivo de Clientes -->
   <script src="https://cdn.jsdelivr.net/npm/driver.js@1.3.1/dist/driver.js.iife.js"></script>
 
-  <script src="/static/js/auth.js?v=4.0"></script>
-  <script src="/static/js/websocket.js?v=4.0"></script>
-  <script src="/static/js/cliente-toon.js?v=4.0"></script>
-  <script src="/static/js/appShell.js?v=4.0"></script>
+  <script src="/static/js/auth.js?v=5.0"></script>
+  <script src="/static/js/websocket.js?v=5.0"></script>
+  <script src="/static/js/cliente-toon.js?v=5.0"></script>
+  <script src="/static/js/appShell.js?v=5.0"></script>
   <script>
     if ("serviceWorker" in navigator && (location.protocol === "https:" || location.hostname === "localhost" || location.hostname === "127.0.0.1")) {
-      navigator.serviceWorker.register("/static/sw.js?v=4.0", { scope: "/static/" })
+      navigator.serviceWorker.register("/static/sw.js?v=5.0", { scope: "/static/" })
         .then(reg => {
           reg.update();
         })

@@ -85,6 +85,12 @@ function renderUniversalHeader() {
       <a href="/static/cliente/app.html?mesa=5" class="btn btn-cta" style="padding: 0.4rem 0.9rem; font-size: 0.8rem;">🔥 PEDIR AHORA</a>
       <a href="/static/cliente/app.html?login=1" class="btn btn-outline" style="padding: 0.4rem 0.9rem; font-size: 0.8rem;">👤 CLIENTES</a>
     `;
+  } else if (role === "admin" || role === "gerente") {
+    rightActions = `
+      <button class="btn btn-outline" style="padding: 0.35rem 0.65rem; font-size: 0.78rem; border-color: var(--cyan-accent); color: var(--cyan-accent);" onclick="openAdminScreensModal()" title="Acceso directo a todas las pantallas">
+        🖥️ Pantallas
+      </button>
+    `;
   }
 
   // Botón de Cerrar Sesión para Personal
@@ -208,31 +214,20 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 });
 
-// Auto-disparo del Loader 3D al recargar la página (Page Reload / Refresh)
+// Carga rápida optimizada sin bloqueos artificiales
 (function initPageReloadLoader() {
   if (typeof document === "undefined") return;
 
-  function runInitialLoader() {
-    createGlobalLoaderDOM();
-    showGlobalLoader("CARGANDO SISTEMA DONDE DAVID...");
-
-    window.addEventListener("load", () => {
-      setTimeout(() => {
-        hideGlobalLoader();
-      }, 500);
-    });
-
-    if (document.readyState === "complete") {
-      setTimeout(() => {
-        hideGlobalLoader();
-      }, 500);
-    }
+  function dismissLoader() {
+    hideGlobalLoader();
   }
 
-  if (document.body) {
-    runInitialLoader();
+  if (document.readyState === "complete") {
+    dismissLoader();
   } else {
-    document.addEventListener("DOMContentLoaded", runInitialLoader);
+    window.addEventListener("load", dismissLoader);
+    document.addEventListener("DOMContentLoaded", dismissLoader);
+    setTimeout(dismissLoader, 300);
   }
 })();
 
@@ -389,24 +384,83 @@ function closeUniversalMobileDrawer() {
   if (drawer) drawer.classList.remove("open");
 }
 
-// Fetch Interceptor para mostrar/ocultar el indicador de carga automáticamente sin demoras
+function openAdminScreensModal() {
+  let modal = document.getElementById("admin-screens-modal");
+  if (!modal) {
+    modal = document.createElement("div");
+    modal.id = "admin-screens-modal";
+    modal.className = "product-modal-backdrop";
+    modal.innerHTML = `
+      <div class="product-modal-card admin-screens-card">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+          <h3 style="margin: 0; font-size: 1.15rem; color: var(--gold-accent); display: flex; align-items: center; gap: 0.5rem;">
+            <span>🖥️</span> PANTALLAS DEL SISTEMA
+          </h3>
+          <button class="modal-close-btn" onclick="closeAdminScreensModal()" aria-label="Cerrar modal">&times;</button>
+        </div>
+        <p style="font-size: 0.82rem; color: var(--text-muted); margin: 0 0 1rem 0;">
+          Acceso rápido del Administrador a todos los paneles y pantallas del restaurante:
+        </p>
+        <div class="admin-screens-grid">
+          <a href="/static/admin/index.html" class="admin-screens-link">
+            <span>⚙️</span> <span>Administración</span>
+          </a>
+          <a href="/static/caja/panel.html" class="admin-screens-link">
+            <span>💰</span> <span>Caja POS Touch</span>
+          </a>
+          <a href="/static/cocina/monitor.html" class="admin-screens-link">
+            <span>👨‍🍳</span> <span>Monitor Cocina KDS</span>
+          </a>
+          <a href="/static/mesero/panel.html" class="admin-screens-link">
+            <span>🍽️</span> <span>Meseros & Salón</span>
+          </a>
+          <a href="/static/delivery/panel.html" class="admin-screens-link">
+            <span>🛵</span> <span>Despacho Delivery</span>
+          </a>
+          <a href="/static/gerencia/panel.html" class="admin-screens-link">
+            <span>📈</span> <span>Panel de Gerencia</span>
+          </a>
+          <a href="/static/cliente/app.html" class="admin-screens-link">
+            <span>📱</span> <span>Menú Clientes (PWA)</span>
+          </a>
+          <a href="/static/index.html" class="admin-screens-link">
+            <span>🌐</span> <span>Portada Web Oficial</span>
+          </a>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(modal);
+  }
+  modal.classList.add("open");
+}
+
+function closeAdminScreensModal() {
+  const modal = document.getElementById("admin-screens-modal");
+  if (modal) modal.classList.remove("open");
+}
+
+// Fetch Interceptor optimizado: Carga ultra-rápida sin parpadeos ni bloqueos en consultas GET
 if (typeof window !== "undefined" && window.fetch) {
   const originalFetch = window.fetch;
   window.fetch = async function (...args) {
     const url = args[0] ? args[0].toString() : "";
-    const isBackgroundCall = url.includes("/configuraciones-publicas") || url.includes("/health") || url.includes("/websocket") || url.includes("/caja/") || url.includes("/cliente/");
+    const options = args[1] || {};
+    const method = (options.method || "GET").toUpperCase();
     
-    if (!isBackgroundCall) {
-      showGlobalLoader("CARGANDO DATOS...");
+    // Solo mostrar loader si una operación de guardado/mutación demora más de 400ms
+    let timer = null;
+    if (method !== "GET" && !url.includes("/health") && !url.includes("/websocket")) {
+      timer = setTimeout(() => {
+        showGlobalLoader("GUARDANDO...");
+      }, 400);
     }
     
     try {
       const response = await originalFetch.apply(this, args);
       return response;
     } finally {
-      if (!isBackgroundCall) {
-        hideGlobalLoader();
-      }
+      if (timer) clearTimeout(timer);
+      hideGlobalLoader();
     }
   };
 }
