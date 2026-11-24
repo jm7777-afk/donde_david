@@ -4,15 +4,15 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Donde David - Panel de Administración General</title>
-  <link rel="stylesheet" href="/static/css/global.css?v=5.0">
-  <link rel="stylesheet" href="/static/css/toon-theme.css?v=5.0">
-  <link rel="stylesheet" href="/static/css/index.css?v=5.0">
+  <link rel="stylesheet" href="/static/css/global.css?v=5.1">
+  <link rel="stylesheet" href="/static/css/toon-theme.css?v=5.1">
+  <link rel="stylesheet" href="/static/css/index.css?v=5.1">
   
   <!-- Driver.js CSS para Onboarding Tour Interactivo -->
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/driver.js@1.3.1/dist/driver.css">
 
-  <link rel="stylesheet" href="/static/css/pages/admin-index.css?v=5.0">
-  <link rel="stylesheet" href="/static/css/utilities.css?v=5.0">
+  <link rel="stylesheet" href="/static/css/pages/admin-index.css?v=5.1">
+  <link rel="stylesheet" href="/static/css/utilities.css?v=5.1">
 </head>
 <body class="toon-theme"><nav id="app-sidebar"></nav>
 
@@ -1010,15 +1010,40 @@
 
   <!-- Driver.js Library script -->
   <script src="https://cdn.jsdelivr.net/npm/driver.js@1.3.1/dist/driver.js.iife.js"></script>
-  <script src="/static/js/auth.js?v=5.0"></script>
-  <script src="/static/js/appShell.js?v=5.0"></script>
-  <script src="/static/js/websocket.js?v=5.0"></script>
-  <script src="/static/js/admin-toon.js?v=5.0"></script>
+  <script src="/static/js/auth.js?v=5.1"></script>
+  <script src="/static/js/appShell.js?v=5.1"></script>
+  <script src="/static/js/websocket.js?v=5.1"></script>
+  <script src="/static/js/admin-toon.js?v=5.1"></script>
 
   <!-- Script para Autodisparo del Tour Interactivo Driver.js -->
   <script>
     function startOnboardingTour(force = false) {
       if (!window.driver || !window.driver.js) return;
+      if (!force && window.innerWidth < 900) return;
+
+      const rawSteps = [
+        {
+          element: '#btn-orders-panel',
+          popover: {
+            title: '📊 Panel de Pedidos y Métricas',
+            description: 'Monitor central donde visualizas en tiempo real el total de ventas, insumos críticos, pedidos en cocina y mesas ocupadas.',
+            side: 'bottom',
+            align: 'center'
+          }
+        },
+        {
+          element: '#nav-menu-items',
+          popover: {
+            title: '🍔 Gestión del Menú / Productos',
+            description: 'Desde este panel administras todo tu catálogo gastronómico: agregar categorías, registrar nuevos platos, ajustar precios e ingredientes editables.',
+            side: 'bottom',
+            align: 'center'
+          }
+        }
+      ];
+
+      const validSteps = rawSteps.filter(s => document.querySelector(s.element));
+      if (validSteps.length === 0) return;
 
       const driverObj = window.driver.js.driver({
         showProgress: true,
@@ -1028,59 +1053,12 @@
         nextBtnText: 'Siguiente →',
         prevBtnText: '← Anterior',
         onDestroyed: () => {
-          // Registrar en el backend tour_completed = true
           fetch('/api/v1/admin/tour-completed', {
             method: 'POST',
             headers: Auth.getHeaders()
           }).catch(err => console.error(err));
         },
-        steps: [
-          {
-            element: '#sidebar-branding',
-            popover: {
-              title: '🖼️ Personalización de Marca',
-              description: 'Aquí puedes configurar la identidad comercial de tu restaurante: actualizar el logotipo, cambiar los banners y ajustar la paleta de colores de la web pública.',
-              side: 'bottom',
-              align: 'start'
-            }
-          },
-          {
-            element: '#nav-menu-items',
-            popover: {
-              title: '🍔 Gestión del Menú / Productos',
-              description: 'Desde este panel administras todo tu catálogo gastronómico: agregar categorías, registrar nuevos platos, ajustar precios e ingredientes editables.',
-              side: 'bottom',
-              align: 'center'
-            }
-          },
-          {
-            element: '#btn-view-site',
-            popover: {
-              title: '🌐 Ver Sitio Web Público',
-              description: 'Acceso directo en una nueva pestaña para previsualizar exactamente cómo ven tus clientes la página web de tu restaurante en vivo.',
-              side: 'bottom',
-              align: 'center'
-            }
-          },
-          {
-            element: '#btn-orders-panel',
-            popover: {
-              title: '📊 Panel de Pedidos y Métricas',
-              description: 'Monitor central donde visualizas en tiempo real el total de ventas, insumos críticos, pedidos en cocina y mesas ocupadas.',
-              side: 'bottom',
-              align: 'center'
-            }
-          },
-          {
-            element: '#btn-help-tour',
-            popover: {
-              title: '❓ Botón de Ayuda del Tour',
-              description: 'Puedes hacer clic en este icono en cualquier momento para volver a ejecutar este Tour Interactivo de Bienvenida.',
-              side: 'bottom',
-              align: 'end'
-            }
-          }
-        ]
+        steps: validSteps
       });
 
       driverObj.drive();

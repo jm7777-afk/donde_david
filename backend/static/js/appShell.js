@@ -390,15 +390,18 @@ function openAdminScreensModal() {
     modal = document.createElement("div");
     modal.id = "admin-screens-modal";
     modal.className = "product-modal-backdrop";
+    modal.onclick = (e) => {
+      if (e.target === modal) closeAdminScreensModal();
+    };
     modal.innerHTML = `
       <div class="product-modal-card admin-screens-card">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
-          <h3 style="margin: 0; font-size: 1.15rem; color: var(--gold-accent); display: flex; align-items: center; gap: 0.5rem;">
+        <div class="admin-screens-header">
+          <h3 class="admin-screens-title">
             <span>🖥️</span> PANTALLAS DEL SISTEMA
           </h3>
           <button class="modal-close-btn" onclick="closeAdminScreensModal()" aria-label="Cerrar modal">&times;</button>
         </div>
-        <p style="font-size: 0.82rem; color: var(--text-muted); margin: 0 0 1rem 0;">
+        <p class="admin-screens-desc">
           Acceso rápido del Administrador a todos los paneles y pantallas del restaurante:
         </p>
         <div class="admin-screens-grid">

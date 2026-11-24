@@ -503,16 +503,20 @@ h1.hero-title {
 .product-modal-backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(4, 6, 11, 0.85);
-  backdrop-filter: blur(10px);
+  background: rgba(4, 6, 11, 0.88);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 1rem;
-  z-index: 2000;
+  padding: clamp(0.65rem, 3vw, 1.25rem);
+  z-index: 999999;
   opacity: 0;
   pointer-events: none;
-  transition: opacity 0.3s ease;
+  transition: opacity 0.25s ease;
+  overflow-y: auto !important;
+  -webkit-overflow-scrolling: touch !important;
+  box-sizing: border-box;
 }
 .product-modal-backdrop.open {
   opacity: 1;
@@ -524,10 +528,13 @@ h1.hero-title {
   border-radius: var(--radius-lg);
   max-width: 500px;
   width: 100%;
-  max-height: 90vh;
-  overflow-y: auto;
-  box-shadow: 0 20px 60px rgba(0,0,0,0.8);
+  max-height: 88vh;
+  max-height: 88dvh;
+  overflow-y: auto !important;
+  -webkit-overflow-scrolling: touch !important;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.85);
   position: relative;
+  box-sizing: border-box;
   animation: modalUp 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
 }
 @keyframes modalUp {
@@ -1016,38 +1023,11 @@ h1.hero-title {
   position: relative;
 }
 
-.admin-sidebar {
-  width: 280px;
-  background: var(--toon-card);
-  border-right: 1px solid var(--toon-border);
-  padding: 1.25rem 1rem;
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  z-index: 200;
-}
-
 .admin-main-content {
   flex: 1;
   padding: 1.5rem;
   width: 100%;
   overflow-x: hidden;
-}
-
-@media (max-width: 1024px) {
-  .admin-sidebar {
-    position: fixed;
-    top: 60px;
-    left: 0;
-    bottom: 0;
-    width: 290px;
-    box-shadow: 10px 0 30px rgba(0, 0, 0, 0.7);
-    transform: translateX(-100%);
-  }
-  .admin-sidebar.open {
-    transform: translateX(0);
-  }
 }
 
 /* ==================== UNIVERSAL HEADER STYLES (ESTILO CASHEA) ==================== */
@@ -1529,24 +1509,28 @@ select.form-control option, select option {
   top: 0;
   left: 0;
   bottom: 0;
-  width: 310px;
-  max-width: 85vw;
-  background: linear-gradient(180deg, rgba(16, 23, 38, 0.98), rgba(8, 12, 22, 0.98));
+  width: min(320px, 86vw);
+  max-width: 86vw;
+  background: linear-gradient(180deg, rgba(16, 23, 38, 0.98), rgba(8, 12, 22, 0.99));
   border-right: 2px solid var(--gold-accent);
-  box-shadow: 10px 0 40px rgba(0, 0, 0, 0.8);
+  box-shadow: 10px 0 40px rgba(0, 0, 0, 0.85);
   z-index: 999995;
   transform: translateX(-100%);
   transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   display: flex;
   flex-direction: column;
-  padding: 1.5rem 1.2rem;
+  padding: 1.5rem 1.2rem 7.5rem 1.2rem;
   overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  box-sizing: border-box;
 }
 .universal-mobile-drawer-card.open {
   transform: translateX(0) !important;
 }
 
 .drawer-nav-item {
+  flex-shrink: 0 !important;
   display: flex;
   align-items: center;
   gap: 0.85rem;
@@ -1561,6 +1545,7 @@ select.form-control option, select option {
   font-size: 0.95rem;
   cursor: pointer;
   transition: all 0.2s ease;
+  box-sizing: border-box;
 }
 .drawer-nav-item:hover, .drawer-nav-item:active {
   background: var(--gold-gradient);
@@ -2782,19 +2767,45 @@ select {
 
 /* Quick Admin Screens Switcher Modal */
 .admin-screens-card {
-  max-width: 520px;
-  width: 90%;
-  padding: 1.5rem;
+  max-width: 540px;
+  width: 100%;
+  max-height: 86vh;
+  max-height: 86dvh;
+  overflow-y: auto !important;
+  -webkit-overflow-scrolling: touch;
+  padding: 1.25rem 1.1rem;
   background: var(--toon-card);
   border: 2px solid var(--cyan-accent);
   border-radius: 16px;
-  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.7);
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.85);
+  box-sizing: border-box;
+}
+.admin-screens-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.75rem;
+}
+.admin-screens-title {
+  margin: 0;
+  font-size: 1.15rem;
+  color: var(--gold-accent);
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.admin-screens-desc {
+  font-size: 0.82rem;
+  color: var(--text-muted);
+  margin: 0 0 0.85rem 0;
+  line-height: 1.35;
 }
 .admin-screens-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 0.75rem;
-  margin-top: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr));
+  gap: 0.65rem;
+  width: 100%;
+  box-sizing: border-box;
 }
 .admin-screens-link {
   display: flex;
@@ -2809,10 +2820,27 @@ select {
   font-size: 0.85rem;
   font-weight: 700;
   transition: all 0.2s ease;
+  box-sizing: border-box;
 }
 .admin-screens-link:hover {
   background: rgba(0, 245, 212, 0.12);
   border-color: var(--cyan-accent);
   color: var(--cyan-accent);
   transform: translateY(-2px);
+}
+@media (max-width: 600px) {
+  .admin-screens-card {
+    padding: 1rem 0.85rem;
+    max-height: 84vh;
+    max-height: 84dvh;
+    width: 96%;
+  }
+  .admin-screens-grid {
+    grid-template-columns: 1fr !important;
+    gap: 0.5rem;
+  }
+  .admin-screens-link {
+    padding: 0.65rem 0.85rem;
+    font-size: 0.82rem;
+  }
 }
