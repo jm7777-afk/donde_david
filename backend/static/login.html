@@ -39,7 +39,7 @@
       <div class="login-options-row">
         <label class="login-remember-label" for="portal-remember">
           <input type="checkbox" id="portal-remember">
-          <span>Recordar contraseña</span>
+          <span>Recordar usuario</span>
         </label>
         <a href="javascript:void(0)" class="login-forgot-link" onclick="forgotPasswordAlert()">¿Olvidaste tu contraseña?</a>
       </div>
@@ -49,25 +49,15 @@
       </button>
     </form>
 
-    <div class="login-demo-panel">
-      <div class="login-demo-title">ACCESOS DIRECTOS DEMO:</div>
-      <div class="login-demo-grid">
-        <button class="demo-role-btn" onclick="quickStaffLogin('admin', 'admin123', '/static/admin/index.html')">⚙️ Administrador</button>
-        <button class="demo-role-btn" onclick="quickStaffLogin('caja', 'caja123', '/static/caja/panel.html')">💰 Caja POS</button>
-        <button class="demo-role-btn" onclick="quickStaffLogin('cocina1', 'cocina123', '/static/cocina/monitor.html')">👨‍🍳 Cocina KDS</button>
-        <button class="demo-role-btn" onclick="quickStaffLogin('delivery1', 'delivery123', '/static/delivery/panel.html')">🛵 Repartidor</button>
-      </div>
-    </div>
-
     <div class="login-footer">
       <a href="/static/index.html" class="login-footer-link">← Volver al Sitio Web Público</a>
     </div>
 
   </div>
 
-  <script src="/static/js/websocket.js?v=5.2"></script>
-  <script src="/static/js/auth.js?v=5.2"></script>
-  <script src="/static/js/appShell.js?v=5.2"></script>
+  <script src="/static/js/websocket.js?v=5.3"></script>
+  <script src="/static/js/auth.js?v=5.3"></script>
+  <script src="/static/js/appShell.js?v=5.3"></script>
   <script>
     const rememberCheckbox = document.getElementById("portal-remember");
     const userInput = document.getElementById("portal-user");
@@ -83,20 +73,13 @@
       });
     }
 
-    // Cargar credenciales recordadas si existen
+    // Cargar únicamente el nombre de usuario recordado (nunca almacenar contraseñas en localStorage)
     try {
+      localStorage.removeItem("donde_david_portal_pass");
       const savedUser = localStorage.getItem("donde_david_portal_user");
-      const savedPass = localStorage.getItem("donde_david_portal_pass");
       const isRemembered = localStorage.getItem("donde_david_portal_remember") === "true";
       if (isRemembered && savedUser) {
         userInput.value = savedUser;
-        if (savedPass) {
-          try {
-            passInput.value = atob(savedPass);
-          } catch (_) {
-            passInput.value = savedPass;
-          }
-        }
         rememberCheckbox.checked = true;
       }
     } catch (err) {
@@ -108,19 +91,18 @@
       const u = userInput.value.trim();
       const p = passInput.value;
 
-      // Guardar o eliminar credenciales según estado del checkbox
+      // Guardar o eliminar solo el nombre de usuario según estado del checkbox
       try {
+        localStorage.removeItem("donde_david_portal_pass");
         if (rememberCheckbox && rememberCheckbox.checked) {
           localStorage.setItem("donde_david_portal_user", u);
-          localStorage.setItem("donde_david_portal_pass", btoa(p));
           localStorage.setItem("donde_david_portal_remember", "true");
         } else {
           localStorage.removeItem("donde_david_portal_user");
-          localStorage.removeItem("donde_david_portal_pass");
           localStorage.removeItem("donde_david_portal_remember");
         }
       } catch (err) {
-        console.warn("Error almacenando credenciales", err);
+        console.warn("Error almacenando preferencia de usuario", err);
       }
 
       try {
@@ -134,15 +116,6 @@
 
     function forgotPasswordAlert() {
       alert("Para recuperar o reasignar tu contraseña, comunícate con la Administración o Gerencia del restaurante para restablecer tus credenciales.");
-    }
-
-    async function quickStaffLogin(user, pass, redirectUrl) {
-      try {
-        await Auth.login(user, pass);
-        window.location.href = redirectUrl;
-      } catch (err) {
-        showToast(err.message, "danger");
-      }
     }
 
     function redirectByRole(rol) {

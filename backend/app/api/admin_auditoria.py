@@ -4,7 +4,7 @@ Módulo API: Auditoría y Trazabilidad Administrativa (Admin Audit Router)
 Provee endpoints seguros para la consulta, filtrado, detalle y exportación
 de los eventos de auditoría y trazabilidad del sistema Donde David.
 """
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from fastapi.responses import PlainTextResponse
@@ -94,7 +94,7 @@ def exportar_auditoria_csv(
     items, _ = get_audit_logs(db=db, skip=0, limit=limit)
     csv_data = generate_audit_csv(items)
 
-    filename = f"auditoria_donde_david_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.csv"
+    filename = f"auditoria_donde_david_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}.csv"
     return PlainTextResponse(
         content=csv_data,
         media_type="text/csv",

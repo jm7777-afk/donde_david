@@ -158,9 +158,9 @@
 
       <div class="u-background-token-toon-card u-padding-1-25rem u-border-radius-token-radius-md u-margin-1-25rem-0 u-border-1px-solid-token-toon-border">
         <div class="u-display-flex u-justify-content-space-between u-color-token-text-muted u-margin-bottom-0-5rem"><span>Subtotal</span><span id="cart-subtotal">$0.00</span></div>
-        <div class="u-display-flex u-justify-content-space-between u-color-token-text-muted u-margin-bottom-0-5rem"><span>IVA (16%)</span><span id="cart-tax">$0.00</span></div>
+        <div class="u-display-flex u-justify-content-space-between u-color-token-text-muted u-margin-bottom-0-5rem"><span id="cart-tax-label">IVA (16%)</span><span id="cart-tax">$0.00</span></div>
         <div id="cart-delivery-row" class="u-display-flex u-justify-content-space-between u-color-token-text-muted u-margin-bottom-0-5rem"><span>Envío Delivery</span><span id="cart-delivery-cost">$5.00</span></div>
-        <div id="cart-empaque-row" class="u-display-flex u-justify-content-space-between u-color-token-text-muted u-margin-bottom-0-5rem"><span>Empaque para Llevar</span><span id="cart-empaque-cost">$1.00</span></div>
+        <div id="cart-empaque-row" class="u-display-flex u-justify-content-space-between u-color-token-text-muted u-margin-bottom-0-5rem"><span>Empaque para Llevar</span><span id="cart-empaque-cost">$3.00</span></div>
         <div class="u-display-flex u-justify-content-space-between u-font-size-1-3rem u-font-weight-900 u-border-top-1px-dashed-token-toon-border u-padding-top-0-75rem u-color-token-gold-accent"><span>TOTAL GENERAL</span><span id="cart-total">$0.00</span></div>
       </div>
 
@@ -486,7 +486,7 @@
         <div class="login-options-row u-margin-bottom-1rem">
           <label class="login-remember-label" for="client-remember-credentials">
             <input type="checkbox" id="client-remember-credentials">
-            <span class="u-font-size-0-8rem">Recordar mi contraseña</span>
+            <span class="u-font-size-0-8rem">Recordar mi usuario</span>
           </label>
         </div>
 
@@ -761,13 +761,13 @@
   <!-- Driver.js Library script para Tour Interactivo de Clientes -->
   <script src="https://cdn.jsdelivr.net/npm/driver.js@1.3.1/dist/driver.js.iife.js"></script>
 
-  <script src="/static/js/auth.js?v=5.2"></script>
-  <script src="/static/js/websocket.js?v=5.2"></script>
-  <script src="/static/js/cliente-toon.js?v=5.2"></script>
-  <script src="/static/js/appShell.js?v=5.2"></script>
+  <script src="/static/js/auth.js?v=5.3"></script>
+  <script src="/static/js/websocket.js?v=5.3"></script>
+  <script src="/static/js/cliente-toon.js?v=5.3"></script>
+  <script src="/static/js/appShell.js?v=5.3"></script>
   <script>
     if ("serviceWorker" in navigator && (location.protocol === "https:" || location.hostname === "localhost" || location.hostname === "127.0.0.1")) {
-      navigator.serviceWorker.register("/static/sw.js?v=5.2", { scope: "/static/" })
+      navigator.serviceWorker.register("/static/sw.js?v=5.3", { scope: "/static/" })
         .then(reg => {
           reg.update();
         })

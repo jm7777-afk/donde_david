@@ -26,9 +26,9 @@ Variables requeridas:
 
 El feed de tasa es externo y no está operado directamente por el BCV. Si deja de responder, el sistema conserva la última tasa válida; el administrador también puede guardar una tasa manual, que permanece activa hasta una actualización manual del feed.
 
-El esquema se administra con Alembic. Para una instalación nueva: `alembic upgrade head`. No uses `create_all` ni el seed demo en producción. Crea la primera cuenta admin mediante `/setup` y cambia las credenciales iniciales de desarrollo que sigan presentes en bases locales.
+El esquema se administra con Alembic. En Render, `render.yaml` ejecuta `alembic upgrade head && gunicorn -k uvicorn.workers.UvicornWorker --workers 1 backend.app.main:app --bind 0.0.0.0:$PORT`. No uses `create_all` ni el seed demo en producción. Crea la primera cuenta admin mediante `/setup` y cambia las credenciales iniciales de desarrollo que sigan presentes en bases locales. La pantalla `/static/login.html` no expone botones ni contraseñas demo en producción, ni el cliente almacena contraseñas en `localStorage`.
 
-En Render, consulta [RENDER_DEPLOYMENT.md](../RENDER_DEPLOYMENT.md) para configurar PostgreSQL, secretos, health checks y el comando de arranque.
+En Render, consulta [RENDER_DEPLOYMENT.md](../RENDER_DEPLOYMENT.md) para configurar PostgreSQL, secretos, health checks y el comando de arranque. CI valida `compileall`, `node --check`, `alembic upgrade head && alembic check`, `pytest tests -q` y las pruebas de Flutter antes de desplegar.
 
 ## Operación y escalado
 

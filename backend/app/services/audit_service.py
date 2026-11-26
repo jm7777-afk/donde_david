@@ -42,7 +42,8 @@ def record_audit(
     detalle: Optional[str] = None,
     datos_previos: Optional[Union[dict, list, str]] = None,
     datos_nuevos: Optional[Union[dict, list, str]] = None,
-    auto_commit: bool = True
+    auto_commit: bool = True,
+    normalize_action: bool = True,
 ) -> Optional[Auditoria]:
     """
     Registra un evento de auditoría en la base de datos de manera segura y resiliente.
@@ -60,8 +61,9 @@ def record_audit(
     :param auto_commit: Si es True, realiza commit inmediato; si es False, se acopla a la transacción activa.
     """
     try:
+        clean_action = accion.strip()
         entry = Auditoria(
-            accion=accion.strip().upper(),
+            accion=clean_action.upper() if normalize_action else clean_action,
             usuario=usuario.strip() if usuario else "desconocido",
             usuario_id=usuario_id,
             ip_address=ip_address.strip() if ip_address else None,

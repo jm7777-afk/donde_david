@@ -20,16 +20,26 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
           cache: pip
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
       - name: Install dependencies
         run: python -m pip install -r requirements.txt
       - name: Check Python syntax
         run: python -m compileall -q backend tests
-      - name: Check fresh database migration
-        run: alembic upgrade head
+      - name: Check frontend JavaScript syntax
+        run: |
+          for f in backend/static/js/*.js backend/static/js/**/*.js; do
+            [ -f "$f" ] && node --check "$f"
+          done
+      - name: Check fresh database migration and model alignment
+        run: |
+          alembic upgrade head
+          alembic check
         env:
           DATABASE_URL: sqlite:///./migration_smoke.db
       - name: Run tests
-        run: pytest -q
+        run: pytest tests -q
 
   mobile:
     runs-on: ubuntu-latest

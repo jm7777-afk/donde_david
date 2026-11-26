@@ -30,6 +30,7 @@ from backend.app.schemas.schemas import CategoriaOut, ProductoOut, PedidoCreate,
 from backend.app.models.solicitud_mesa import SolicitudMesa
 from backend.app.websockets.manager import ws_manager
 from backend.app.services.tables import parse_table_number, refresh_table_state
+from backend.app.services.orders import get_pricing_config, prepare_order_items, deduct_order_stock
 
 router = APIRouter(prefix="/cliente", tags=["Cliente QR / App"])
 logger = logging.getLogger(__name__)
@@ -164,16 +165,10 @@ async def crear_pedido(
     if not pedido_in.detalles or len(pedido_in.detalles) == 0:
         raise HTTPException(status_code=400, detail="El pedido debe contener productos.")
     
-    iva_active_cfg = db.query(Configuracion).filter(Configuracion.clave == "iva_activo").first()
-    is_iva_active = iva_active_cfg.valor.lower() in ("true", "1") if iva_active_cfg else True
-    tax_config = db.query(Configuracion).filter(Configuracion.clave == "impuesto_porcentaje").first()
-    tax_rate = (float(tax_config.valor) if tax_config else 16.0) if is_iva_active else 0.0
-
-    delivery_config = db.query(Configuracion).filter(Configuracion.clave == "costo_delivery").first()
-    delivery_fee = float(delivery_config.valor) if pedido_in.tipo == "delivery" and delivery_config else (5.0 if pedido_in.tipo == "delivery" else 0.0)
-
-    empaque_config = db.query(Configuracion).filter(Configuracion.clave == "costo_empaque").first()
-    costo_empaque_val = float(empaque_config.valor) if pedido_in.tipo == "llevar" and empaque_config else (3.0 if pedido_in.tipo == "llevar" else 0.0)
+    pricing = get_pricing_config(db)
+    tax_rate = pricing["tax_rate"]
+    delivery_fee = pricing["delivery_fee"] if pedido_in.tipo == "delivery" else 0.0
+    costo_empaque_val = pricing["package_fee"] if pedido_in.tipo == "llevar" else 0.0
 
     deferred_payment = pedido_in.tipo == "mesa" and pedido_in.modo_pago == "PAGAR_DESPUES"
     if pedido_in.modo_pago not in {"PAGAR_ANTES", "PAGAR_DESPUES"}:
@@ -223,89 +218,9 @@ async def crear_pedido(
         mesa_obj.estado = "OCUPADA"
         mesa_obj.cliente_actual = current_user.nombre if current_user else f"Cliente Mesa {mesa_num_val}"
 
-    requested_quantities: dict[int, int] = {}
-    for item in pedido_in.detalles:
-        requested_quantities[item.producto_id] = (
-            requested_quantities.get(item.producto_id, 0) + item.cantidad
-        )
-
-    products: dict[int, Producto] = {}
-    stock_before: dict[int, int] = {}
-    for product_id, quantity in requested_quantities.items():
-        product = db.query(Producto).filter(
-            Producto.id == product_id,
-            Producto.activo == True,
-            Producto.disponible == True,
-        ).with_for_update().first()
-        if not product:
-            raise HTTPException(status_code=404, detail=f"Producto con ID {product_id} no disponible.")
-        if product.stock < quantity:
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail=f"Stock insuficiente para el producto '{product.nombre}' (Disponible: {product.stock}, Solicitado: {quantity})."
-            )
-        products[product_id] = product
-        stock_before[product_id] = product.stock
-
-    subtotal_acumulado = 0.0
-    detalles_db = []
-
-    for item in pedido_in.detalles:
-        producto = products[item.producto_id]
-        precio = float(producto.precio_promocion) if (producto.precio_promocion and producto.precio_promocion > 0) else float(producto.precio)
-        customizations = item.personalizaciones or {}
-        extras_requested = customizations.get("extras", [])
-        if not isinstance(extras_requested, list):
-            raise HTTPException(status_code=422, detail="La lista de extras no es válida.")
-        try:
-            configured_extras = json.loads(producto.extras_json or "[]")
-        except json.JSONDecodeError:
-            logger.exception("Invalid extras_json for product %s", producto.id)
-            raise HTTPException(status_code=500, detail="La configuración de extras de un producto es inválida.")
-        if not isinstance(configured_extras, list):
-            logger.error("Invalid extras_json shape for product %s", producto.id)
-            raise HTTPException(status_code=500, detail="La configuración de extras de un producto es inválida.")
-        configured_by_name = {
-            entry["nombre"]: float(entry["precio"])
-            for entry in configured_extras
-            if isinstance(entry, dict)
-            and isinstance(entry.get("nombre"), str)
-            and isinstance(entry.get("precio"), (int, float))
-            and not isinstance(entry.get("precio"), bool)
-            and math.isfinite(entry["precio"])
-        }
-        selected_names = []
-        extra_total = 0.0
-        for extra in extras_requested:
-            if not isinstance(extra, str) or extra not in configured_by_name or extra in selected_names:
-                raise HTTPException(status_code=422, detail=f"El extra solicitado no está disponible para {producto.nombre}.")
-            selected_names.append(extra)
-            extra_total += configured_by_name[extra]
-        unit_price = round(precio + extra_total, 2)
-        subtotal_item = round(unit_price * item.cantidad, 2)
-        subtotal_acumulado += subtotal_item
-
-        personalizations_to_save = dict(customizations)
-        if extras_requested:
-            personalizations_to_save["extras"] = selected_names
-        personalizaciones_str = json.dumps(personalizations_to_save) if personalizations_to_save else None
-
-        detalle = DetallePedido(
-            producto_id=producto.id,
-            cantidad=item.cantidad,
-            precio_unitario=unit_price,
-            subtotal=subtotal_item,
-            puntos_fidelidad_unitarios=max(0, int(producto.puntos_fidelidad or 0)),
-            personalizaciones=personalizaciones_str,
-            observaciones=item.observaciones,
-            estado="PENDIENTE"
-        )
-        detalles_db.append(detalle)
-
-    for product_id, quantity in requested_quantities.items():
-        products[product_id].stock -= quantity
-
-    subtotal_final = round(subtotal_acumulado, 2)
+    products, requested_quantities, stock_before, detalles_db, subtotal_final = prepare_order_items(
+        db, pedido_in.detalles
+    )
     impuesto_monto = round(subtotal_final * (tax_rate / 100.0), 2)
     total_final = round(subtotal_final + impuesto_monto + delivery_fee + costo_empaque_val, 2)
 
@@ -318,7 +233,7 @@ async def crear_pedido(
         numero_mesa=(
             num_mesa_clean if pedido_in.tipo == "mesa"
             else "Mostrador" if pedido_in.tipo == "llevar"
-            else f"Delivery #{db.query(Pedido).count() + 101}"
+            else "Delivery"
         ),
         codigo_qr=pedido_in.codigo_qr,
         token_seguimiento_hash=hashlib.sha256(tracking_token.encode("utf-8")).hexdigest(),
@@ -355,16 +270,16 @@ async def crear_pedido(
 
     db.add(nuevo_pedido)
     db.flush()
-    for product_id, quantity in requested_quantities.items():
-        db.add(MovimientoInventario(
-            producto_id=product_id,
-            tipo_movimiento="VENTA",
-            cantidad_cambio=-quantity,
-            cantidad_anterior=stock_before[product_id],
-            cantidad_nueva=products[product_id].stock,
-            motivo=f"Pedido #{nuevo_pedido.id}",
-            usuario_id=current_user.id if current_user else None
-        ))
+    if pedido_in.tipo == "delivery":
+        nuevo_pedido.numero_mesa = f"Delivery #{nuevo_pedido.id + 100}"
+    deduct_order_stock(
+        db,
+        nuevo_pedido.id,
+        products,
+        requested_quantities,
+        stock_before,
+        current_user.id if current_user else None,
+    )
     db.commit()
     db.refresh(nuevo_pedido)
 
@@ -526,12 +441,25 @@ def verificar_otp_pedido(
     request: Request,
     response: Response,
     req: OTPVerifyRequest,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    tracking_token: Optional[str] = Header(default=None, alias="X-Order-Tracking-Token"),
+    current_user: Optional[Usuario] = Depends(get_current_user_optional),
 ):
-    pedido = db.query(Pedido).filter(Pedido.id == req.pedido_id).first()
+    pedido = db.query(Pedido).filter(Pedido.id == req.pedido_id).with_for_update().first()
     if not pedido:
         raise HTTPException(status_code=404, detail="Pedido no encontrado")
-    
+
+    is_staff = current_user is not None and current_user.rol in {"admin", "supervisor", "caja", "repartidor"}
+    owns_order = current_user is not None and pedido.usuario_id == current_user.id
+    has_valid_token = False
+    if tracking_token and pedido.token_seguimiento_hash:
+        token_digest = hashlib.sha256(tracking_token.encode("utf-8")).hexdigest()
+        has_valid_token = hmac.compare_digest(token_digest, pedido.token_seguimiento_hash)
+    if not (is_staff or owns_order or has_valid_token):
+        raise HTTPException(status_code=404, detail="Pedido no encontrado")
+    if pedido.tipo != "delivery" or pedido.estado == "CANCELADO":
+        raise HTTPException(status_code=409, detail="Este pedido no admite verificación OTP.")
+
     if pedido.codigo_otp and hmac.compare_digest(pedido.codigo_otp, req.codigo_otp):
         pedido.otp_verificado = True
         db.commit()
@@ -731,20 +659,21 @@ def canjear_puntos(
     if recompensa not in reward_costs:
         raise HTTPException(status_code=400, detail="Recompensa no válida")
     costo = reward_costs[recompensa]
-    if current_user.puntos_fidelidad < costo:
+    locked_user = db.query(Usuario).filter(Usuario.id == current_user.id).with_for_update().first()
+    if not locked_user or int(locked_user.puntos_fidelidad or 0) < costo:
         raise HTTPException(status_code=400, detail="Puntos insuficientes para canjear esta recompensa")
     # Deduct points
-    current_user.puntos_fidelidad -= costo
+    locked_user.puntos_fidelidad = int(locked_user.puntos_fidelidad or 0) - costo
     # Log redemption
     db.add(PuntosLog(
-        usuario_id=current_user.id,
+        usuario_id=locked_user.id,
         puntos=-costo,
         concepto=f"Canje de {recompensa}",
         pedido_id=None
     ))
     db.commit()
-    db.refresh(current_user)
-    return {"mensaje": "Recompensa canjeada exitosamente", "puntos_restantes": current_user.puntos_fidelidad}
+    db.refresh(locked_user)
+    return {"mensaje": "Recompensa canjeada exitosamente", "puntos_restantes": locked_user.puntos_fidelidad}
 
 
 @router.get("/puntos/historial")

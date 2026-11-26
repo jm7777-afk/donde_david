@@ -18,7 +18,7 @@ router = APIRouter(prefix="/gerencia", tags=["Gerencia"])
 @router.get("/dashboard")
 def get_manager_dashboard(
     db: Session = Depends(get_db),
-    user=Depends(require_roles(["gerente"])),
+    user=Depends(require_roles(["gerente"], allow_admin_override=False)),
 ):
     now = datetime.now(timezone.utc)
     today_start = datetime.combine(now.date(), time.min, tzinfo=timezone.utc)

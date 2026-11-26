@@ -7,6 +7,7 @@ from decimal import Decimal
 import hmac
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import and_, func, or_
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from pydantic import BaseModel, Field
 from backend.app.core.database import get_db
@@ -20,11 +21,12 @@ from backend.app.models.mesa import Mesa
 from backend.app.models.usuario import Usuario
 from backend.app.models.movimiento_inventario import MovimientoInventario
 from backend.app.models.movimiento_caja import MovimientoCaja
-from backend.app.models.puntos_log import Auditoria
 from backend.app.models.arqueo_turno import ArqueoTurno
 from backend.app.schemas.schemas import PedidoOut, TurnoApertura, TurnoCierre, TurnoOut, CobrarPedidoRequest, DetallePedidoItem, MovimientoCajaCreate, MovimientoCajaOut, ConfirmarRetiroRequest
 from backend.app.schemas.schemas import ConfirmarPagoRequest
+from backend.app.services.audit_service import record_audit
 from backend.app.services.exchange_rate import get_bcv_rate
+from backend.app.services.orders import get_pricing_config, prepare_order_items, deduct_order_stock, restore_order_stock
 from backend.app.services.tables import parse_table_number, refresh_table_state
 from backend.app.services.loyalty import award_order_loyalty_points
 from backend.app.websockets.manager import ws_manager
@@ -118,7 +120,7 @@ async def registrar_movimiento_caja(
     db: Session = Depends(get_db),
     current_user=Depends(require_roles(["admin", "supervisor", "caja"])),
 ):
-    turno = db.query(Turno).filter(Turno.activo == True).order_by(Turno.id.desc()).first()
+    turno = db.query(Turno).filter(Turno.activo == True).with_for_update().order_by(Turno.id.desc()).first()
     if not turno:
         raise HTTPException(status_code=409, detail="Debe abrir un turno antes de registrar un egreso.")
     movimiento = MovimientoCaja(
@@ -131,6 +133,17 @@ async def registrar_movimiento_caja(
         observacion=data.observacion.strip() if data.observacion else None,
     )
     db.add(movimiento)
+    db.flush()
+    record_audit(
+        db=db,
+        accion="CASH_EXPENSE",
+        usuario=current_user.nombre_usuario,
+        usuario_id=current_user.id,
+        recurso="movimientos_caja",
+        recurso_id=movimiento.id,
+        detalle=f"Egreso {data.metodo_pago} ${movimiento.monto_usd:.2f}: {movimiento.concepto}",
+        auto_commit=False,
+    )
     db.commit()
     db.refresh(movimiento)
     await ws_manager.broadcast("MOVIMIENTO_CAJA", {
@@ -147,7 +160,7 @@ async def abrir_turno(
     db: Session = Depends(get_db),
     current_user = Depends(require_roles(["admin", "supervisor", "caja"]))
 ):
-    turno_existente = db.query(Turno).filter(Turno.activo == True).first()
+    turno_existente = db.query(Turno).filter(Turno.activo == True).with_for_update().first()
     if turno_existente:
         raise HTTPException(status_code=400, detail=f"Ya existe un turno activo (# {turno_existente.numero_turno}).")
 
@@ -163,6 +176,21 @@ async def abrir_turno(
         usuario_caja_id=current_user.id
     )
     db.add(nuevo_turno)
+    try:
+        db.flush()
+    except IntegrityError as exc:
+        db.rollback()
+        raise HTTPException(status_code=409, detail="Otro usuario abrió el turno simultáneamente; recarga la caja.") from exc
+    record_audit(
+        db=db,
+        accion="SHIFT_OPEN",
+        usuario=current_user.nombre_usuario,
+        usuario_id=current_user.id,
+        recurso="turnos",
+        recurso_id=nuevo_turno.id,
+        detalle=f"Turno #{nuevo_turno.numero_turno} abierto con ${float(nuevo_turno.monto_apertura):.2f}",
+        auto_commit=False,
+    )
     db.commit()
     db.refresh(nuevo_turno)
 
@@ -181,7 +209,7 @@ async def cerrar_turno(
     db: Session = Depends(get_db),
     current_user = Depends(require_roles(["admin", "supervisor", "caja"]))
 ):
-    turno = db.query(Turno).filter(Turno.activo == True).order_by(Turno.id.desc()).first()
+    turno = db.query(Turno).filter(Turno.activo == True).order_by(Turno.id.desc()).with_for_update().first()
     if not turno:
         raise HTTPException(status_code=404, detail="No hay turno activo para cerrar.")
 
@@ -211,6 +239,16 @@ async def cerrar_turno(
     turno.efectivo_esperado = expected_total
     turno.activo = False
 
+    record_audit(
+        db=db,
+        accion="SHIFT_CLOSE",
+        usuario=current_user.nombre_usuario,
+        usuario_id=current_user.id,
+        recurso="turnos",
+        recurso_id=turno.id,
+        detalle=f"Turno #{turno.numero_turno} cerrado. Diferencia efectivo: ${turno.diferencia:.2f}",
+        auto_commit=False,
+    )
     db.commit()
     db.refresh(turno)
 
@@ -365,20 +403,12 @@ async def confirmar_pago_pedido(
     else:
         pedido.estado_pago = "RECHAZADO"
         pedido.estado = "CANCELADO"
-        for detalle in pedido.detalles:
-            producto = db.query(Producto).filter(Producto.id == detalle.producto_id).with_for_update().first()
-            if producto:
-                anterior = producto.stock
-                producto.stock += detalle.cantidad
-                db.add(MovimientoInventario(
-                    producto_id=producto.id,
-                    tipo_movimiento="DEVOLUCION",
-                    cantidad_cambio=detalle.cantidad,
-                    cantidad_anterior=anterior,
-                    cantidad_nueva=producto.stock,
-                    motivo=f"Pago móvil rechazado - Pedido #{pedido.id}",
-                    usuario_id=current_user.id,
-                ))
+        restore_order_stock(
+            db,
+            pedido,
+            motivo=f"Pago móvil rechazado - Pedido #{pedido.id}",
+            usuario_id=current_user.id,
+        )
         if pedido.tipo == "mesa":
             try:
                 refresh_table_state(db, parse_table_number(pedido.numero_mesa))
@@ -389,11 +419,17 @@ async def confirmar_pago_pedido(
     audit_detail = f"Pedido #{pedido.id}: {'aprobado' if data.aprobado else 'rechazado'}"
     if data.observacion and data.observacion.strip():
         audit_detail += f" · {data.observacion.strip()}"
-    db.add(Auditoria(
+    record_audit(
+        db=db,
         accion="Validación de Pago Móvil",
         usuario=current_user.nombre_usuario,
+        usuario_id=current_user.id,
+        recurso="pedidos",
+        recurso_id=pedido.id,
         detalle=audit_detail[:255],
-    ))
+        auto_commit=False,
+        normalize_action=False,
+    )
 
     db.commit()
     await ws_manager.broadcast("PAGO_VALIDADO", {
@@ -426,14 +462,10 @@ async def crear_y_cobrar_rapido(
     if data.metodo_pago == "Pago Móvil" and data.moneda_pago != "VES":
         raise HTTPException(status_code=422, detail="Pago Móvil debe cobrarse en bolívares.")
 
-    iva_active_cfg = db.query(Configuracion).filter(Configuracion.clave == "iva_activo").first()
-    is_iva_active = iva_active_cfg.valor.lower() in ("true", "1") if iva_active_cfg else True
-    tax_config = db.query(Configuracion).filter(Configuracion.clave == "impuesto_porcentaje").first()
-    tax_rate = (float(tax_config.valor) if tax_config else 16.0) if is_iva_active else 0.0
-    delivery_config = db.query(Configuracion).filter(Configuracion.clave == "costo_delivery").first()
-    package_config = db.query(Configuracion).filter(Configuracion.clave == "costo_empaque").first()
-    delivery_fee = float(delivery_config.valor) if delivery_config else 5.0
-    package_fee = float(package_config.valor) if package_config else 3.0
+    pricing = get_pricing_config(db)
+    tax_rate = pricing["tax_rate"]
+    delivery_fee = pricing["delivery_fee"]
+    package_fee = pricing["package_fee"]
 
     if data.tipo == "delivery" and not all([
         data.nombre_cliente_delivery and data.nombre_cliente_delivery.strip(),
@@ -472,79 +504,9 @@ async def crear_y_cobrar_rapido(
         mesa.estado = "OCUPADA"
         mesa.cliente_actual = data.nombre_factura or f"Cliente Mesa {mesa_number}"
 
-    requested_quantities: dict[int, int] = {}
-    for item in data.detalles:
-        requested_quantities[item.producto_id] = (
-            requested_quantities.get(item.producto_id, 0) + item.cantidad
-        )
-    products: dict[int, Producto] = {}
-    stock_before: dict[int, int] = {}
-    for product_id, quantity in requested_quantities.items():
-        product = db.query(Producto).filter(
-            Producto.id == product_id,
-            Producto.activo == True,
-            Producto.disponible == True,
-        ).with_for_update().first()
-        if not product:
-            raise HTTPException(status_code=404, detail=f"Producto #{product_id} no disponible.")
-        if product.stock < quantity:
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail=f"Stock insuficiente para el producto '{product.nombre}' (Disponible: {product.stock}, Solicitado: {quantity})."
-            )
-        products[product_id] = product
-        stock_before[product_id] = product.stock
-
-    subtotal_acumulado = 0.0
-    detalles_db = []
-
-    for item in data.detalles:
-        producto = products[item.producto_id]
-        precio_num = float(producto.precio_promocion) if (producto.precio_promocion and float(producto.precio_promocion) > 0) else float(producto.precio)
-        customizations = item.personalizaciones or {}
-        extras_requested = customizations.get("extras", [])
-        if not isinstance(extras_requested, list):
-            raise HTTPException(status_code=422, detail="La lista de extras no es válida.")
-        try:
-            configured_extras = json.loads(producto.extras_json or "[]")
-        except json.JSONDecodeError as exc:
-            raise HTTPException(status_code=500, detail="La configuración de extras de un producto es inválida.") from exc
-        if not isinstance(configured_extras, list):
-            raise HTTPException(status_code=500, detail="La configuración de extras de un producto es inválida.")
-        configured_by_name = {
-            entry["nombre"]: float(entry["precio"])
-            for entry in configured_extras
-            if isinstance(entry, dict)
-            and isinstance(entry.get("nombre"), str)
-            and isinstance(entry.get("precio"), (int, float))
-            and not isinstance(entry.get("precio"), bool)
-            and math.isfinite(entry["precio"])
-            and entry["precio"] >= 0
-        }
-        selected_names = []
-        extra_total = 0.0
-        for extra in extras_requested:
-            if not isinstance(extra, str) or extra not in configured_by_name or extra in selected_names:
-                raise HTTPException(status_code=422, detail=f"El extra solicitado no está disponible para {producto.nombre}.")
-            selected_names.append(extra)
-            extra_total += configured_by_name[extra]
-        unit_price = round(precio_num + extra_total, 2)
-        subtotal_item = round(unit_price * item.cantidad, 2)
-        subtotal_acumulado += subtotal_item
-
-        detalle = DetallePedido(
-            producto_id=producto.id,
-            cantidad=item.cantidad,
-            precio_unitario=unit_price,
-            subtotal=subtotal_item,
-            puntos_fidelidad_unitarios=max(0, int(producto.puntos_fidelidad or 0)),
-            personalizaciones=json.dumps({**customizations, "extras": selected_names}) if customizations else None,
-            observaciones=item.observaciones,
-            estado="PENDIENTE"
-        )
-        detalles_db.append(detalle)
-
-    subtotal_final = round(subtotal_acumulado, 2)
+    products, requested_quantities, stock_before, detalles_db, subtotal_final = prepare_order_items(
+        db, data.detalles, always_serialize_personalizations=True
+    )
     impuesto_monto = round(subtotal_final * (tax_rate / 100.0), 2)
     costo_extra = delivery_fee if data.tipo == "delivery" else package_fee if data.tipo == "llevar" else 0.0
     total_final = round(subtotal_final + impuesto_monto + costo_extra, 2)
@@ -562,11 +524,9 @@ async def crear_y_cobrar_rapido(
         )
 
     cambio_calculado = round(data.monto_recibido - total_exigible, 2)
-    for product_id, quantity in requested_quantities.items():
-        products[product_id].stock -= quantity
 
     nuevo_pedido = Pedido(
-        numero_mesa=numero_mesa if data.tipo == "mesa" else "Mostrador" if data.tipo == "llevar" else f"Delivery #{db.query(Pedido).count() + 101}",
+        numero_mesa=numero_mesa if data.tipo == "mesa" else "Mostrador" if data.tipo == "llevar" else "Delivery",
         tipo=data.tipo,
         modo_pago="PAGAR_ANTES",
         estado="COBRADO",
@@ -600,23 +560,26 @@ async def crear_y_cobrar_rapido(
 
     db.add(nuevo_pedido)
     db.flush()
+    if data.tipo == "delivery":
+        nuevo_pedido.numero_mesa = f"Delivery #{nuevo_pedido.id + 100}"
     award_order_loyalty_points(db, nuevo_pedido)
-    for product_id, quantity in requested_quantities.items():
-        db.add(MovimientoInventario(
-            producto_id=product_id,
-            tipo_movimiento="VENTA",
-            cantidad_cambio=-quantity,
-            cantidad_anterior=stock_before[product_id],
-            cantidad_nueva=products[product_id].stock,
-            motivo=f"Pedido #{nuevo_pedido.id}",
-            usuario_id=current_user.id
-        ))
+    deduct_order_stock(db, nuevo_pedido.id, products, requested_quantities, stock_before, current_user.id)
     factura_num = f"FAC-DD-{nuevo_pedido.id:06d}"
     nuevo_pedido.factura_numero = factura_num
 
     current_ventas = float(turno_activo.total_ventas or 0.0)
     turno_activo.total_ventas = round(current_ventas + float(total_final), 2)
     turno_activo.total_pedidos += 1
+    record_audit(
+        db=db,
+        accion="POS_QUICK_SALE",
+        usuario=current_user.nombre_usuario,
+        usuario_id=current_user.id,
+        recurso="pedidos",
+        recurso_id=nuevo_pedido.id,
+        detalle=f"POS rápido {factura_num}: {data.metodo_pago} {data.moneda_pago} ${total_final:.2f}",
+        auto_commit=False,
+    )
     db.commit()
     db.refresh(nuevo_pedido)
 
@@ -725,11 +688,16 @@ async def cobrar_pedido(
     turno_activo.total_ventas = round(current_ventas + ped_total, 2)
     turno_activo.total_pedidos += 1
     award_order_loyalty_points(db, pedido)
-    db.add(Auditoria(
+    record_audit(
+        db=db,
         accion="Cobro de pedido",
         usuario=current_user.nombre_usuario,
+        usuario_id=current_user.id,
+        recurso="pedidos",
+        recurso_id=pedido.id,
         detalle=f"Pedido #{pedido.id}: {data.metodo_pago} {data.moneda_pago} {recibido:.2f}",
-    ))
+        auto_commit=False,
+    )
 
     db.commit()
 

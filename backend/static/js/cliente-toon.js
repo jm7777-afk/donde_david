@@ -277,25 +277,18 @@ function toggleClientPasswordVisibility() {
 
 function loadClientSavedCredentials() {
   try {
+    // Limpiar cualquier contraseña heredada almacenada previamente en localStorage
+    localStorage.removeItem("donde_david_client_saved_pass");
     const isRem = localStorage.getItem("donde_david_client_remember") === "true";
     const user = localStorage.getItem("donde_david_client_saved_user");
-    const pass = localStorage.getItem("donde_david_client_saved_pass");
     const userInput = document.getElementById("login-username-input");
-    const passInput = document.getElementById("login-pass-input");
     const remCb = document.getElementById("client-remember-credentials");
     if (isRem && user && userInput) {
       userInput.value = user;
-      if (pass && passInput) {
-        try {
-          passInput.value = atob(pass);
-        } catch (_) {
-          passInput.value = pass;
-        }
-      }
       if (remCb) remCb.checked = true;
     }
   } catch (e) {
-    console.warn("No se pudo cargar credenciales recordadas de cliente", e);
+    console.warn("No se pudo cargar el usuario recordado de cliente", e);
   }
 }
 
@@ -344,11 +337,7 @@ document.addEventListener("DOMContentLoaded", () => {
     if (hdrTableBadge) {
       hdrTableBadge.innerText = `🍽️ MESA #${currentDetectedMesa}`;
     }
-    // Auto-login mesa como cliente de sala para realizar pedidos directamente
-    if (typeof Auth !== "undefined" && !Auth.getUser()) {
-      Auth.setUser({ id: 0, nombre: `Cliente Mesa #${currentDetectedMesa}`, rol: "cliente" });
-    }
-    // Entrar directamente al menú interactivo
+    // Entrar directamente al menú interactivo en modo mesa QR (sin forjar sesión de usuario)
     showScreen("screen-home");
     setTimeout(() => {
       showToast(`🍽️ ¡Mesa #${currentDetectedMesa} conectada con éxito! Puedes ordenar directamente tus platos.`, "success");
@@ -454,9 +443,17 @@ async function loadConfigPublica() {
     const cfg = await res.json();
     const rate = Number(cfg.tasa_cambio_bs);
     tasaCambioBs = Number.isFinite(rate) && rate > 0 ? rate : null;
-    checkoutTaxRate = Number.parseFloat(cfg.impuesto_porcentaje) || 16;
-    checkoutDeliveryFee = Number.parseFloat(cfg.costo_delivery) || 0;
-    checkoutPackageFee = Number.parseFloat(cfg.costo_empaque) || 0;
+    const ivaActivo = cfg.iva_activo !== "false" && cfg.iva_activo !== false;
+    const parsedTax = Number.parseFloat(cfg.impuesto_porcentaje);
+    checkoutTaxRate = ivaActivo ? (Number.isFinite(parsedTax) && parsedTax >= 0 ? parsedTax : 16) : 0;
+    const cartTaxLabel = document.getElementById("cart-tax-label");
+    if (cartTaxLabel) {
+      cartTaxLabel.textContent = ivaActivo ? `IVA (${checkoutTaxRate}%)` : "IVA (Exento 0%)";
+    }
+    const parsedDelivery = Number.parseFloat(cfg.costo_delivery);
+    checkoutDeliveryFee = Number.isFinite(parsedDelivery) && parsedDelivery >= 0 ? parsedDelivery : 0;
+    const parsedPackage = Number.parseFloat(cfg.costo_empaque);
+    checkoutPackageFee = Number.isFinite(parsedPackage) && parsedPackage >= 0 ? parsedPackage : 0;
     pagoMovilConfig = {
       banco: cfg.pago_movil_banco || "",
       telefono: cfg.pago_movil_telefono || "",
@@ -1458,23 +1455,31 @@ async function submitFinalOrder() {
 }
 
 function openOtpModal(orderId, code) {
+  const modal = document.getElementById("otp-modal");
+  if (!modal) return;
   currentPendingOrderId = orderId;
-  document.getElementById("otp-simulated-code").innerText = `Código sim enviado por WhatsApp: ${code}`;
-  document.getElementById("otp-input-code").value = code;
-  document.getElementById("otp-modal").classList.add("open");
+  const simLabel = document.getElementById("otp-simulated-code");
+  const codeInput = document.getElementById("otp-input-code");
+  if (simLabel) simLabel.innerText = `Código sim enviado por WhatsApp: ${code}`;
+  if (codeInput) codeInput.value = code || "";
+  modal.classList.add("open");
 }
 
 async function submitOtpVerification() {
-  const codeInput = document.getElementById("otp-input-code").value;
+  const codeInput = document.getElementById("otp-input-code")?.value;
   if (!codeInput) {
     showToast("Ingresa el código OTP de 6 dígitos", "warning");
     return;
   }
 
   try {
+    const headers = { ...Auth.getHeaders() };
+    if (activeTrackingOrder?.token_seguimiento) {
+      headers["X-Order-Tracking-Token"] = activeTrackingOrder.token_seguimiento;
+    }
     const res = await fetch("/api/v1/cliente/pedidos/verificar-otp", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers,
       body: JSON.stringify({
         pedido_id: currentPendingOrderId,
         codigo_otp: codeInput
@@ -1487,7 +1492,7 @@ async function submitOtpVerification() {
     }
 
     showToast("✅ Teléfono verificado con éxito por OTP", "success");
-    document.getElementById("otp-modal").classList.remove("open");
+    document.getElementById("otp-modal")?.classList.remove("open");
     showScreen("screen-tracking");
   } catch (err) {
     showToast(err.message, "danger");
@@ -2151,13 +2156,6 @@ function getDeviceGPSLocation() {
         badge.style.display = "block";
         badge.innerHTML = `✅ <strong>Ubicación GPS obtenida:</strong> ${lat.toFixed(6)}, ${lng.toFixed(6)} • <a href="${mapsUrl}" target="_blank" rel="noopener noreferrer" style="color: var(--gold-accent); text-decoration: underline; font-weight: 800;">📍 Abrir en Google Maps</a>`;
       }
-      }
-
-      const badge = document.getElementById("gps-status-badge");
-      if (badge) {
-        badge.style.display = "block";
-        badge.innerHTML = `✅ <strong>Ubicación GPS obtenida:</strong> ${lat}, ${lng}`;
-      }
 
       if (leafletMap && leafletMarker) {
         leafletMap.setView([Number(lat), Number(lng)], 16);
@@ -2444,19 +2442,18 @@ async function submitClientLogin() {
     return;
   }
 
-  // Guardar o limpiar credenciales de cliente según checkbox
+  // Guardar o limpiar solo el nombre de usuario (nunca la contraseña) según checkbox
   try {
+    localStorage.removeItem("donde_david_client_saved_pass");
     if (rememberCb && rememberCb.checked) {
       localStorage.setItem("donde_david_client_saved_user", username);
-      localStorage.setItem("donde_david_client_saved_pass", btoa(pass));
       localStorage.setItem("donde_david_client_remember", "true");
     } else {
       localStorage.removeItem("donde_david_client_saved_user");
-      localStorage.removeItem("donde_david_client_saved_pass");
       localStorage.removeItem("donde_david_client_remember");
     }
   } catch (err) {
-    console.warn("No se pudo guardar la preferencia de recordar contraseña", err);
+    console.warn("No se pudo guardar la preferencia de recordar usuario", err);
   }
 
   try {

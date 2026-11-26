@@ -80,10 +80,10 @@ def get_current_user(
         raise credentials_exception
     return user
 
-def require_roles(allowed_roles: list[str]):
+def require_roles(allowed_roles: list[str], *, allow_admin_override: bool = True):
     def role_checker(current_user: Any = Depends(get_current_user)):
-        # El rol Administrador (y Supervisor) posee acceso universal a todos los módulos y pantallas
-        if current_user.rol in ["admin", "supervisor"] or current_user.rol in allowed_roles:
+        # El rol Administrador (y Supervisor) posee acceso universal a los módulos operativos
+        if (allow_admin_override and current_user.rol in ["admin", "supervisor"]) or current_user.rol in allowed_roles:
             return current_user
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,

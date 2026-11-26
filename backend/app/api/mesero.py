@@ -168,7 +168,7 @@ async def cambiar_mesa_pedido(
     db: Session = Depends(get_db),
     user = Depends(require_roles(["admin", "supervisor", "mesero", "caja"]))
 ):
-    pedido = db.query(Pedido).filter(Pedido.id == pedido_id).first()
+    pedido = db.query(Pedido).filter(Pedido.id == pedido_id).with_for_update().first()
     if not pedido:
         raise HTTPException(status_code=404, detail="Pedido no encontrado")
 
@@ -216,7 +216,7 @@ async def marcar_pedido_entregado(
     db: Session = Depends(get_db),
     user = Depends(require_roles(["admin", "supervisor", "mesero", "caja"]))
 ):
-    pedido = db.query(Pedido).filter(Pedido.id == pedido_id).first()
+    pedido = db.query(Pedido).filter(Pedido.id == pedido_id).with_for_update().first()
     if not pedido:
         raise HTTPException(status_code=404, detail="Pedido no encontrado")
     if pedido.tipo != "mesa" or pedido.estado != "LISTO":

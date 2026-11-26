@@ -2,6 +2,14 @@ let kdsOrders = [];
 let timerInterval = null;
 let kdsModeFilter = "todos";
 let kdsSearchTerm = "";
+const updatingKdsOrderIds = new Set();
+const updatingKdsItemIds = new Set();
+
+function escapeKdsHtml(value) {
+  return String(value ?? "").replace(/[&<>"']/g, ch => ({
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
+  })[ch]);
+}
 
 document.addEventListener("DOMContentLoaded", () => {
   // Check auth
@@ -93,13 +101,13 @@ function renderKDSOrders() {
                 ? JSON.parse(d.producto.ingredientes_json) 
                 : d.producto.ingredientes_json;
               if (Array.isArray(ingList) && ingList.length > 0) {
-                customText += `<br><small style="color: #94A3B8; font-size: 0.78rem;">🥩 <em>Ingredientes: ${ingList.join(', ')}</em></small>`;
+                customText += `<br><small style="color: #94A3B8; font-size: 0.78rem;">🥩 <em>Ingredientes: ${ingList.map(escapeKdsHtml).join(', ')}</em></small>`;
               } else if (typeof ingList === 'string' && ingList.trim()) {
-                customText += `<br><small style="color: #94A3B8; font-size: 0.78rem;">🥩 <em>Ingredientes: ${ingList}</em></small>`;
+                customText += `<br><small style="color: #94A3B8; font-size: 0.78rem;">🥩 <em>Ingredientes: ${escapeKdsHtml(ingList)}</em></small>`;
               }
             } catch(e) {
               if (typeof d.producto.ingredientes_json === 'string' && d.producto.ingredientes_json.trim()) {
-                customText += `<br><small style="color: #94A3B8; font-size: 0.78rem;">🥩 <em>Ingredientes: ${d.producto.ingredientes_json}</em></small>`;
+                customText += `<br><small style="color: #94A3B8; font-size: 0.78rem;">🥩 <em>Ingredientes: ${escapeKdsHtml(d.producto.ingredientes_json)}</em></small>`;
               }
             }
           }
@@ -107,21 +115,21 @@ function renderKDSOrders() {
             try {
               const parsed = JSON.parse(d.personalizaciones);
               if (parsed.opciones && parsed.opciones.length > 0) {
-                customText += `<br><small style="color: var(--brand-orange); font-weight: 800;">✨ Modificaciones: ${parsed.opciones.join(', ')}</small>`;
+                customText += `<br><small style="color: var(--brand-orange); font-weight: 800;">✨ Modificaciones: ${parsed.opciones.map(escapeKdsHtml).join(', ')}</small>`;
               }
             } catch(e) {}
           }
           if (d.observaciones) {
-            customText += `<br><small style="color: var(--brand-red); font-weight: 800;">⚠️ Nota Cliente: ${d.observaciones}</small>`;
+            customText += `<br><small style="color: var(--brand-red); font-weight: 800;">⚠️ Nota Cliente: ${escapeKdsHtml(d.observaciones)}</small>`;
           }
 
           itemsHtml += `
             <div style="display: flex; justify-content: space-between; align-items: center; padding: 0.45rem 0; border-bottom: 1px dashed rgba(226, 232, 240, 0.15);">
               <div>
-                <strong style="color: #FFFFFF; font-size: 0.95rem;">${d.cantidad}x ${d.producto ? d.producto.nombre : 'Producto'}</strong>
+                <strong style="color: #FFFFFF; font-size: 0.95rem;">${Number(d.cantidad) || 0}x ${escapeKdsHtml(d.producto ? d.producto.nombre : 'Producto')}</strong>
                 ${customText}
               </div>
-              <button class="btn btn-outline" style="min-height: 32px; padding: 0.2rem 0.5rem; font-size: 0.72rem;" onclick="updateItemStatus(${d.id}, '${d.estado === 'LISTO' ? 'PENDIENTE' : 'LISTO'}')">
+              <button class="btn btn-outline" style="min-height: 32px; padding: 0.2rem 0.5rem; font-size: 0.72rem;" onclick="updateItemStatus(${Number(d.id)}, '${d.estado === 'LISTO' ? 'PENDIENTE' : 'LISTO'}')">
                 ${d.estado === 'LISTO' ? '✅ Listo' : '⏳ Pendiente'}
               </button>
             </div>
@@ -129,9 +137,9 @@ function renderKDSOrders() {
         });
 
         orderCardsHtml += `
-          <div class="kds-card status-${order.estado} ${urgentBorder}" style="margin-bottom: 1rem;">
+          <div class="kds-card status-${escapeKdsHtml(order.estado)} ${urgentBorder}" style="margin-bottom: 1rem;">
             <div style="display: flex; justify-content: space-between; align-items: center;">
-              <h3 style="font-size: 1.15rem; font-weight: 800; color: #FFFFFF;">#${order.id} - ${order.numero_mesa}</h3>
+              <h3 style="font-size: 1.15rem; font-weight: 800; color: #FFFFFF;">#${Number(order.id)} - ${escapeKdsHtml(order.numero_mesa)}</h3>
               <span class="${timerClass}" aria-label="${isUrgent ? "Comanda urgente" : "Tiempo transcurrido"}">⏱️ ${isUrgent ? "URGENTE · " : ""}${elapsedMinutes} min</span>
             </div>
 
@@ -198,29 +206,43 @@ function getElapsedMinutes(dateStr) {
 }
 
 async function updateOrderStatus(orderId, newStatus) {
+  if (updatingKdsOrderIds.has(orderId)) return;
+  updatingKdsOrderIds.add(orderId);
   try {
-    const res = await fetch(`/api/v1/cocina/pedidos/${orderId}/estado?estado=${newStatus}`, {
+    const res = await fetch(`/api/v1/cocina/pedidos/${orderId}/estado?estado=${encodeURIComponent(newStatus)}`, {
       method: "PUT",
       headers: Auth.getHeaders()
     });
-    if (!res.ok) throw new Error("Error al actualizar el estado");
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || "Error al actualizar el estado");
+    }
     showToast(`Comanda #${orderId} actualizada a ${newStatus}`, "success");
-    loadKDSOrders();
+    await loadKDSOrders();
   } catch (err) {
     showToast(err.message, "danger");
+  } finally {
+    updatingKdsOrderIds.delete(orderId);
   }
 }
 
 async function updateItemStatus(itemId, newStatus) {
+  if (updatingKdsItemIds.has(itemId)) return;
+  updatingKdsItemIds.add(itemId);
   try {
-    const res = await fetch(`/api/v1/cocina/detalles/${itemId}/estado?estado=${newStatus}`, {
+    const res = await fetch(`/api/v1/cocina/detalles/${itemId}/estado?estado=${encodeURIComponent(newStatus)}`, {
       method: "PUT",
       headers: Auth.getHeaders()
     });
-    if (!res.ok) throw new Error("Error al actualizar estado del ítem");
-    loadKDSOrders();
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || "Error al actualizar estado del ítem");
+    }
+    await loadKDSOrders();
   } catch (err) {
     showToast(err.message, "danger");
+  } finally {
+    updatingKdsItemIds.delete(itemId);
   }
 }
 

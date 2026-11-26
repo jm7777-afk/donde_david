@@ -266,7 +266,13 @@ async function submitWizardFinish() {
 
 async function loadDashboardStats() {
   try {
-    const res = await fetch("/api/v1/admin/dashboard-stats", { headers: Auth.getHeaders() });
+    const cat = document.getElementById("filter-metrics-category")?.value || "todas";
+    const pay = document.getElementById("filter-metrics-payment")?.value || "todos";
+    const params = new URLSearchParams();
+    if (cat && cat !== "todas") params.set("categoria", cat);
+    if (pay && pay !== "todos") params.set("metodo_pago", pay);
+    const querySuffix = params.toString() ? `?${params.toString()}` : "";
+    const res = await fetch(`/api/v1/admin/dashboard-stats${querySuffix}`, { headers: Auth.getHeaders() });
     if (res.ok) {
       adminStats = await res.json();
       
@@ -318,11 +324,13 @@ async function loadDashboardStats() {
         adminStats.top_productos.forEach((p, idx) => {
           topHtml += `
             <div style="display: flex; justify-content: space-between; padding: 0.75rem 0; border-bottom: 1px solid var(--toon-border);">
-              <span><strong>#${idx + 1} ${p.nombre}</strong> (${p.unidades} unidades vendidas)</span>
+              <span><strong>#${idx + 1} ${escapeAdminHtml(p.nombre)}</strong> (${Number(p.unidades || 0)} unidades vendidas)</span>
               <strong style="color: var(--gold-accent);">${formatPriceDual(p.total)}</strong>
             </div>
           `;
         });
+      } else {
+        topHtml = `<div style="padding: 0.75rem 0; color: var(--text-muted); font-size: 0.9rem;">No hay ventas registradas para los filtros seleccionados.</div>`;
       }
       if (document.getElementById("top-products-container")) {
         document.getElementById("top-products-container").innerHTML = topHtml;
@@ -357,14 +365,14 @@ function renderPublicacionesAdmin() {
   }
 
   adminPublicaciones.forEach(p => {
-    const img = p.imagen_url || "https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=500";
+    const img = escapeAdminHtml(p.imagen_url || "https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=500");
     html += `
       <tr style="border-bottom: 1px solid var(--toon-border);">
-        <td style="padding: 0.75rem;"><img src="${img}" style="width: 50px; height: 50px; border-radius: 8px; object-fit: cover;"></td>
-        <td style="padding: 0.75rem; font-weight: 700; color: #fff;">${p.titulo}</td>
-        <td style="padding: 0.75rem; color: var(--text-muted); font-size: 0.85rem;">${p.contenido}</td>
-        <td style="padding: 0.75rem;"><span class="badge" style="background: var(--gold-accent); color: #000; font-weight: 800;">${p.autor}</span></td>
-        <td style="padding: 0.75rem;"><button class="btn-gold" style="padding: 0.3rem 0.6rem; font-size: 0.75rem; background: var(--neon-red); color: #fff;" onclick="deletePublicacion(${p.id})">🗑️ Eliminar</button></td>
+        <td style="padding: 0.75rem;"><img src="${img}" alt="${escapeAdminHtml(p.titulo)}" style="width: 50px; height: 50px; border-radius: 8px; object-fit: cover;"></td>
+        <td style="padding: 0.75rem; font-weight: 700; color: #fff;">${escapeAdminHtml(p.titulo)}</td>
+        <td style="padding: 0.75rem; color: var(--text-muted); font-size: 0.85rem;">${escapeAdminHtml(p.contenido)}</td>
+        <td style="padding: 0.75rem;"><span class="badge" style="background: var(--gold-accent); color: #000; font-weight: 800;">${escapeAdminHtml(p.autor)}</span></td>
+        <td style="padding: 0.75rem;"><button class="btn-gold" style="padding: 0.3rem 0.6rem; font-size: 0.75rem; background: var(--neon-red); color: #fff;" onclick="deletePublicacion(${Number(p.id)})">🗑️ Eliminar</button></td>
       </tr>
     `;
   });
@@ -843,10 +851,10 @@ function renderResenasAdmin() {
   adminResenas.forEach(r => {
     html += `
       <tr style="border-bottom: 1px solid var(--toon-border);">
-        <td style="padding: 0.75rem; font-weight: 700; color: #fff;">${r.nombre_cliente}</td>
+        <td style="padding: 0.75rem; font-weight: 700; color: #fff;">${escapeAdminHtml(r.nombre_cliente)}</td>
         <td style="padding: 0.75rem; color: var(--gold-accent); font-size: 1.1rem;">${'⭐'.repeat(Math.min(5, Math.max(1, parseInt(r.estrellas) || 5)))}</td>
-        <td style="padding: 0.75rem; color: var(--text-muted); font-size: 0.85rem;">"${r.comentario}"</td>
-        <td style="padding: 0.75rem;"><button class="btn-gold" style="padding: 0.3rem 0.6rem; font-size: 0.75rem; background: var(--neon-red); color: #fff;" onclick="deleteResena(${r.id})">🗑️ Eliminar</button></td>
+        <td style="padding: 0.75rem; color: var(--text-muted); font-size: 0.85rem;">"${escapeAdminHtml(r.comentario)}"</td>
+        <td style="padding: 0.75rem;"><button class="btn-gold" style="padding: 0.3rem 0.6rem; font-size: 0.75rem; background: var(--neon-red); color: #fff;" onclick="deleteResena(${Number(r.id)})">🗑️ Eliminar</button></td>
       </tr>
     `;
   });
@@ -889,6 +897,7 @@ async function deleteResena(id) {
 
 /* ==================== GUÍA & CARRUSEL ADMIN ==================== */
 async function loadGuiaAdmin() {
+  if (!document.getElementById("guia-tbody")) return;
   try {
     const res = await fetch("/api/v1/admin/guia", { headers: Auth.getHeaders() });
     if (res.ok) {
@@ -911,16 +920,17 @@ function renderGuiaAdmin() {
 
   let html = "";
   adminGuiaItems.forEach(g => {
-    const isVideo = g.tipo_media === "video" || g.media_url.endsWith(".mp4");
-    const mediaPreview = isVideo ? `<video src="${g.media_url}" style="width: 60px; height: 44px; border-radius: 6px; object-fit: cover;" autoplay muted loop></video>` : `<img src="${g.media_url}" style="width: 60px; height: 44px; border-radius: 6px; object-fit: cover;">`;
+    const safeMediaUrl = escapeAdminHtml(g.media_url);
+    const isVideo = g.tipo_media === "video" || String(g.media_url || "").endsWith(".mp4");
+    const mediaPreview = isVideo ? `<video src="${safeMediaUrl}" style="width: 60px; height: 44px; border-radius: 6px; object-fit: cover;" autoplay muted loop></video>` : `<img src="${safeMediaUrl}" alt="${escapeAdminHtml(g.titulo)}" style="width: 60px; height: 44px; border-radius: 6px; object-fit: cover;">`;
 
     html += `
       <tr style="border-bottom: 1px solid var(--toon-border);">
         <td style="padding: 0.75rem;">${mediaPreview}</td>
-        <td style="padding: 0.75rem; font-weight: 700; color: #fff;">${g.titulo}</td>
-        <td style="padding: 0.75rem; color: var(--text-muted); font-size: 0.85rem;">${g.descripcion || ''}</td>
-        <td style="padding: 0.75rem;"><span class="badge" style="background: var(--gold-accent); color: #000; font-size: 0.75rem; font-weight: 800;">${g.tipo_vista}</span></td>
-        <td style="padding: 0.75rem;"><button class="btn-gold" style="padding: 0.3rem 0.6rem; font-size: 0.75rem; background: var(--neon-red); color: #fff;" onclick="deleteGuiaItem(${g.id})">🗑️ Eliminar</button></td>
+        <td style="padding: 0.75rem; font-weight: 700; color: #fff;">${escapeAdminHtml(g.titulo)}</td>
+        <td style="padding: 0.75rem; color: var(--text-muted); font-size: 0.85rem;">${escapeAdminHtml(g.descripcion || '')}</td>
+        <td style="padding: 0.75rem;"><span class="badge" style="background: var(--gold-accent); color: #000; font-size: 0.75rem; font-weight: 800;">${escapeAdminHtml(g.tipo_vista)}</span></td>
+        <td style="padding: 0.75rem;"><button class="btn-gold" style="padding: 0.3rem 0.6rem; font-size: 0.75rem; background: var(--neon-red); color: #fff;" onclick="deleteGuiaItem(${Number(g.id)})">🗑️ Eliminar</button></td>
       </tr>
     `;
   });
@@ -986,12 +996,12 @@ function renderMesas() {
   let html = "";
   adminMesas.forEach(m => {
     html += `
-      <div class="mesa-card ${m.estado}">
-        <div style="font-size: 1.2rem; font-weight: 900; color: #fff;">Mesa #${m.numero_mesa}</div>
-        <div style="font-size: 0.75rem; color: var(--text-muted); margin: 0.3rem 0;">Estado: ${m.estado}</div>
+      <div class="mesa-card ${escapeAdminHtml(m.estado)}">
+        <div style="font-size: 1.2rem; font-weight: 900; color: #fff;">Mesa #${Number(m.numero_mesa)}</div>
+        <div style="font-size: 0.75rem; color: var(--text-muted); margin: 0.3rem 0;">Estado: ${escapeAdminHtml(m.estado)}</div>
         <div style="display: flex; gap: 0.4rem; justify-content: center; margin-top: 0.75rem;">
-          <button class="btn-gold" style="padding: 0.3rem 0.6rem; font-size: 0.7rem;" onclick="viewQrMesa(${m.numero_mesa})">📱 QR</button>
-          <button class="btn-gold" style="padding: 0.3rem 0.6rem; font-size: 0.7rem; background: var(--neon-red); color: #fff;" onclick="deleteMesa(${m.numero_mesa})">🗑️</button>
+          <button class="btn-gold" style="padding: 0.3rem 0.6rem; font-size: 0.7rem;" onclick="viewQrMesa(${Number(m.numero_mesa)})">📱 QR</button>
+          <button class="btn-gold" style="padding: 0.3rem 0.6rem; font-size: 0.7rem; background: var(--neon-red); color: #fff;" onclick="deleteMesa(${Number(m.numero_mesa)})">🗑️</button>
         </div>
       </div>
     `;
@@ -1068,12 +1078,12 @@ function renderInsumos() {
     const isCrit = i.estado === "CRITICO";
     html += `
       <tr style="border-bottom: 1px solid var(--toon-border);">
-        <td style="padding: 0.75rem; font-weight: 700; color: #fff;">${i.nombre}</td>
-        <td style="padding: 0.75rem; font-size: 1.1rem; font-weight: 900; color: ${isCrit ? 'var(--neon-red)' : 'var(--neon-green)'};">${i.stock_actual} ${i.unidad_medida}</td>
-        <td style="padding: 0.75rem; color: var(--text-muted);">${i.stock_minimo} ${i.unidad_medida}</td>
-        <td style="padding: 0.75rem;">${i.unidad_medida}</td>
-        <td style="padding: 0.75rem;"><span class="badge" style="background: ${isCrit ? 'var(--neon-red)' : 'var(--neon-green)'}; color: #fff; padding: 0.2rem 0.5rem; border-radius: 6px;">${i.estado}</span></td>
-        <td style="padding: 0.75rem;"><button class="btn-gold" style="padding: 0.3rem 0.6rem; font-size: 0.75rem;" onclick="openIngresoInsumoModal(${i.id})">📥 Ingreso Stock</button></td>
+        <td style="padding: 0.75rem; font-weight: 700; color: #fff;">${escapeAdminHtml(i.nombre)}</td>
+        <td style="padding: 0.75rem; font-size: 1.1rem; font-weight: 900; color: ${isCrit ? 'var(--neon-red)' : 'var(--neon-green)'};">${Number(i.stock_actual || 0)} ${escapeAdminHtml(i.unidad_medida)}</td>
+        <td style="padding: 0.75rem; color: var(--text-muted);">${Number(i.stock_minimo || 0)} ${escapeAdminHtml(i.unidad_medida)}</td>
+        <td style="padding: 0.75rem;">${escapeAdminHtml(i.unidad_medida)}</td>
+        <td style="padding: 0.75rem;"><span class="badge" style="background: ${isCrit ? 'var(--neon-red)' : 'var(--neon-green)'}; color: #fff; padding: 0.2rem 0.5rem; border-radius: 6px;">${escapeAdminHtml(i.estado)}</span></td>
+        <td style="padding: 0.75rem;"><button class="btn-gold" style="padding: 0.3rem 0.6rem; font-size: 0.75rem;" onclick="openIngresoInsumoModal(${Number(i.id)})">📥 Ingreso Stock</button></td>
       </tr>
     `;
   });
@@ -1240,13 +1250,13 @@ function renderCategories() {
   const tbody = document.getElementById("categories-tbody");
   let html = "";
   adminCategories.forEach(c => {
-    const img = c.imagen_url || "https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=500";
+    const img = escapeAdminHtml(c.imagen_url || "https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=500");
     html += `
       <tr style="border-bottom: 1px solid var(--toon-border);">
-        <td style="padding: 0.75rem;"><img src="${img}" style="width: 44px; height: 44px; border-radius: 8px; object-fit: cover;"></td>
-        <td style="padding: 0.75rem; font-weight: 700; color: #fff;">${c.nombre}</td>
-        <td style="padding: 0.75rem; color: var(--text-muted);">${c.descripcion || ''}</td>
-        <td style="padding: 0.75rem;"><button class="btn-gold" style="padding: 0.3rem 0.6rem; font-size: 0.75rem; background: var(--neon-red); color: #fff;" onclick="deleteCategoria(${c.id})">🗑️ Eliminar</button></td>
+        <td style="padding: 0.75rem;"><img src="${img}" alt="${escapeAdminHtml(c.nombre)}" style="width: 44px; height: 44px; border-radius: 8px; object-fit: cover;"></td>
+        <td style="padding: 0.75rem; font-weight: 700; color: #fff;">${escapeAdminHtml(c.nombre)}</td>
+        <td style="padding: 0.75rem; color: var(--text-muted);">${escapeAdminHtml(c.descripcion || '')}</td>
+        <td style="padding: 0.75rem;"><button class="btn-gold" style="padding: 0.3rem 0.6rem; font-size: 0.75rem; background: var(--neon-red); color: #fff;" onclick="deleteCategoria(${Number(c.id)})">🗑️ Eliminar</button></td>
       </tr>
     `;
   });
@@ -1330,19 +1340,20 @@ function renderUsers(users) {
       'repartidor': '<span class="badge" style="background: #0ea5e9; color: #fff; font-weight: 800; padding: 0.2rem 0.5rem; border-radius: 6px;">🛵 Repartidor</span>',
       'cliente': '<span class="badge" style="background: rgba(255,255,255,0.1); color: #fff; font-weight: 800; padding: 0.2rem 0.5rem; border-radius: 6px;">📱 Cliente</span>'
     };
-    const roleBadge = roleBadges[u.rol] || `<span class="badge">${u.rol}</span>`;
+    const roleBadge = roleBadges[u.rol] || `<span class="badge">${escapeAdminHtml(u.rol)}</span>`;
 
     html += `
       <tr style="border-bottom: 1px solid var(--toon-border);">
-        <td style="padding: 0.75rem; font-weight: 700; color: #fff;">${u.nombre} ${u.apellido}</td>
-        <td style="padding: 0.75rem;"><code>${u.nombre_usuario}</code></td>
-        <td style="padding: 0.75rem; color: var(--text-muted);">${u.email}</td>
-        <td style="padding: 0.75rem;">${u.telefono || '-'}</td>
+        <td style="padding: 0.75rem; color: var(--text-muted); font-weight: 700;">#${Number(u.id)}</td>
+        <td style="padding: 0.75rem; font-weight: 700; color: #fff;">${escapeAdminHtml(u.nombre)} ${escapeAdminHtml(u.apellido)}</td>
+        <td style="padding: 0.75rem;"><code>${escapeAdminHtml(u.nombre_usuario)}</code></td>
+        <td style="padding: 0.75rem; color: var(--text-muted);">${escapeAdminHtml(u.email)}</td>
+        <td style="padding: 0.75rem;">${escapeAdminHtml(u.telefono || '-')}</td>
         <td style="padding: 0.75rem;">${roleBadge}</td>
         <td style="padding: 0.75rem;">${u.activo ? '<span style="color: var(--neon-green); font-weight: 800;">🟢 Activo</span>' : '<span style="color: var(--neon-red); font-weight: 800;">🔴 Inactivo</span>'}</td>
         <td style="padding: 0.75rem; display: flex; gap: 0.4rem;">
-          <button class="btn-gold" style="padding: 0.3rem 0.6rem; font-size: 0.75rem;" onclick="openEditUserModal(${u.id})">✏️ Editar</button>
-          <button class="btn-gold" style="padding: 0.3rem 0.6rem; font-size: 0.75rem; background: ${u.activo ? 'var(--neon-red)' : 'var(--neon-green)'}; color: #fff;" onclick="toggleUserActive(${u.id}, ${!u.activo})">
+          <button class="btn-gold" style="padding: 0.3rem 0.6rem; font-size: 0.75rem;" onclick="openEditUserModal(${Number(u.id)})">✏️ Editar</button>
+          <button class="btn-gold" style="padding: 0.3rem 0.6rem; font-size: 0.75rem; background: ${u.activo ? 'var(--neon-red)' : 'var(--neon-green)'}; color: #fff;" onclick="toggleUserActive(${Number(u.id)}, ${!u.activo})">
             ${u.activo ? '🚫 Desactivar' : '✅ Activar'}
           </button>
         </td>
@@ -1486,8 +1497,8 @@ async function openRealtimeOpsModal() {
         html += `
           <div style="background: rgba(255,255,255,0.04); border: 1px solid ${isUrgent ? 'var(--neon-red)' : 'var(--toon-border)'}; border-radius: 8px; padding: 0.75rem; display: flex; justify-content: space-between; align-items: center;">
             <div>
-              <strong style="color: #fff; font-size: 0.95rem;">Comanda #${o.id} - ${o.numero_mesa}</strong>
-              <div style="font-size: 0.78rem; color: var(--text-muted);">Estado: <strong style="color: var(--cyan-accent);">${o.estado}</strong></div>
+              <strong style="color: #fff; font-size: 0.95rem;">Comanda #${Number(o.id)} - ${escapeAdminHtml(o.numero_mesa)}</strong>
+              <div style="font-size: 0.78rem; color: var(--text-muted);">Estado: <strong style="color: var(--cyan-accent);">${escapeAdminHtml(o.estado)}</strong></div>
             </div>
             <div style="text-align: right;">
               <span class="badge" style="background: ${isUrgent ? 'var(--neon-red)' : 'rgba(255,255,255,0.1)'}; color: #fff; font-size: 0.75rem;">⏱️ ${elapsedMin} min</span>

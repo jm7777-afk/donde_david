@@ -4,11 +4,11 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>DONDE DAVID - Touch POS Registradora</title>
-  <link rel="stylesheet" href="/static/css/global.css?v=5.2">
-  <link rel="stylesheet" href="/static/css/toon-theme.css?v=5.2">
-  <link rel="stylesheet" href="/static/css/index.css?v=5.2">
-  <link rel="stylesheet" href="/static/css/pages/caja-panel.css?v=5.2">
-  <link rel="stylesheet" href="/static/css/utilities.css?v=5.2">
+  <link rel="stylesheet" href="/static/css/global.css?v=5.3">
+  <link rel="stylesheet" href="/static/css/toon-theme.css?v=5.3">
+  <link rel="stylesheet" href="/static/css/index.css?v=5.3">
+  <link rel="stylesheet" href="/static/css/pages/caja-panel.css?v=5.3">
+  <link rel="stylesheet" href="/static/css/utilities.css?v=5.3">
 </head>
 <body class="pos-body">
 <nav id="app-sidebar"></nav>
@@ -19,6 +19,7 @@
     <div class="u-display-flex u-gap-0-4rem u-flex-wrap-wrap u-margin-0-75rem-1rem">
       <button class="mc-mode-btn active" id="view-btn-pos" onclick="switchPosMainView('pos')">🖥️ POS TOUCH</button>
       <button class="mc-mode-btn" id="view-btn-queue" onclick="switchPosMainView('queue')">🧾 CUENTAS Y PAGOS POR COBRAR</button>
+      <button class="mc-mode-btn" id="view-btn-app-payments" onclick="switchPosMainView('app-payments')">📱 PAGOS MÓVILES (0)</button>
       <button class="mc-mode-btn" id="view-btn-pickup" onclick="switchPosMainView('pickup')">📦 RETIROS</button>
       <button class="mc-mode-btn" id="view-btn-postres" onclick="switchPosMainView('postres')">🍰 POSTRES (CAJERA)</button>
       <button class="mc-mode-btn" id="view-btn-deliverys" onclick="switchPosMainView('deliverys')">🛵 DELIVERYS</button>
@@ -173,7 +174,15 @@
 
   <!-- CONTENIDO 3: HISTORIAL DE FACTURAS -->
   <div id="view-history-container" class="u-display-none u-max-width-1200px u-margin-0-auto u-padding-1-5rem">
-    <h2 class="u-font-size-1-4rem u-font-weight-900 u-font-family-token-font-display u-color-token-color-yellow u-margin-top-0 u-margin-bottom-1-25rem">📄 HISTORIAL Y REIMPRESIÓN DE FACTURAS</h2>
+    <div class="u-display-flex u-justify-content-space-between u-align-items-center u-flex-wrap-wrap u-gap-0p75rem u-margin-bottom-1-25rem">
+      <h2 class="u-font-size-1-4rem u-font-weight-900 u-font-family-token-font-display u-color-token-color-yellow u-margin-0">📄 HISTORIAL Y REIMPRESIÓN DE FACTURAS</h2>
+      <select id="pos-history-payment-filter" class="form-control u-width-auto u-min-width-180px" onchange="filterPaidOrdersByPaymentMethod()" aria-label="Filtrar facturas por método de pago">
+        <option value="ALL">Todos los métodos</option>
+        <option value="Efectivo">Efectivo</option>
+        <option value="Pago Móvil">Pago Móvil</option>
+        <option value="Punto de Venta">Punto de Venta</option>
+      </select>
+    </div>
     <div class="u-background-token-color-dark u-border-1px-solid-token-color-border u-border-radius-token-radius-md u-overflow-x-auto">
       <table class="u-width-100 u-border-collapse-collapse u-text-align-left">
         <thead>
@@ -391,9 +400,9 @@
     </div>
   </div>
 
-  <script src="/static/js/auth.js?v=5.2"></script>
-  <script src="/static/js/appShell.js?v=5.2"></script>
-  <script src="/static/js/websocket.js?v=5.2"></script>
-  <script src="/static/js/caja.js?v=5.2"></script>
+  <script src="/static/js/auth.js?v=5.3"></script>
+  <script src="/static/js/appShell.js?v=5.3"></script>
+  <script src="/static/js/websocket.js?v=5.3"></script>
+  <script src="/static/js/caja.js?v=5.3"></script>
 </body>
 </html>

@@ -284,14 +284,25 @@ async function confirmPickupOrder(orderId) {
   }
 }
 
+const confirmingMobilePaymentIds = new Set();
+let isSubmittingPosFast = false;
+let isClosingShift = false;
+let isSubmittingPayment = false;
+
 function renderAppPaymentsQueue() {
   const container = document.getElementById("app-payments-grid-list");
-  if (!container) return;
   const validationOrders = pendingOrders.filter(o => o.estado_pago === "PENDIENTE_VALIDACION");
+
+  const appPaymentsBtn = document.getElementById("view-btn-app-payments");
+  if (appPaymentsBtn) {
+    appPaymentsBtn.textContent = `📱 PAGOS MÓVILES (${validationOrders.length})`;
+  }
 
   if (document.getElementById("app-payments-count")) {
     document.getElementById("app-payments-count").innerText = `${validationOrders.length} pagos móviles por validar`;
   }
+
+  if (!container) return;
 
   if (validationOrders.length === 0) {
     container.innerHTML = `<div style="grid-column: 1/-1; text-align: center; color: var(--text-muted); padding: 2rem;">No hay pagos pendientes por confirmar en la caja.</div>`;
@@ -326,7 +337,9 @@ function renderAppPaymentsQueue() {
 }
 
 async function confirmMobilePayment(orderId, approved) {
+  if (confirmingMobilePaymentIds.has(orderId)) return;
   const observation = approved ? "" : (prompt("Motivo del rechazo (opcional):") || "");
+  confirmingMobilePaymentIds.add(orderId);
   try {
     const response = await fetch(`/api/v1/caja/pedidos/${orderId}/confirmar-pago`, {
       method: "POST",
@@ -343,11 +356,14 @@ async function confirmMobilePayment(orderId, approved) {
     await loadPaidOrders();
   } catch (error) {
     showToast(error.message, "danger");
+  } finally {
+    confirmingMobilePaymentIds.delete(orderId);
   }
 }
 
 // ==================== BÚSQUEDA DE CLIENTES REGISTRADOS POR ID O NOMBRE EN CAJA ====================
 let selectedCustomerPos = null;
+let lastSearchedCustomersPos = [];
 
 async function searchCustomerPosLive() {
   const query = document.getElementById("pos-customer-search-input")?.value.trim();
@@ -357,6 +373,7 @@ async function searchCustomerPosLive() {
   if (!query || query.length < 1) {
     dropdown.style.display = "none";
     dropdown.innerHTML = "";
+    lastSearchedCustomersPos = [];
     return;
   }
 
@@ -364,20 +381,21 @@ async function searchCustomerPosLive() {
     const res = await fetch(`/api/v1/caja/clientes/buscar?q=${encodeURIComponent(query)}`, { headers: Auth.getHeaders() });
     if (!res.ok) return;
     const clients = await res.json();
+    lastSearchedCustomersPos = Array.isArray(clients) ? clients : [];
 
-    if (!clients || clients.length === 0) {
-      dropdown.innerHTML = `<div style="padding: 0.6rem; font-size: 0.8rem; color: var(--text-muted); text-align: center;">No se encontró ningún cliente con '${query}'</div>`;
+    if (lastSearchedCustomersPos.length === 0) {
+      dropdown.innerHTML = `<div style="padding: 0.6rem; font-size: 0.8rem; color: var(--text-muted); text-align: center;">No se encontró ningún cliente con '${escapeCajaHtml(query)}'</div>`;
       dropdown.style.display = "block";
       return;
     }
 
-    dropdown.innerHTML = clients.map(c => `
-      <div style="padding: 0.65rem 0.85rem; border-bottom: 1px solid var(--toon-border); cursor: pointer; display: flex; justify-content: space-between; align-items: center; background: rgba(255,255,255,0.03);" onclick="selectCustomerForPos(${c.id}, '${c.nombre_completo.replace(/'/g, "\\'")}', '${c.codigo_cliente}', ${c.puntos_fidelidad})">
+    dropdown.innerHTML = lastSearchedCustomersPos.map(c => `
+      <div style="padding: 0.65rem 0.85rem; border-bottom: 1px solid var(--toon-border); cursor: pointer; display: flex; justify-content: space-between; align-items: center; background: rgba(255,255,255,0.03);" onclick="selectCustomerPosById(${Number(c.id)})">
         <div>
-          <strong style="color: #fff; font-size: 0.88rem; display: block;">${c.nombre_completo}</strong>
-          <small style="color: var(--cyan-accent); font-weight: 800;">🆔 ${c.codigo_cliente} • ${c.email}</small>
+          <strong style="color: #fff; font-size: 0.88rem; display: block;">${escapeCajaHtml(c.nombre_completo)}</strong>
+          <small style="color: var(--cyan-accent); font-weight: 800;">🆔 ${escapeCajaHtml(c.codigo_cliente)} • ${escapeCajaHtml(c.email)}</small>
         </div>
-        <span style="font-size: 0.78rem; background: rgba(255,188,13,0.2); color: var(--gold-accent); padding: 0.2rem 0.55rem; border-radius: 12px; font-weight: 900;">${c.puntos_fidelidad} Pts 🏆</span>
+        <span style="font-size: 0.78rem; background: rgba(255,188,13,0.2); color: var(--gold-accent); padding: 0.2rem 0.55rem; border-radius: 12px; font-weight: 900;">${Number(c.puntos_fidelidad || 0)} Pts 🏆</span>
       </div>
     `).join('');
     dropdown.style.display = "block";
@@ -386,13 +404,35 @@ async function searchCustomerPosLive() {
   }
 }
 
-function selectCustomerForPos(id, name, code, points) {
-  selectedCustomerPos = { id, name, code, points };
+function selectCustomerPosById(customerId) {
+  const match = lastSearchedCustomersPos.find(c => Number(c.id) === Number(customerId));
+  if (!match) return;
+  selectCustomerForPos(
+    match.id,
+    match.nombre_completo,
+    match.codigo_cliente,
+    match.puntos_fidelidad,
+    match.telefono
+  );
+}
+
+function selectCustomerForPos(id, name, code, points, telefono = null) {
+  const cleanPhone = telefono && telefono !== "Sin teléfono" ? String(telefono).trim() : null;
+  selectedCustomerPos = { id, name, nombre: name, code, points, telefono: cleanPhone };
   if (document.getElementById("pos-customer-search-input")) {
     document.getElementById("pos-customer-search-input").value = `${name} (${code})`;
   }
-  if (document.getElementById("pos-mesa-input")) {
+  if (currentOrderType !== "mesa" && document.getElementById("pos-mesa-input")) {
     document.getElementById("pos-mesa-input").value = `${name} (${code})`;
+  }
+  if (document.getElementById("pay-nombre-input") && !document.getElementById("pay-nombre-input").value.trim()) {
+    document.getElementById("pay-nombre-input").value = name;
+  }
+  if (document.getElementById("pos-delivery-name") && !document.getElementById("pos-delivery-name").value.trim()) {
+    document.getElementById("pos-delivery-name").value = name;
+  }
+  if (cleanPhone && document.getElementById("pos-delivery-phone") && !document.getElementById("pos-delivery-phone").value.trim()) {
+    document.getElementById("pos-delivery-phone").value = cleanPhone;
   }
   const dropdown = document.getElementById("pos-customer-results-dropdown");
   if (dropdown) dropdown.style.display = "none";
@@ -1037,6 +1077,7 @@ function getPosExtraFee() {
 }
 
 async function submitPosOrderFast() {
+  if (isSubmittingPosFast) return;
   if (posCart.length === 0) {
     showToast("Toca al menos 1 producto para armar el pedido presencial.", "warning");
     return;
@@ -1056,11 +1097,12 @@ async function submitPosOrderFast() {
     return;
   }
   const totalDue = currency === "VES" ? total * tasaCambioBs : total;
+  const selectedCustomerName = selectedCustomerPos ? (selectedCustomerPos.nombre || selectedCustomerPos.name || "") : "";
+  const selectedCustomerPhone = selectedCustomerPos?.telefono || "";
   const mesa = document.getElementById("pos-mesa-input")?.value || "Mostrador";
-  const deliveryName = document.getElementById("pos-delivery-name")?.value.trim()
-    || (selectedCustomerPos ? selectedCustomerPos.nombre : "");
+  const deliveryName = document.getElementById("pos-delivery-name")?.value.trim() || selectedCustomerName;
   const deliveryAddress = document.getElementById("pos-delivery-address")?.value.trim() || "";
-  const deliveryPhone = document.getElementById("pos-delivery-phone")?.value.trim() || "";
+  const deliveryPhone = document.getElementById("pos-delivery-phone")?.value.trim() || selectedCustomerPhone;
   const received = Number.parseFloat(document.getElementById("pos-received-input")?.value || "0");
   if (currentOrderType === "delivery" && (!deliveryName || !deliveryAddress || !deliveryPhone)) {
     showToast("Para crear un delivery indica nombre, dirección y teléfono de contacto.", "warning");
@@ -1082,13 +1124,13 @@ async function submitPosOrderFast() {
     nombre_factura: currentOrderType === "delivery"
       ? deliveryName
       : document.getElementById("pay-nombre-input")?.value.trim()
-        || (selectedCustomerPos ? selectedCustomerPos.nombre : "Consumidor Final"),
+        || (selectedCustomerName || "Consumidor Final"),
     nombre_cliente_delivery: currentOrderType === "delivery"
       ? deliveryName
-      : selectedCustomerPos ? selectedCustomerPos.nombre : "Cliente Presencial",
+      : (selectedCustomerName || "Cliente Presencial"),
     telefono_delivery: currentOrderType === "delivery"
       ? deliveryPhone
-      : (selectedCustomerPos ? selectedCustomerPos.telefono : null),
+      : (selectedCustomerPhone || null),
     direccion_delivery: currentOrderType === "delivery" ? deliveryAddress : null,
     detalles: posCart.map(item => ({
       producto_id: item.producto_id,
@@ -1101,6 +1143,9 @@ async function submitPosOrderFast() {
     }))
   };
 
+  isSubmittingPosFast = true;
+  const submitBtn = document.querySelector('button[onclick="submitPosOrderFast()"]');
+  if (submitBtn) submitBtn.disabled = true;
   try {
     const res = await fetch("/api/v1/caja/crear-y-cobrar-rapido", {
       method: "POST",
@@ -1123,6 +1168,9 @@ async function submitPosOrderFast() {
     viewReceipt(result.pedido_id);
   } catch (err) {
     showToast(err.message, "danger");
+  } finally {
+    isSubmittingPosFast = false;
+    if (submitBtn) submitBtn.disabled = false;
   }
 }
 
@@ -1336,7 +1384,7 @@ function renderPaidOrders() {
   }
 
   if (filtered.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="5" style="text-align: center; color: var(--text-muted); padding: 1.5rem;">No hay facturas emitidas con el filtro '${currentHistoryPaymentFilter}'.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="5" style="text-align: center; color: var(--text-muted); padding: 1.5rem;">No hay facturas emitidas con el filtro '${escapeCajaHtml(currentHistoryPaymentFilter)}'.</td></tr>`;
     return;
   }
 
@@ -1400,6 +1448,7 @@ async function submitCerrarTurno() {
 }
 
 async function confirmarCerrarTurno() {
+  if (isClosingShift) return;
   const rawAmount = document.getElementById("monto-cierre-input").value.trim();
   const amount = Number(rawAmount);
   const mobileAmount = Number(document.getElementById("cierre-movil-input").value);
@@ -1410,6 +1459,9 @@ async function confirmarCerrarTurno() {
     showToast("Ingresa montos contados válidos para cada método de pago.", "warning");
     return;
   }
+  isClosingShift = true;
+  const closeBtn = document.querySelector('button[onclick="confirmarCerrarTurno()"]');
+  if (closeBtn) closeBtn.disabled = true;
   try {
     const res = await fetch("/api/v1/caja/cerrar-turno", {
       method: "POST",
@@ -1433,6 +1485,9 @@ async function confirmarCerrarTurno() {
     await loadShiftStatus();
   } catch (err) {
     showToast(err.message, "danger");
+  } finally {
+    isClosingShift = false;
+    if (closeBtn) closeBtn.disabled = false;
   }
 }
 
@@ -1505,7 +1560,7 @@ function calculateChange() {
 }
 
 async function submitPayment() {
-  if (!selectedOrderForPayment) return;
+  if (!selectedOrderForPayment || isSubmittingPayment) return;
 
   const method = document.getElementById("pay-method-select").value;
   const currency = document.getElementById("pay-currency-select").value;
@@ -1513,25 +1568,28 @@ async function submitPayment() {
   const nit = document.getElementById("pay-nit-input").value || "CF";
   const nombre = document.getElementById("pay-nombre-input").value || "Consumidor Final";
 
-  if (currency === "VES") {
-    try {
-      await loadPosConfig();
-    } catch (error) {
-      showToast(error.message, "danger");
-      return;
-    }
-    if (tasaCambioBs === null) {
-      showToast("No hay una tasa BCV válida para cobrar en bolívares.", "warning");
-      return;
-    }
-  }
-  const totalDue = currency === "VES" ? selectedOrderForPayment.total * tasaCambioBs : selectedOrderForPayment.total;
-  if (received < totalDue) {
-    showToast(`El monto recibido debe ser al menos ${currency === "VES" ? "Bs. " : "$"}${totalDue.toFixed(2)}`, "warning");
-    return;
-  }
-
+  isSubmittingPayment = true;
+  const payBtn = document.querySelector('#payment-modal button[onclick="submitPayment()"]');
+  if (payBtn) payBtn.disabled = true;
   try {
+    if (currency === "VES") {
+      try {
+        await loadPosConfig();
+      } catch (error) {
+        showToast(error.message, "danger");
+        return;
+      }
+      if (tasaCambioBs === null) {
+        showToast("No hay una tasa BCV válida para cobrar en bolívares.", "warning");
+        return;
+      }
+    }
+    const totalDue = currency === "VES" ? selectedOrderForPayment.total * tasaCambioBs : selectedOrderForPayment.total;
+    if (received < totalDue) {
+      showToast(`El monto recibido debe ser al menos ${currency === "VES" ? "Bs. " : "$"}${totalDue.toFixed(2)}`, "warning");
+      return;
+    }
+
     const res = await fetch(`/api/v1/caja/pedidos/${selectedOrderForPayment.id}/cobrar`, {
       method: "POST",
       headers: Auth.getHeaders(),
@@ -1573,6 +1631,9 @@ async function submitPayment() {
     viewReceipt(selectedOrderForPayment.id);
   } catch (err) {
     showToast(err.message, "danger");
+  } finally {
+    isSubmittingPayment = false;
+    if (payBtn) payBtn.disabled = false;
   }
 }
 

@@ -83,9 +83,11 @@ erDiagram
 
 ## Migraciones y operación inicial
 
-Las migraciones Alembic son la fuente de verdad del esquema; la última incorpora códigos de retiro, solicitudes de mesa, egresos y arqueos por método de pago. En desarrollo, las mesas nuevas se inicializan libres y no se crean turnos ni ventas de demostración. La base queda sin pedidos personales, por lo que las estadísticas, los canales y las recomendaciones empiezan sin datos hasta registrar actividad real.
+Las migraciones Alembic son la fuente de verdad del esquema (`alembic check` alineado con modelos ORM); la revisión `f9c1d2e3a4b5_align_auditoria_constraints.py` alinea `auditoria.detalle` (`VARCHAR(500)`), `auditoria.fecha` (`NOT NULL`), índice `ix_auditoria_usuario_id` y clave foránea `fk_auditoria_usuario_id_usuarios` (`ON DELETE SET NULL`). El archivo `restaurante.db` fue desindexado de Git (`git rm --cached`) para evitar contaminación del repositorio; para desarrollo local se crea/migra al arrancar o mediante `alembic upgrade head`.
 
-El reinicio de una base local es destructivo. Antes de recrearla, copia los archivos SQLite existentes a una carpeta de respaldo fuera del repositorio y confirma que la aplicación esté detenida. No ejecutes un reinicio de bases en producción. No se integra una pasarela de pago de terceros en esta versión.
+Las mutaciones concurrentes críticas (stock de productos en `services/orders.py`, turnos y cobros en `caja.py`, transiciones en `cocina.py` y `mesero.py`, canje de puntos en `cliente.py`) aplican bloqueos de fila (`with_for_update()`) ordenados determinísticamente por `producto_id`. La restauración de respaldos PostgreSQL en `services/backup_service.py` valida tablas/columnas contra `Base.metadata`, ordena topológicamente el vaciado e inserción, normaliza tipos y reinicia secuencias (`setval(pg_get_serial_sequence(...))`).
+
+El reinicio de una base local es destructivo. Antes de recrearla, copia los archivos SQLite existentes a `backend/backups/` o fuera del repositorio y confirma que la aplicación esté detenida. No ejecutes un reinicio de bases en producción. No se integra una pasarela de pago de terceros en esta versión.
 
 ---
 

@@ -2,15 +2,18 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 from typing import Optional, List, Literal
 from datetime import datetime
 
+
 # Token Schemas
 class Token(BaseModel):
     access_token: str
     token_type: str
     usuario: dict
 
+
 class LoginRequest(BaseModel):
     nombre_usuario: str = Field(min_length=1, max_length=150)
     password: str = Field(min_length=1, max_length=72)
+
 
 # User Schemas
 class UsuarioBase(BaseModel):
@@ -22,8 +25,10 @@ class UsuarioBase(BaseModel):
     rol: str
     activo: Optional[bool] = True
 
+
 class UsuarioCreate(UsuarioBase):
     password: str = Field(min_length=12, max_length=72)
+
 
 class UsuarioOut(UsuarioBase):
     id: int
@@ -113,87 +118,16 @@ class CategoriaBase(BaseModel):
     orden: Optional[int] = 0
     activo: Optional[bool] = True
 
+
 class CategoriaCreate(CategoriaBase):
     pass
+
 
 class CategoriaOut(CategoriaBase):
     id: int
     fecha_creacion: Optional[datetime] = None
 
     model_config = ConfigDict(from_attributes=True)
-
-
-# ==================== SCHEMAS: AUDITORIA ====================
-class AuditoriaOut(BaseModel):
-    id: int
-    accion: str
-    usuario: str
-    usuario_id: Optional[int] = None
-    ip_address: Optional[str] = None
-    recurso: Optional[str] = None
-    recurso_id: Optional[str] = None
-    detalle: Optional[str] = None
-    datos_previos: Optional[str] = None
-    datos_nuevos: Optional[str] = None
-    fecha: datetime
-
-    model_config = ConfigDict(from_attributes=True)
-
-
-class AuditoriaListOut(BaseModel):
-    total: int
-    items: List[AuditoriaOut]
-    acciones_disponibles: List[str] = Field(default_factory=list)
-    recursos_disponibles: List[str] = Field(default_factory=list)
-
-
-# ==================== SCHEMAS: LOGS ====================
-class LogEntryOut(BaseModel):
-    timestamp: Optional[str] = None
-    level: str
-    logger: str
-    message: str
-    raw: str
-
-
-class LogResponseOut(BaseModel):
-    file: str
-    size_kb: float
-    total_returned: int
-    logs: List[LogEntryOut]
-
-
-class LogStatsOut(BaseModel):
-    total_recent_events: int
-    counts_by_level: dict[str, int]
-    error_rate_percentage: float
-    app_log_size_kb: float
-    error_log_size_kb: float
-
-
-# ==================== SCHEMAS: BACKUPS ====================
-class BackupCreateRequest(BaseModel):
-    descripcion: Optional[str] = Field(default=None, max_length=255)
-
-
-class BackupOut(BaseModel):
-    filename: str
-    engine: str
-    created_at: str
-    created_by: str
-    description: Optional[str] = None
-    size_bytes: int
-    size_human: str
-    sha256: str
-    status: str
-
-
-class BackupRestoreResponse(BaseModel):
-    mensaje: str
-    checkpoint_previo: Optional[str] = None
-    tablas_restauradas: Optional[List[str]] = None
-    restaurado_por: str
-    timestamp: str
 
 
 # Producto Schemas
@@ -216,8 +150,10 @@ class ProductoBase(BaseModel):
     activo: Optional[bool] = True
     categoria_id: int
 
+
 class ProductoCreate(ProductoBase):
     pass
+
 
 class ProductoUpdate(BaseModel):
     nombre: Optional[str] = None
@@ -235,84 +171,12 @@ class ProductoUpdate(BaseModel):
     disponible: Optional[bool] = None
     activo: Optional[bool] = None
 
+
 class ProductoOut(ProductoBase):
     id: int
     categoria: Optional[CategoriaOut] = None
 
     model_config = ConfigDict(from_attributes=True)
-
-
-# ==================== SCHEMAS: AUDITORIA ====================
-class AuditoriaOut(BaseModel):
-    id: int
-    accion: str
-    usuario: str
-    usuario_id: Optional[int] = None
-    ip_address: Optional[str] = None
-    recurso: Optional[str] = None
-    recurso_id: Optional[str] = None
-    detalle: Optional[str] = None
-    datos_previos: Optional[str] = None
-    datos_nuevos: Optional[str] = None
-    fecha: datetime
-
-    model_config = ConfigDict(from_attributes=True)
-
-
-class AuditoriaListOut(BaseModel):
-    total: int
-    items: List[AuditoriaOut]
-    acciones_disponibles: List[str] = Field(default_factory=list)
-    recursos_disponibles: List[str] = Field(default_factory=list)
-
-
-# ==================== SCHEMAS: LOGS ====================
-class LogEntryOut(BaseModel):
-    timestamp: Optional[str] = None
-    level: str
-    logger: str
-    message: str
-    raw: str
-
-
-class LogResponseOut(BaseModel):
-    file: str
-    size_kb: float
-    total_returned: int
-    logs: List[LogEntryOut]
-
-
-class LogStatsOut(BaseModel):
-    total_recent_events: int
-    counts_by_level: dict[str, int]
-    error_rate_percentage: float
-    app_log_size_kb: float
-    error_log_size_kb: float
-
-
-# ==================== SCHEMAS: BACKUPS ====================
-class BackupCreateRequest(BaseModel):
-    descripcion: Optional[str] = Field(default=None, max_length=255)
-
-
-class BackupOut(BaseModel):
-    filename: str
-    engine: str
-    created_at: str
-    created_by: str
-    description: Optional[str] = None
-    size_bytes: int
-    size_human: str
-    sha256: str
-    status: str
-
-
-class BackupRestoreResponse(BaseModel):
-    mensaje: str
-    checkpoint_previo: Optional[str] = None
-    tablas_restauradas: Optional[List[str]] = None
-    restaurado_por: str
-    timestamp: str
 
 
 # Promocion Schemas
@@ -324,83 +188,11 @@ class PromocionCreate(BaseModel):
     banner_url: Optional[str] = None
     activo: Optional[bool] = True
 
+
 class PromocionOut(PromocionCreate):
     id: int
 
     model_config = ConfigDict(from_attributes=True)
-
-
-# ==================== SCHEMAS: AUDITORIA ====================
-class AuditoriaOut(BaseModel):
-    id: int
-    accion: str
-    usuario: str
-    usuario_id: Optional[int] = None
-    ip_address: Optional[str] = None
-    recurso: Optional[str] = None
-    recurso_id: Optional[str] = None
-    detalle: Optional[str] = None
-    datos_previos: Optional[str] = None
-    datos_nuevos: Optional[str] = None
-    fecha: datetime
-
-    model_config = ConfigDict(from_attributes=True)
-
-
-class AuditoriaListOut(BaseModel):
-    total: int
-    items: List[AuditoriaOut]
-    acciones_disponibles: List[str] = Field(default_factory=list)
-    recursos_disponibles: List[str] = Field(default_factory=list)
-
-
-# ==================== SCHEMAS: LOGS ====================
-class LogEntryOut(BaseModel):
-    timestamp: Optional[str] = None
-    level: str
-    logger: str
-    message: str
-    raw: str
-
-
-class LogResponseOut(BaseModel):
-    file: str
-    size_kb: float
-    total_returned: int
-    logs: List[LogEntryOut]
-
-
-class LogStatsOut(BaseModel):
-    total_recent_events: int
-    counts_by_level: dict[str, int]
-    error_rate_percentage: float
-    app_log_size_kb: float
-    error_log_size_kb: float
-
-
-# ==================== SCHEMAS: BACKUPS ====================
-class BackupCreateRequest(BaseModel):
-    descripcion: Optional[str] = Field(default=None, max_length=255)
-
-
-class BackupOut(BaseModel):
-    filename: str
-    engine: str
-    created_at: str
-    created_by: str
-    description: Optional[str] = None
-    size_bytes: int
-    size_human: str
-    sha256: str
-    status: str
-
-
-class BackupRestoreResponse(BaseModel):
-    mensaje: str
-    checkpoint_previo: Optional[str] = None
-    tablas_restauradas: Optional[List[str]] = None
-    restaurado_por: str
-    timestamp: str
 
 
 # Resena Schemas
@@ -410,84 +202,12 @@ class ResenaCreate(BaseModel):
     estrellas: Optional[int] = Field(default=5, ge=1, le=5)
     foto_url: Optional[str] = None
 
+
 class ResenaOut(ResenaCreate):
     id: int
     fecha_creacion: Optional[datetime] = None
 
     model_config = ConfigDict(from_attributes=True)
-
-
-# ==================== SCHEMAS: AUDITORIA ====================
-class AuditoriaOut(BaseModel):
-    id: int
-    accion: str
-    usuario: str
-    usuario_id: Optional[int] = None
-    ip_address: Optional[str] = None
-    recurso: Optional[str] = None
-    recurso_id: Optional[str] = None
-    detalle: Optional[str] = None
-    datos_previos: Optional[str] = None
-    datos_nuevos: Optional[str] = None
-    fecha: datetime
-
-    model_config = ConfigDict(from_attributes=True)
-
-
-class AuditoriaListOut(BaseModel):
-    total: int
-    items: List[AuditoriaOut]
-    acciones_disponibles: List[str] = Field(default_factory=list)
-    recursos_disponibles: List[str] = Field(default_factory=list)
-
-
-# ==================== SCHEMAS: LOGS ====================
-class LogEntryOut(BaseModel):
-    timestamp: Optional[str] = None
-    level: str
-    logger: str
-    message: str
-    raw: str
-
-
-class LogResponseOut(BaseModel):
-    file: str
-    size_kb: float
-    total_returned: int
-    logs: List[LogEntryOut]
-
-
-class LogStatsOut(BaseModel):
-    total_recent_events: int
-    counts_by_level: dict[str, int]
-    error_rate_percentage: float
-    app_log_size_kb: float
-    error_log_size_kb: float
-
-
-# ==================== SCHEMAS: BACKUPS ====================
-class BackupCreateRequest(BaseModel):
-    descripcion: Optional[str] = Field(default=None, max_length=255)
-
-
-class BackupOut(BaseModel):
-    filename: str
-    engine: str
-    created_at: str
-    created_by: str
-    description: Optional[str] = None
-    size_bytes: int
-    size_human: str
-    sha256: str
-    status: str
-
-
-class BackupRestoreResponse(BaseModel):
-    mensaje: str
-    checkpoint_previo: Optional[str] = None
-    tablas_restauradas: Optional[List[str]] = None
-    restaurado_por: str
-    timestamp: str
 
 
 # Publicacion Schemas
@@ -498,6 +218,7 @@ class PublicacionCreate(BaseModel):
     autor: Optional[str] = "Donde David"
     activo: Optional[bool] = True
 
+
 class PublicacionOut(PublicacionCreate):
     id: int
     fecha_creacion: Optional[datetime] = None
@@ -505,87 +226,16 @@ class PublicacionOut(PublicacionCreate):
     model_config = ConfigDict(from_attributes=True)
 
 
-# ==================== SCHEMAS: AUDITORIA ====================
-class AuditoriaOut(BaseModel):
-    id: int
-    accion: str
-    usuario: str
-    usuario_id: Optional[int] = None
-    ip_address: Optional[str] = None
-    recurso: Optional[str] = None
-    recurso_id: Optional[str] = None
-    detalle: Optional[str] = None
-    datos_previos: Optional[str] = None
-    datos_nuevos: Optional[str] = None
-    fecha: datetime
-
-    model_config = ConfigDict(from_attributes=True)
-
-
-class AuditoriaListOut(BaseModel):
-    total: int
-    items: List[AuditoriaOut]
-    acciones_disponibles: List[str] = Field(default_factory=list)
-    recursos_disponibles: List[str] = Field(default_factory=list)
-
-
-# ==================== SCHEMAS: LOGS ====================
-class LogEntryOut(BaseModel):
-    timestamp: Optional[str] = None
-    level: str
-    logger: str
-    message: str
-    raw: str
-
-
-class LogResponseOut(BaseModel):
-    file: str
-    size_kb: float
-    total_returned: int
-    logs: List[LogEntryOut]
-
-
-class LogStatsOut(BaseModel):
-    total_recent_events: int
-    counts_by_level: dict[str, int]
-    error_rate_percentage: float
-    app_log_size_kb: float
-    error_log_size_kb: float
-
-
-# ==================== SCHEMAS: BACKUPS ====================
-class BackupCreateRequest(BaseModel):
-    descripcion: Optional[str] = Field(default=None, max_length=255)
-
-
-class BackupOut(BaseModel):
-    filename: str
-    engine: str
-    created_at: str
-    created_by: str
-    description: Optional[str] = None
-    size_bytes: int
-    size_human: str
-    sha256: str
-    status: str
-
-
-class BackupRestoreResponse(BaseModel):
-    mensaje: str
-    checkpoint_previo: Optional[str] = None
-    tablas_restauradas: Optional[List[str]] = None
-    restaurado_por: str
-    timestamp: str
-
-
 # Cambiar Mesa Request
 class CambiarMesaRequest(BaseModel):
     nueva_mesa: int = Field(gt=0)
+
 
 # OTP Verify Request
 class OTPVerifyRequest(BaseModel):
     pedido_id: int
     codigo_otp: str
+
 
 # Detalle Pedido Schemas
 class DetallePedidoItem(BaseModel):
@@ -593,6 +243,7 @@ class DetallePedidoItem(BaseModel):
     cantidad: int = Field(gt=0, le=100)
     personalizaciones: Optional[dict] = None
     observaciones: Optional[str] = None
+
 
 class DetallePedidoOut(BaseModel):
     id: int
@@ -609,85 +260,12 @@ class DetallePedidoOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
-# ==================== SCHEMAS: AUDITORIA ====================
-class AuditoriaOut(BaseModel):
-    id: int
-    accion: str
-    usuario: str
-    usuario_id: Optional[int] = None
-    ip_address: Optional[str] = None
-    recurso: Optional[str] = None
-    recurso_id: Optional[str] = None
-    detalle: Optional[str] = None
-    datos_previos: Optional[str] = None
-    datos_nuevos: Optional[str] = None
-    fecha: datetime
-
-    model_config = ConfigDict(from_attributes=True)
-
-
-class AuditoriaListOut(BaseModel):
-    total: int
-    items: List[AuditoriaOut]
-    acciones_disponibles: List[str] = Field(default_factory=list)
-    recursos_disponibles: List[str] = Field(default_factory=list)
-
-
-# ==================== SCHEMAS: LOGS ====================
-class LogEntryOut(BaseModel):
-    timestamp: Optional[str] = None
-    level: str
-    logger: str
-    message: str
-    raw: str
-
-
-class LogResponseOut(BaseModel):
-    file: str
-    size_kb: float
-    total_returned: int
-    logs: List[LogEntryOut]
-
-
-class LogStatsOut(BaseModel):
-    total_recent_events: int
-    counts_by_level: dict[str, int]
-    error_rate_percentage: float
-    app_log_size_kb: float
-    error_log_size_kb: float
-
-
-# ==================== SCHEMAS: BACKUPS ====================
-class BackupCreateRequest(BaseModel):
-    descripcion: Optional[str] = Field(default=None, max_length=255)
-
-
-class BackupOut(BaseModel):
-    filename: str
-    engine: str
-    created_at: str
-    created_by: str
-    description: Optional[str] = None
-    size_bytes: int
-    size_human: str
-    sha256: str
-    status: str
-
-
-class BackupRestoreResponse(BaseModel):
-    mensaje: str
-    checkpoint_previo: Optional[str] = None
-    tablas_restauradas: Optional[List[str]] = None
-    restaurado_por: str
-    timestamp: str
-
-
 # Pedido Schemas
 class PedidoCreate(BaseModel):
     numero_mesa: str = Field(min_length=1, max_length=50)
     codigo_qr: Optional[str] = None
     tipo: Optional[Literal["mesa", "llevar", "delivery"]] = "mesa"
-    modo_pago: Optional[str] = "PAGAR_ANTES" # PAGAR_ANTES, PAGAR_DESPUES
+    modo_pago: Optional[str] = "PAGAR_ANTES"  # PAGAR_ANTES, PAGAR_DESPUES
     observaciones: Optional[str] = None
     nombre_cliente_delivery: Optional[str] = None
     telefono_delivery: Optional[str] = None
@@ -707,23 +285,28 @@ class PedidoCreate(BaseModel):
             raise ValueError("Las coordenadas solo aplican a pedidos delivery.")
         return self
 
+
 class SolicitudMesaCreate(BaseModel):
     numero_mesa: int = Field(gt=0)
     tipo: Literal["LLAMAR_MESERO", "SOLICITAR_CUENTA"]
     pedido_id: Optional[int] = Field(default=None, gt=0)
     nota: Optional[str] = Field(default=None, max_length=250)
 
+
 class SolicitudMesaEstado(BaseModel):
     estado: Literal["ATENDIDA", "CANCELADA"]
 
+
 class MesaLimpiezaRequest(BaseModel):
     accion: Literal["INICIAR", "FINALIZAR"]
+
 
 class MovimientoCajaCreate(BaseModel):
     concepto: str = Field(min_length=3, max_length=150)
     monto_usd: float = Field(gt=0, allow_inf_nan=False)
     metodo_pago: Literal["Efectivo", "Pago Móvil", "Punto de Venta"] = "Efectivo"
     observacion: Optional[str] = Field(default=None, max_length=300)
+
 
 class MovimientoCajaOut(BaseModel):
     id: int
@@ -739,82 +322,10 @@ class MovimientoCajaOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
-# ==================== SCHEMAS: AUDITORIA ====================
-class AuditoriaOut(BaseModel):
-    id: int
-    accion: str
-    usuario: str
-    usuario_id: Optional[int] = None
-    ip_address: Optional[str] = None
-    recurso: Optional[str] = None
-    recurso_id: Optional[str] = None
-    detalle: Optional[str] = None
-    datos_previos: Optional[str] = None
-    datos_nuevos: Optional[str] = None
-    fecha: datetime
-
-    model_config = ConfigDict(from_attributes=True)
-
-
-class AuditoriaListOut(BaseModel):
-    total: int
-    items: List[AuditoriaOut]
-    acciones_disponibles: List[str] = Field(default_factory=list)
-    recursos_disponibles: List[str] = Field(default_factory=list)
-
-
-# ==================== SCHEMAS: LOGS ====================
-class LogEntryOut(BaseModel):
-    timestamp: Optional[str] = None
-    level: str
-    logger: str
-    message: str
-    raw: str
-
-
-class LogResponseOut(BaseModel):
-    file: str
-    size_kb: float
-    total_returned: int
-    logs: List[LogEntryOut]
-
-
-class LogStatsOut(BaseModel):
-    total_recent_events: int
-    counts_by_level: dict[str, int]
-    error_rate_percentage: float
-    app_log_size_kb: float
-    error_log_size_kb: float
-
-
-# ==================== SCHEMAS: BACKUPS ====================
-class BackupCreateRequest(BaseModel):
-    descripcion: Optional[str] = Field(default=None, max_length=255)
-
-
-class BackupOut(BaseModel):
-    filename: str
-    engine: str
-    created_at: str
-    created_by: str
-    description: Optional[str] = None
-    size_bytes: int
-    size_human: str
-    sha256: str
-    status: str
-
-
-class BackupRestoreResponse(BaseModel):
-    mensaje: str
-    checkpoint_previo: Optional[str] = None
-    tablas_restauradas: Optional[List[str]] = None
-    restaurado_por: str
-    timestamp: str
-
-
 class ArqueoTurnoInput(BaseModel):
     metodo_pago: Literal["Efectivo", "Pago Móvil", "Punto de Venta"]
     contado_usd: float = Field(ge=0, allow_inf_nan=False)
+
 
 class ArqueoTurnoOut(BaseModel):
     metodo_pago: str
@@ -823,79 +334,6 @@ class ArqueoTurnoOut(BaseModel):
     diferencia_usd: float
 
     model_config = ConfigDict(from_attributes=True)
-
-
-# ==================== SCHEMAS: AUDITORIA ====================
-class AuditoriaOut(BaseModel):
-    id: int
-    accion: str
-    usuario: str
-    usuario_id: Optional[int] = None
-    ip_address: Optional[str] = None
-    recurso: Optional[str] = None
-    recurso_id: Optional[str] = None
-    detalle: Optional[str] = None
-    datos_previos: Optional[str] = None
-    datos_nuevos: Optional[str] = None
-    fecha: datetime
-
-    model_config = ConfigDict(from_attributes=True)
-
-
-class AuditoriaListOut(BaseModel):
-    total: int
-    items: List[AuditoriaOut]
-    acciones_disponibles: List[str] = Field(default_factory=list)
-    recursos_disponibles: List[str] = Field(default_factory=list)
-
-
-# ==================== SCHEMAS: LOGS ====================
-class LogEntryOut(BaseModel):
-    timestamp: Optional[str] = None
-    level: str
-    logger: str
-    message: str
-    raw: str
-
-
-class LogResponseOut(BaseModel):
-    file: str
-    size_kb: float
-    total_returned: int
-    logs: List[LogEntryOut]
-
-
-class LogStatsOut(BaseModel):
-    total_recent_events: int
-    counts_by_level: dict[str, int]
-    error_rate_percentage: float
-    app_log_size_kb: float
-    error_log_size_kb: float
-
-
-# ==================== SCHEMAS: BACKUPS ====================
-class BackupCreateRequest(BaseModel):
-    descripcion: Optional[str] = Field(default=None, max_length=255)
-
-
-class BackupOut(BaseModel):
-    filename: str
-    engine: str
-    created_at: str
-    created_by: str
-    description: Optional[str] = None
-    size_bytes: int
-    size_human: str
-    sha256: str
-    status: str
-
-
-class BackupRestoreResponse(BaseModel):
-    mensaje: str
-    checkpoint_previo: Optional[str] = None
-    tablas_restauradas: Optional[List[str]] = None
-    restaurado_por: str
-    timestamp: str
 
 
 class PedidoBaseOut(BaseModel):
@@ -940,88 +378,18 @@ class PedidoBaseOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
-# ==================== SCHEMAS: AUDITORIA ====================
-class AuditoriaOut(BaseModel):
-    id: int
-    accion: str
-    usuario: str
-    usuario_id: Optional[int] = None
-    ip_address: Optional[str] = None
-    recurso: Optional[str] = None
-    recurso_id: Optional[str] = None
-    detalle: Optional[str] = None
-    datos_previos: Optional[str] = None
-    datos_nuevos: Optional[str] = None
-    fecha: datetime
-
-    model_config = ConfigDict(from_attributes=True)
-
-
-class AuditoriaListOut(BaseModel):
-    total: int
-    items: List[AuditoriaOut]
-    acciones_disponibles: List[str] = Field(default_factory=list)
-    recursos_disponibles: List[str] = Field(default_factory=list)
-
-
-# ==================== SCHEMAS: LOGS ====================
-class LogEntryOut(BaseModel):
-    timestamp: Optional[str] = None
-    level: str
-    logger: str
-    message: str
-    raw: str
-
-
-class LogResponseOut(BaseModel):
-    file: str
-    size_kb: float
-    total_returned: int
-    logs: List[LogEntryOut]
-
-
-class LogStatsOut(BaseModel):
-    total_recent_events: int
-    counts_by_level: dict[str, int]
-    error_rate_percentage: float
-    app_log_size_kb: float
-    error_log_size_kb: float
-
-
-# ==================== SCHEMAS: BACKUPS ====================
-class BackupCreateRequest(BaseModel):
-    descripcion: Optional[str] = Field(default=None, max_length=255)
-
-
-class BackupOut(BaseModel):
-    filename: str
-    engine: str
-    created_at: str
-    created_by: str
-    description: Optional[str] = None
-    size_bytes: int
-    size_human: str
-    sha256: str
-    status: str
-
-
-class BackupRestoreResponse(BaseModel):
-    mensaje: str
-    checkpoint_previo: Optional[str] = None
-    tablas_restauradas: Optional[List[str]] = None
-    restaurado_por: str
-    timestamp: str
-
-
 class PedidoOut(PedidoBaseOut):
     codigo_otp: Optional[str] = None
+
 
 class PedidoCreadoOut(PedidoOut):
     codigo_retiro: Optional[str] = None
     token_seguimiento: Optional[str] = None
 
+
 class ConfirmarRetiroRequest(BaseModel):
     codigo_retiro: str = Field(min_length=6, max_length=6, pattern="^[0-9]{6}$")
+
 
 # Payment Request Schema
 class CobrarPedidoRequest(BaseModel):
@@ -1031,30 +399,38 @@ class CobrarPedidoRequest(BaseModel):
     nit_cliente: Optional[str] = "CF"
     nombre_factura: Optional[str] = "Consumidor Final"
 
+
 class ConfirmarPagoRequest(BaseModel):
     aprobado: bool
     observacion: Optional[str] = Field(default=None, max_length=250)
 
+
 class AsignarRepartidorRequest(BaseModel):
     repartidor_id: int = Field(gt=0)
 
+
 class EstadoDeliveryRequest(BaseModel):
     estado: str = Field(pattern="^(RECOGIDO|EN_CAMINO)$")
+
 
 class UbicacionRepartidorRequest(BaseModel):
     lat: float = Field(ge=-90, le=90, allow_inf_nan=False)
     lng: float = Field(ge=-180, le=180, allow_inf_nan=False)
 
+
 class EntregaDeliveryRequest(BaseModel):
     codigo_otp: str = Field(min_length=6, max_length=6, pattern="^[0-9]{6}$")
+
 
 # Turno Schemas
 class TurnoApertura(BaseModel):
     monto_apertura: float = Field(ge=0, allow_inf_nan=False)
 
+
 class TurnoCierre(BaseModel):
     monto_cierre: float = Field(ge=0, allow_inf_nan=False)
     arqueo: Optional[List[ArqueoTurnoInput]] = Field(default=None, max_length=3)
+
 
 class TurnoOut(BaseModel):
     id: int
@@ -1074,148 +450,3 @@ class TurnoOut(BaseModel):
     esperado_por_metodo: dict[str, float] = Field(default_factory=dict)
 
     model_config = ConfigDict(from_attributes=True)
-# ==================== SCHEMAS: AUDITORIA ====================
-class AuditoriaOut(BaseModel):
-    id: int
-    accion: str
-    usuario: str
-    usuario_id: Optional[int] = None
-    ip_address: Optional[str] = None
-    recurso: Optional[str] = None
-    recurso_id: Optional[str] = None
-    detalle: Optional[str] = None
-    datos_previos: Optional[str] = None
-    datos_nuevos: Optional[str] = None
-    fecha: datetime
-
-    model_config = ConfigDict(from_attributes=True)
-
-
-class AuditoriaListOut(BaseModel):
-    total: int
-    items: List[AuditoriaOut]
-    acciones_disponibles: List[str] = Field(default_factory=list)
-    recursos_disponibles: List[str] = Field(default_factory=list)
-
-
-# ==================== SCHEMAS: LOGS ====================
-class LogEntryOut(BaseModel):
-    timestamp: Optional[str] = None
-    level: str
-    logger: str
-    message: str
-    raw: str
-
-
-class LogResponseOut(BaseModel):
-    file: str
-    size_kb: float
-    total_returned: int
-    logs: List[LogEntryOut]
-
-
-class LogStatsOut(BaseModel):
-    total_recent_events: int
-    counts_by_level: dict[str, int]
-    error_rate_percentage: float
-    app_log_size_kb: float
-    error_log_size_kb: float
-
-
-# ==================== SCHEMAS: BACKUPS ====================
-class BackupCreateRequest(BaseModel):
-    descripcion: Optional[str] = Field(default=None, max_length=255)
-
-
-class BackupOut(BaseModel):
-    filename: str
-    engine: str
-    created_at: str
-    created_by: str
-    description: Optional[str] = None
-    size_bytes: int
-    size_human: str
-    sha256: str
-    status: str
-
-
-class BackupRestoreResponse(BaseModel):
-    mensaje: str
-    checkpoint_previo: Optional[str] = None
-    tablas_restauradas: Optional[List[str]] = None
-    restaurado_por: str
-    timestamp: str
-
-
-# ==================== SCHEMAS: AUDITORIA ====================
-class AuditoriaOut(BaseModel):
-    id: int
-    accion: str
-    usuario: str
-    usuario_id: Optional[int] = None
-    ip_address: Optional[str] = None
-    recurso: Optional[str] = None
-    recurso_id: Optional[str] = None
-    detalle: Optional[str] = None
-    datos_previos: Optional[str] = None
-    datos_nuevos: Optional[str] = None
-    fecha: datetime
-
-    model_config = ConfigDict(from_attributes=True)
-
-
-class AuditoriaListOut(BaseModel):
-    total: int
-    items: List[AuditoriaOut]
-    acciones_disponibles: List[str] = Field(default_factory=list)
-    recursos_disponibles: List[str] = Field(default_factory=list)
-
-
-# ==================== SCHEMAS: LOGS ====================
-class LogEntryOut(BaseModel):
-    timestamp: Optional[str] = None
-    level: str
-    logger: str
-    message: str
-    raw: str
-
-
-class LogResponseOut(BaseModel):
-    file: str
-    size_kb: float
-    total_returned: int
-    logs: List[LogEntryOut]
-
-
-class LogStatsOut(BaseModel):
-    total_recent_events: int
-    counts_by_level: dict[str, int]
-    error_rate_percentage: float
-    app_log_size_kb: float
-    error_log_size_kb: float
-
-
-# ==================== SCHEMAS: BACKUPS ====================
-class BackupCreateRequest(BaseModel):
-    descripcion: Optional[str] = Field(default=None, max_length=255)
-
-
-class BackupOut(BaseModel):
-    filename: str
-    engine: str
-    created_at: str
-    created_by: str
-    description: Optional[str] = None
-    size_bytes: int
-    size_human: str
-    sha256: str
-    status: str
-
-
-class BackupRestoreResponse(BaseModel):
-    mensaje: str
-    checkpoint_previo: Optional[str] = None
-    tablas_restauradas: Optional[List[str]] = None
-    restaurado_por: str
-    timestamp: str
-

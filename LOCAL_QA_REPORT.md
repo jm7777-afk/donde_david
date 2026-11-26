@@ -6,16 +6,17 @@ La verificación local cubrió el backend, las migraciones, los flujos por rol y
 
 | Verificación | Resultado |
 |---|---|
-| `pytest -q` | 44 pruebas pasaron |
+| `pytest tests -v --tb=short` | 58 pruebas pasaron (0 fallos, 0 warnings) |
+| `pytest backend/scripts/test_api.py -v --tb=short` | 9 pruebas pasaron (0 fallos) |
 | `python -m compileall -q backend tests` | Correcto |
 | `git diff --check` | Correcto |
-| `alembic upgrade head` en SQLite desechable | Correcto |
-| `alembic check` contra modelos ORM | Sin operaciones pendientes |
-| Generación SQL de Alembic para PostgreSQL offline | Correcta; no conectó a una base real |
-| `node --check` en los scripts principales | Correcto |
-| Escaneo HTML | 12 páginas; sin IDs duplicados ni recursos estáticos locales ausentes |
+| `alembic upgrade head` en SQLite desechable | Correcto (`f9c1d2e3a4b5`) |
+| `alembic check` contra modelos ORM | Sin operaciones pendientes (`exit 0`) |
+| Generación SQL de Alembic para PostgreSQL offline (`alembic upgrade head --sql`) | Correcta (`exit 0`; sin conexión directa a la BD en Render) |
+| `node --check` sobre todos los JS de `backend/static/js/` | Correcto (`exit 0`) |
+| Validación de entorno `ENVIRONMENT=production` | Rechaza `SECRET_KEY` débil y normaliza `postgres://` a `postgresql+psycopg://` |
 | `/health` y `/ready` | Correcto; base de datos conectada |
-| Casos de prueba | RBAC, credenciales, validación de importes, autenticación WebSocket, cancelación/reposición de stock, auditoría, solicitudes QR, personalización, retiro, arqueo de caja, extras configurables y validación de coordenadas delivery |
+| Casos de prueba | Matriz completa RBAC (9 perfiles), concurrencia/idempotencia de cobros y stock, OTP con `X-Order-Tracking-Token`, canje de puntos con bloqueo, validaciones admin, métricas filtrables por categoría/método, E2E QR → Cocina → Mesero → Caja → Limpieza, higiene frontend/seguridad y estilos HTML |
 
 ## Controles incorporados
 
@@ -28,9 +29,10 @@ La verificación local cubrió el backend, las migraciones, los flujos por rol y
 - Los uploads validan extensión, MIME, firma y tamaño.
 - Los errores internos se registran en servidor y se responden sin detalles sensibles.
 - El perfil de usuario nuevo parte de historial y dirección vacíos; solo conserva los 50 puntos de bienvenida definidos explícitamente por el registro.
-- El panel administrativo antiguo redirige al panel vigente para evitar presentar métricas estáticas de demostración.
+- El panel administrativo antiguo redirige al panel vigente para evitar presentar métricas estáticas de demostración, y el dashboard administrativo soporta filtrado real por categoría y método de pago.
 - Las recomendaciones del cliente se calculan localmente con historial y ventas; no se envían datos a un proveedor de IA externo.
-- La base SQLite de desarrollo quedó inicializada sin ventas, pedidos, mesas ocupadas ni turno ficticios. Las bases anteriores se respaldaron antes del reinicio.
+- Se eliminaron los accesos rápidos con credenciales demo en `login.html`, el guardado de contraseñas en `localStorage`, las referencias rotas de POS (`#view-btn-app-payments`, `#pos-history-payment-filter`) y las interpolaciones HTML sin escape en los paneles JS de operación y administración.
+- Se desindexó `restaurante.db` del control de versiones Git conservando respaldo local fuera del índice.
 
 ## Pendientes antes de operación real
 

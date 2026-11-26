@@ -17,14 +17,15 @@ const Auth = {
     const u = this.getUser();
     return !!(u && (u.rol === "admin" || u.rol === "supervisor"));
   },
-  requireRole(allowedRoles) {
+  requireRole(allowedRoles, options = {}) {
+    const { allowAdminOverride = true } = options;
     const u = this.getUser();
     if (!u) {
       window.location.replace("/login");
       return false;
     }
-    // El Administrador tiene acceso universal a todas las pantallas del sistema con credenciales activas
-    if (this.isAdmin()) return true;
+    // El Administrador tiene acceso universal a los paneles operativos con credenciales activas
+    if (allowAdminOverride && this.isAdmin()) return true;
     const roles = Array.isArray(allowedRoles) ? allowedRoles : [allowedRoles];
     if (!roles.includes(u.rol)) {
       window.location.replace("/login");

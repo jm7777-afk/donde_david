@@ -91,9 +91,14 @@ async def global_exception_handler(request: Request, exc: Exception):
         content={"detail": "Error interno del servidor."}
     )
 
+# Caché en memoria una vez confirmada la instalación permanente en producción/desarrollo
+_system_installed_cached = False
+
+
 # Middleware Guardia de Instalación Única (/setup Guard)
 @app.middleware("http")
 async def setup_installer_guard_middleware(request: Request, call_next):
+    global _system_installed_cached
     path = request.url.path
     
     # Excluir archivos estáticos, endpoints de API, healthcheck y websockets
@@ -101,7 +106,7 @@ async def setup_installer_guard_middleware(request: Request, call_next):
         path.startswith("/static/")
         or path.startswith("/api/")
         or path.startswith("/ws")
-        or path == "/health"
+        or path in {"/health", "/ready"}
     )
     
     if is_static_asset:
@@ -118,11 +123,18 @@ async def setup_installer_guard_middleware(request: Request, call_next):
             response.headers["Expires"] = "0"
         return response
 
-    db = SessionLocal()
-    try:
-        is_installed = check_system_installed(db)
-    finally:
-        db.close()
+    if os.path.exists(LOCK_FILE_PATH):
+        is_installed = True
+    elif _system_installed_cached and settings.ENVIRONMENT != "testing":
+        is_installed = True
+    else:
+        db = SessionLocal()
+        try:
+            is_installed = check_system_installed(db)
+            if is_installed and settings.ENVIRONMENT != "testing":
+                _system_installed_cached = True
+        finally:
+            db.close()
 
     is_setup_route = path == "/setup" or path.startswith("/static/setup")
 

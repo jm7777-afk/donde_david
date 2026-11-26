@@ -287,8 +287,49 @@ async def upload_file(file: UploadFile = File(...)):
         raise HTTPException(status_code=500, detail="No se pudo guardar el archivo.") from exc
 
 # ==================== DASHBOARD & METRICS ====================
+def _resolve_metric_category_ids(db: Session, categoria: Optional[str]) -> Optional[list[int]]:
+    if not categoria:
+        return None
+    norm = categoria.strip().lower()
+    if not norm or norm == "todas":
+        return None
+    all_cats = db.query(Categoria).all()
+    postre_terms = ("postre", "dulce", "helado")
+    bebida_terms = ("bebida", "refresco", "malteada", "jugo")
+    if norm == "postres":
+        return [c.id for c in all_cats if any(t in (c.nombre or "").lower() for t in postre_terms)]
+    if norm == "bebidas":
+        return [c.id for c in all_cats if any(t in (c.nombre or "").lower() for t in bebida_terms)]
+    if norm == "comidas":
+        excluded = postre_terms + bebida_terms + ("extra",)
+        return [c.id for c in all_cats if not any(t in (c.nombre or "").lower() for t in excluded)]
+    return [c.id for c in all_cats if (c.nombre or "").strip().lower() == norm or str(c.id) == norm]
+
+
+def _apply_metric_payment_filter(query, metodo_pago: Optional[str]):
+    if not metodo_pago:
+        return query
+    norm = metodo_pago.strip().lower()
+    if not norm or norm == "todos":
+        return query
+    if norm in ("efectivo", "cash"):
+        return query.filter(func.lower(Pedido.metodo_pago).in_(["efectivo", "cash"]))
+    if "movil" in norm or "móvil" in norm:
+        return query.filter(func.lower(Pedido.metodo_pago).in_(["pago móvil", "pago movil", "transferencia"]))
+    if "tarjeta" in norm or "punto" in norm:
+        return query.filter(func.lower(Pedido.metodo_pago).in_(["punto de venta", "tarjeta"]))
+    if "divisa" in norm or "usd" in norm:
+        return query.filter(
+            Pedido.moneda_pago == "USD",
+            func.lower(Pedido.metodo_pago).in_(["efectivo", "cash", "divisas"]),
+        )
+    return query.filter(func.lower(Pedido.metodo_pago) == norm)
+
+
 @router.get("/dashboard-stats")
 def get_dashboard_stats(
+    categoria: Optional[str] = Query(None),
+    metodo_pago: Optional[str] = Query(None),
     db: Session = Depends(get_db),
     user = Depends(require_roles(["admin", "supervisor"]))
 ):
@@ -298,13 +339,32 @@ def get_dashboard_stats(
     previous_week_start = week_start - timedelta(days=7)
     month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
     previous_month_start = (month_start - timedelta(days=1)).replace(day=1)
-    def sales_between(start: datetime, end: datetime) -> float:
-        total = db.query(func.sum(Pedido.total)).filter(
-            Pedido.estado_pago == "PAGADO",
-            func.coalesce(Pedido.fecha_pago, Pedido.fecha_creacion) >= start,
-            func.coalesce(Pedido.fecha_pago, Pedido.fecha_creacion) < end
-        ).scalar()
-        return float(total or 0.0)
+
+    cat_ids = _resolve_metric_category_ids(db, categoria)
+    active_category_filter = (categoria or "todas").strip().lower() or "todas"
+    active_payment_filter = (metodo_pago or "todos").strip() or "todos"
+
+    def sales_between(start: Optional[datetime], end: Optional[datetime]) -> float:
+        if cat_ids is not None:
+            if not cat_ids:
+                return 0.0
+            query = (
+                db.query(func.sum(DetallePedido.subtotal))
+                .join(Pedido, Pedido.id == DetallePedido.pedido_id)
+                .join(Producto, Producto.id == DetallePedido.producto_id)
+                .filter(
+                    Pedido.estado_pago == "PAGADO",
+                    Producto.categoria_id.in_(cat_ids),
+                )
+            )
+        else:
+            query = db.query(func.sum(Pedido.total)).filter(Pedido.estado_pago == "PAGADO")
+        query = _apply_metric_payment_filter(query, metodo_pago)
+        if start is not None:
+            query = query.filter(func.coalesce(Pedido.fecha_pago, Pedido.fecha_creacion) >= start)
+        if end is not None:
+            query = query.filter(func.coalesce(Pedido.fecha_pago, Pedido.fecha_creacion) < end)
+        return float(query.scalar() or 0.0)
 
     def growth(current: float, previous: float) -> str:
         if previous == 0:
@@ -313,10 +373,23 @@ def get_dashboard_stats(
 
     total_usuarios = db.query(Usuario).filter(Usuario.activo == True).count()
     total_productos = db.query(Producto).filter(Producto.activo == True).count()
-    total_pedidos = db.query(Pedido).count()
-    
-    sum_total = db.query(func.sum(Pedido.total)).filter(Pedido.estado_pago == "PAGADO").scalar()
-    total_ventas = float(sum_total) if sum_total else 0.0
+
+    filtered_orders_query = _apply_metric_payment_filter(db.query(Pedido), metodo_pago)
+    if cat_ids is not None:
+        if not cat_ids:
+            total_pedidos = 0
+        else:
+            count_q = (
+                db.query(func.count(func.distinct(Pedido.id)))
+                .join(DetallePedido, Pedido.id == DetallePedido.pedido_id)
+                .join(Producto, Producto.id == DetallePedido.producto_id)
+                .filter(Producto.categoria_id.in_(cat_ids))
+            )
+            total_pedidos = int(_apply_metric_payment_filter(count_q, metodo_pago).scalar() or 0)
+    else:
+        total_pedidos = filtered_orders_query.count()
+
+    total_ventas = sales_between(None, None)
     ventas_hoy = sales_between(today_start, now + timedelta(microseconds=1))
     ventas_semana = sales_between(week_start, now + timedelta(microseconds=1))
     ventas_semana_anterior = sales_between(previous_week_start, week_start)
@@ -343,26 +416,51 @@ def get_dashboard_stats(
     delivery_count = db.query(Pedido).filter(Pedido.tipo == "delivery").count()
     mesas_ocupadas_count = db.query(Mesa).filter(Mesa.estado == "OCUPADA").count()
 
-    top_productos = db.query(
-        Producto.nombre,
-        func.sum(DetallePedido.cantidad).label("unidades"),
-        func.sum(DetallePedido.subtotal).label("total_ingresos")
-    ).join(DetallePedido, Producto.id == DetallePedido.producto_id)\
-     .join(Pedido, Pedido.id == DetallePedido.pedido_id)\
-     .filter(Pedido.estado_pago == "PAGADO")\
-     .group_by(Producto.id, Producto.nombre)\
-     .order_by(func.sum(DetallePedido.cantidad).desc())\
-     .limit(5).all()
+    if cat_ids is not None and not cat_ids:
+        top_productos = []
+    else:
+        top_query = (
+            db.query(
+                Producto.nombre,
+                func.sum(DetallePedido.cantidad).label("unidades"),
+                func.sum(DetallePedido.subtotal).label("total_ingresos")
+            )
+            .join(DetallePedido, Producto.id == DetallePedido.producto_id)
+            .join(Pedido, Pedido.id == DetallePedido.pedido_id)
+            .filter(Pedido.estado_pago == "PAGADO")
+        )
+        if cat_ids is not None:
+            top_query = top_query.filter(Producto.categoria_id.in_(cat_ids))
+        top_query = _apply_metric_payment_filter(top_query, metodo_pago)
+        top_productos = (
+            top_query.group_by(Producto.id, Producto.nombre)
+            .order_by(func.sum(DetallePedido.cantidad).desc())
+            .limit(5)
+            .all()
+        )
 
     top_list = [
         {"nombre": name, "unidades": int(units), "total": float(tot)}
         for name, units, tot in top_productos
     ] if top_productos else []
 
-    # Cálculo dinámico de desglose de canales reales
-    count_mesa = db.query(Pedido).filter(Pedido.tipo == "mesa", Pedido.estado_pago == "PAGADO").count()
-    count_delivery = db.query(Pedido).filter(Pedido.tipo == "delivery", Pedido.estado_pago == "PAGADO").count()
-    count_llevar = db.query(Pedido).filter(Pedido.tipo == "llevar", Pedido.estado_pago == "PAGADO").count()
+    def count_channel(channel_name: str) -> int:
+        if cat_ids is not None and not cat_ids:
+            return 0
+        q = db.query(func.count(func.distinct(Pedido.id))).filter(
+            Pedido.tipo == channel_name,
+            Pedido.estado_pago == "PAGADO",
+        )
+        if cat_ids is not None:
+            q = q.join(DetallePedido, Pedido.id == DetallePedido.pedido_id).join(
+                Producto, Producto.id == DetallePedido.producto_id
+            ).filter(Producto.categoria_id.in_(cat_ids))
+        q = _apply_metric_payment_filter(q, metodo_pago)
+        return int(q.scalar() or 0)
+
+    count_mesa = count_channel("mesa")
+    count_delivery = count_channel("delivery")
+    count_llevar = count_channel("llevar")
     total_canales = count_mesa + count_delivery + count_llevar
 
     pct_mesa = int(round((count_mesa / total_canales) * 100)) if total_canales else 0
@@ -392,7 +490,11 @@ def get_dashboard_stats(
         "delivery_pedidos": delivery_count,
         "mesas_ocupadas": mesas_ocupadas_count,
         "total_mesas": total_mesas,
-        "top_productos": top_list
+        "top_productos": top_list,
+        "filtros_aplicados": {
+            "categoria": active_category_filter,
+            "metodo_pago": active_payment_filter,
+        },
     }
 
 # ==================== TOUR BIENVENIDA ONBOARDING ====================
@@ -752,6 +854,13 @@ def list_productos_admin(db: Session = Depends(get_db)):
 async def create_producto_admin(data: ProductoCreate, db: Session = Depends(get_db)):
     validate_product_json(data.extras_json, "extras_json")
     validate_product_json(data.media_json, "media_json")
+    if not db.query(Categoria).filter(Categoria.id == data.categoria_id).first():
+        raise HTTPException(status_code=404, detail="Categoría no encontrada")
+    if data.precio_promocion is not None and data.precio_promocion > data.precio:
+        raise HTTPException(
+            status_code=422,
+            detail="El precio promocional no puede ser mayor al precio base.",
+        )
     nuevo = Producto(
         nombre=data.nombre,
         descripcion=data.descripcion,
@@ -786,6 +895,18 @@ async def update_producto_admin(
         raise HTTPException(status_code=404, detail="Producto no encontrado")
     validate_product_json(data.extras_json, "extras_json")
     validate_product_json(data.media_json, "media_json")
+    if data.categoria_id is not None and not db.query(Categoria).filter(Categoria.id == data.categoria_id).first():
+        raise HTTPException(status_code=404, detail="Categoría no encontrada")
+
+    effective_price = data.precio if data.precio is not None else p.precio
+    effective_promo = (
+        data.precio_promocion if "precio_promocion" in data.model_fields_set else p.precio_promocion
+    )
+    if effective_promo is not None and effective_price is not None and float(effective_promo) > float(effective_price):
+        raise HTTPException(
+            status_code=422,
+            detail="El precio promocional no puede ser mayor al precio base.",
+        )
     
     if data.nombre is not None: p.nombre = data.nombre
     if data.descripcion is not None: p.descripcion = data.descripcion
@@ -847,7 +968,11 @@ async def delete_producto_admin(
 
 # ==================== CONFIGURACIONES GLOBALES (HISTORIA & REDES) ====================
 @router.post("/configuraciones")
-async def update_configuracion_admin(data: ConfiguracionUpdate, db: Session = Depends(get_db)):
+async def update_configuracion_admin(
+    data: ConfiguracionUpdate,
+    db: Session = Depends(get_db),
+    current_user=Depends(require_roles(["admin", "supervisor"])),
+):
     validate_configuracion(data)
     set_configuracion(db, data)
     if data.clave == "tasa_cambio_bs":
@@ -862,13 +987,28 @@ async def update_configuracion_admin(data: ConfiguracionUpdate, db: Session = De
             db.add(Configuracion(clave="tasa_actualizada_at", valor=timestamp))
         else:
             updated_at.valor = timestamp
+    record_audit(
+        db=db,
+        accion="CONFIG_UPDATE",
+        usuario=current_user.nombre_usuario,
+        usuario_id=current_user.id,
+        recurso="configuraciones",
+        recurso_id=data.clave,
+        detalle=f"Configuración '{data.clave}' actualizada",
+        datos_nuevos={"clave": data.clave, "valor": data.valor},
+        auto_commit=False,
+    )
     db.commit()
     await ws_manager.broadcast("CONFIGURACION_ACTUALIZADA", {"clave": data.clave, "valor": data.valor})
     return {"clave": data.clave, "valor": data.valor}
 
 
 @router.post("/configuraciones/lote")
-async def update_configuraciones_batch(data: ConfiguracionBatchUpdate, db: Session = Depends(get_db)):
+async def update_configuraciones_batch(
+    data: ConfiguracionBatchUpdate,
+    db: Session = Depends(get_db),
+    current_user=Depends(require_roles(["admin", "supervisor"])),
+):
     keys = [item.clave for item in data.configuraciones]
     if len(keys) != len(set(keys)):
         raise HTTPException(status_code=422, detail="No se permiten claves duplicadas en el mismo guardado.")
@@ -883,6 +1023,16 @@ async def update_configuraciones_batch(data: ConfiguracionBatchUpdate, db: Sessi
             clave="tasa_actualizada_at",
             valor=datetime.now(timezone.utc).isoformat(),
         ))
+    record_audit(
+        db=db,
+        accion="CONFIG_BATCH_UPDATE",
+        usuario=current_user.nombre_usuario,
+        usuario_id=current_user.id,
+        recurso="configuraciones",
+        detalle=f"Actualización en lote de {len(keys)} configuraciones",
+        datos_nuevos={"claves": keys},
+        auto_commit=False,
+    )
     db.commit()
     await ws_manager.broadcast("CONFIGURACION_ACTUALIZADA", {"claves": keys})
     return {"guardadas": keys}
@@ -960,12 +1110,31 @@ def update_usuario_admin(
     db: Session = Depends(get_db),
     user = Depends(require_roles(["admin", "supervisor"]))
 ):
-    u = db.query(Usuario).filter(Usuario.id == usuario_id).first()
+    u = db.query(Usuario).filter(Usuario.id == usuario_id).with_for_update().first()
     if not u:
         raise HTTPException(status_code=404, detail="Usuario no encontrado")
     if data.rol == "admin" and user.rol != "admin":
         raise HTTPException(status_code=403, detail="Solo un administrador puede asignar el rol admin.")
-    
+    if u.id == user.id and data.activo is False:
+        raise HTTPException(status_code=409, detail="No puedes desactivar tu propia cuenta mientras estás autenticado.")
+
+    removing_admin = (
+        u.rol == "admin"
+        and u.activo
+        and ((data.rol is not None and data.rol != "admin") or data.activo is False)
+    )
+    if removing_admin:
+        active_admins = db.query(Usuario).filter(Usuario.rol == "admin", Usuario.activo == True).count()
+        if active_admins <= 1:
+            raise HTTPException(
+                status_code=409,
+                detail="Debe existir al menos un administrador activo en el sistema.",
+            )
+
+    if data.email is not None and data.email != u.email:
+        if db.query(Usuario).filter(Usuario.email == data.email, Usuario.id != u.id).first():
+            raise HTTPException(status_code=400, detail=f"El correo '{data.email}' ya está registrado.")
+
     if data.nombre is not None: u.nombre = data.nombre
     if data.apellido is not None: u.apellido = data.apellido
     if data.email is not None: u.email = data.email

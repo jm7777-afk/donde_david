@@ -161,14 +161,13 @@ if (typeof document !== "undefined") {
   cleanHeaderSubtitles();
   document.addEventListener("DOMContentLoaded", cleanHeaderSubtitles);
   window.addEventListener("load", cleanHeaderSubtitles);
-  setInterval(cleanHeaderSubtitles, 200);
 }
 
 // Invalidador automático de caches obsoletos en el cliente
 if (typeof window !== "undefined" && "caches" in window) {
   caches.keys().then(names => {
     names.forEach(name => {
-      if (name.startsWith("donde-david-pwa-") && name !== "donde-david-pwa-v25") {
+      if (name.startsWith("donde-david-pwa-") && name !== "donde-david-pwa-v33") {
         caches.delete(name);
       }
     });

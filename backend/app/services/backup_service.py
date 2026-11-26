@@ -5,7 +5,7 @@ Soporta generación de copias de seguridad consistentes para SQLite y PostgreSQL
 cálculo de integridad criptográfica (SHA-256), rotación automática de retención
 y restauración con punto de control previo (Pre-Restore Safety Checkpoint).
 """
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 import hashlib
 import json
 import logging
@@ -15,7 +15,7 @@ import sqlite3
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
-from sqlalchemy import text
+from sqlalchemy import Boolean, Date, DateTime, Integer, text
 from sqlalchemy.orm import Session
 
 from backend.app.core.config import settings
@@ -251,23 +251,81 @@ def restore_database_backup(
             "timestamp": datetime.now(timezone.utc).isoformat()
         }
     else:
-        # Restauración de volcado estructurado
+        # Restauración de volcado estructurado (PostgreSQL)
         with open(backup_path, "r", encoding="utf-8") as f:
             data = json.load(f)
 
-        tables = data.get("tables", {})
-        # Restauración dentro de transacción atómica
-        for table_name, rows in tables.items():
-            db.execute(text(f'TRUNCATE TABLE "{table_name}" CASCADE'))
-            for row in rows:
-                cols = ", ".join([f'"{k}"' for k in row.keys()])
-                placeholders = ", ".join([f":{k}" for k in row.keys()])
-                db.execute(text(f'INSERT INTO "{table_name}" ({cols}) VALUES ({placeholders})'), row)
-        db.commit()
+        tables_payload = data.get("tables")
+        if not isinstance(tables_payload, dict):
+            raise ValueError("Formato de respaldo inválido: falta el mapa 'tables'.")
+
+        metadata_tables = Base.metadata.tables
+        unknown_tables = [name for name in tables_payload if name not in metadata_tables]
+        if unknown_tables:
+            raise ValueError(f"El respaldo contiene tablas no reconocidas: {', '.join(sorted(unknown_tables))}")
+
+        def _coerce_column_value(column, value: Any) -> Any:
+            if value is None:
+                return None
+            col_type = column.type
+            if isinstance(col_type, DateTime) and isinstance(value, str):
+                return datetime.fromisoformat(value)
+            if isinstance(col_type, Date) and not isinstance(col_type, DateTime) and isinstance(value, str):
+                return date.fromisoformat(value[:10])
+            if isinstance(col_type, Boolean) and isinstance(value, (int, str)):
+                if isinstance(value, str):
+                    return value.strip().lower() in ("true", "1", "yes", "si", "sí")
+                return bool(value)
+            if isinstance(col_type, Integer) and isinstance(value, str):
+                return int(value)
+            return value
+
+        sorted_tables = [t for t in Base.metadata.sorted_tables if t.name in tables_payload]
+        try:
+            for table in reversed(sorted_tables):
+                db.execute(text(f'TRUNCATE TABLE "{table.name}" RESTART IDENTITY CASCADE'))
+
+            restored_tables: List[str] = []
+            for table in sorted_tables:
+                raw_rows = tables_payload.get(table.name) or []
+                if not isinstance(raw_rows, list):
+                    raise ValueError(f"Formato inválido de filas para la tabla '{table.name}'.")
+                valid_cols = {col.name: col for col in table.columns}
+                cleaned_rows = []
+                for row in raw_rows:
+                    if not isinstance(row, dict):
+                        continue
+                    cleaned_rows.append({
+                        col_name: _coerce_column_value(valid_cols[col_name], value)
+                        for col_name, value in row.items()
+                        if col_name in valid_cols
+                    })
+                if cleaned_rows:
+                    db.execute(table.insert(), cleaned_rows)
+
+                pk_cols = [col for col in table.primary_key.columns if isinstance(col.type, Integer)]
+                if len(pk_cols) == 1:
+                    pk_name = pk_cols[0].name
+                    db.execute(
+                        text(
+                            f'SELECT setval('
+                            f'pg_get_serial_sequence(:tbl, :pk), '
+                            f'COALESCE((SELECT MAX("{pk_name}") FROM "{table.name}"), 1), '
+                            f'EXISTS(SELECT 1 FROM "{table.name}")'
+                            f')'
+                        ),
+                        {"tbl": table.name, "pk": pk_name},
+                    )
+                restored_tables.append(table.name)
+
+            db.commit()
+        except Exception:
+            db.rollback()
+            raise
 
         return {
             "mensaje": f"Restauración relacional completada desde {clean_name}.",
-            "tablas_restauradas": list(tables.keys()),
+            "tablas_restauradas": restored_tables,
             "restaurado_por": usuario,
             "timestamp": datetime.now(timezone.utc).isoformat()
         }

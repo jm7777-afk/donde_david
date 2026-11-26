@@ -1,4 +1,4 @@
-if (!Auth.requireRole("gerente")) {
+if (!Auth.requireRole("gerente", { allowAdminOverride: false })) {
   // Redirigido a /login por falta de privilegios
 } else {
   loadManagerDashboard();

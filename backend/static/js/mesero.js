@@ -3,6 +3,7 @@ let meseroPedidos = [];
 let meseroSolicitudes = [];
 let selectedPedidoForSwap = null;
 let tasaCambioBs = null;
+const meseroInFlightActions = new Set();
 
 function escapeMeseroHtml(value) {
   return String(value ?? "").replace(/[&<>"']/g, character => ({
@@ -64,9 +65,9 @@ function renderMesas() {
   let html = "";
   meseroMesas.forEach(m => {
     html += `
-      <div class="mesa-card-mesero ${m.estado}">
-        <strong style="font-size: 1.2rem; color: #fff;">Mesa #${m.numero_mesa}</strong>
-        <div style="font-size: 0.8rem; color: var(--text-muted); margin: 0.3rem 0;">${m.cliente_actual || 'Disponible'}</div>
+      <div class="mesa-card-mesero ${escapeMeseroHtml(m.estado)}">
+        <strong style="font-size: 1.2rem; color: #fff;">Mesa #${Number(m.numero_mesa)}</strong>
+        <div style="font-size: 0.8rem; color: var(--text-muted); margin: 0.3rem 0;">${escapeMeseroHtml(m.cliente_actual || 'Disponible')}</div>
         <span class="badge" style="background: ${m.estado === 'OCUPADA' ? 'var(--neon-red)' : m.estado === 'LIBRE' ? 'var(--neon-green)' : 'var(--gold-accent)'}; color: ${m.estado === 'PENDIENTE_LIMPIEZA' || m.estado === 'EN_LIMPIEZA' ? '#000' : '#fff'}; font-size: 0.7rem; padding: 0.2rem 0.5rem; border-radius: 6px;">
           ${escapeMeseroHtml(m.estado)}
         </span>
@@ -174,12 +175,13 @@ function renderPedidosActivos() {
 
     p.detalles.forEach(d => {
       const prodName = d.producto ? d.producto.nombre : '';
+      const safeLine = `${Number(d.cantidad) || 0}x ${escapeMeseroHtml(prodName)}`;
       const catName = (d.producto && d.producto.categoria) ? d.producto.categoria.nombre.toLowerCase() : '';
       
       if (catName.includes("bebida") || prodName.toLowerCase().includes("refresco") || prodName.toLowerCase().includes("jugo") || prodName.toLowerCase().includes("agua") || prodName.toLowerCase().includes("cerveza")) {
-        bebidas.push(`${d.cantidad}x ${prodName}`);
+        bebidas.push(safeLine);
       } else {
-        comidas.push(`${d.cantidad}x ${prodName}`);
+        comidas.push(safeLine);
       }
     });
 
@@ -201,7 +203,7 @@ function renderPedidosActivos() {
           <div style="font-size: 0.78rem; color: ${elapsedMinutes >= 15 ? 'var(--neon-red)' : 'var(--text-muted)'}; font-weight: 800; margin-top: 0.35rem;">
             ${elapsedMinutes >= 15 ? 'Prioridad · ' : ''}${elapsedMinutes} min transcurridos
           </div>
-          <div style="font-size: 0.85rem; color: #fff; margin-top: 0.3rem;">Cliente: <strong>${p.nombre_factura || p.nombre_cliente_delivery || 'Comensal'}</strong></div>
+          <div style="font-size: 0.85rem; color: #fff; margin-top: 0.3rem;">Cliente: <strong>${escapeMeseroHtml(p.nombre_factura || p.nombre_cliente_delivery || 'Comensal')}</strong></div>
           <div style="font-size: 0.85rem; color: var(--gold-accent); font-weight: 800;">Total: ${formatPriceDual(p.total)}</div>
           
           <!-- Bloque de Destacado de BEBIDAS para Entregas Rápidas en Mesa -->
@@ -249,9 +251,9 @@ function openCambiarMesaModal(pedidoId) {
 }
 
 async function submitCambiarMesa() {
-  if (!selectedPedidoForSwap) return;
+  if (!selectedPedidoForSwap || meseroInFlightActions.has("swap")) return;
   const nuevaMesa = parseInt(document.getElementById("swap-nueva-mesa-select").value);
-
+  meseroInFlightActions.add("swap");
   try {
     const res = await fetch(`/api/v1/mesero/pedidos/${selectedPedidoForSwap.id}/cambiar-mesa`, {
       method: "POST",
@@ -259,27 +261,40 @@ async function submitCambiarMesa() {
       body: JSON.stringify({ nueva_mesa: nuevaMesa })
     });
 
-    if (!res.ok) throw new Error("Error al reasignar mesa");
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || "Error al reasignar mesa");
+    }
     const data = await res.json();
     showToast(data.mensaje, "success");
     closeModal("cambiar-mesa-modal");
-    loadMeseroData();
+    await loadMeseroData();
   } catch (err) {
     showToast(err.message, "danger");
+  } finally {
+    meseroInFlightActions.delete("swap");
   }
 }
 
 async function marcarPedidoEntregado(pedidoId) {
+  const key = `deliver-${pedidoId}`;
+  if (meseroInFlightActions.has(key)) return;
+  meseroInFlightActions.add(key);
   try {
     const res = await fetch(`/api/v1/mesero/pedidos/${pedidoId}/marcar-entregado`, {
       method: "POST",
       headers: Auth.getHeaders()
     });
-    if (!res.ok) throw new Error("Error al actualizar estado");
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || "Error al actualizar estado");
+    }
     showToast(`Pedido #${pedidoId} entregado a la mesa`, "success");
-    loadMeseroData();
+    await loadMeseroData();
   } catch (err) {
     showToast(err.message, "danger");
+  } finally {
+    meseroInFlightActions.delete(key);
   }
 }
 

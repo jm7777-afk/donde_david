@@ -44,20 +44,21 @@ El endpoint `/ws` autentica al personal antes de registrar la conexión en el ad
 
 ## Estado actual y deuda técnica conocida
 
-- Los routers de administración, caja y cliente concentran los módulos API más grandes. `services/` todavía es pequeño; no se debe trasladar lógica a servicios sin conservar los contratos HTTP y sus pruebas.
-- Los 10 bloques `<style>` de las páginas HTML ya se movieron a hojas externas; el login también quedó sin atributos de estilo. Restan 809 atributos `style` en 12 páginas y estilos en plantillas JavaScript. La migración elegida es semántica y gradual por pantalla, no una conversión masiva a clases opacas.
+- Los routers de administración, caja y cliente concentran los módulos API más grandes; la lógica transaccional compartida de pedidos, cálculo de precios, extras y bloqueo determinista de inventario se centralizó en `backend/app/services/orders.py`. Conservar los contratos HTTP y sus pruebas al refactorizar otros flujos.
+- Los 10 bloques `<style>` de las páginas HTML ya se movieron a hojas externas; el login también quedó sin atributos de estilo. Restan estilos inline puntuales en páginas heredadas y plantillas JavaScript, donde las interpolaciones de usuario y datos dinámicos ya utilizan funciones de escape HTML (`escapeAdminHtml`, `escapeCajaHtml`, `escapeKdsHtml`, `escapeMeseroHtml`, `escapeDeliveryText`, `escapeClientHtml`).
 - Los módulos JavaScript de cliente, caja y administración son los más extensos. Mantienen integración con páginas existentes, por lo que su división debe conservar orden de carga, funciones usadas desde HTML y estado compartido.
+- El límite de peticiones (`slowapi`) y los canales WebSocket (`ws_manager`) operan en memoria local; por ello `render.yaml` ejecuta Gunicorn con `--workers 1` hasta incorporar un broker Redis compartido.
 - Algunas pantallas Flutter son grandes. Ya existen límites funcionales en `screens/`, `providers/` y `widgets/`; conviene extraer componentes y lógica de estado en cambios pequeños cubiertos por pruebas.
-- La CI ejecuta pruebas Python y análisis/pruebas Flutter. La web ya valida que no se reintroduzcan bloques `<style>` y que el login migrado no tenga estilos inline; faltan pruebas de flujo en navegador y completar la migración de atributos.
+- La CI (`.github/workflows/ci.yml`) ejecuta `compileall`, `node --check` sobre `backend/static/js/`, `alembic upgrade head && alembic check`, `pytest tests -q` y análisis/pruebas Flutter (`flutter analyze` / `flutter test`).
 
 ## Convenciones para cambios
 
 1. Mantener rutas, esquemas, roles, eventos y reglas de negocio compatibles salvo cambio solicitado y probado.
-2. Separar responsabilidades por dominio; introducir servicios solo para lógica reutilizable o transacciones que necesiten pruebas independientes.
-3. En web, ubicar CSS en `backend/static/css/`, JavaScript en `backend/static/js/` y usar nombres de clases descriptivos por componente/estado. Migrar una pantalla a la vez y verificar escritorio, móvil e interacciones dinámicas.
+2. Separar responsabilidades por dominio; reutilizar `services/` (`orders.py`, `audit_service.py`, `backup_service.py`, `tables.py`, `loyalty.py`) para reglas financieras e inventario.
+3. En web, ubicar CSS en `backend/static/css/`, JavaScript en `backend/static/js/`, actualizar `?v=5.3` / caché PWA (`sw.js`) ante cambios de assets y evitar atributos `style` o bloques `<style>` en HTML.
 4. En Flutter, mantener widgets de presentación separados de acceso a API, persistencia y estado; evitar que las pantallas creen directamente múltiples clientes HTTP o sesiones.
-5. Validar backend con `python -B -m pytest -q -p no:cacheprovider tests`; validar móvil desde `mobile_app/` con `flutter analyze --no-pub` y `flutter test --no-pub`.
-6. No versionar bases locales, secretos, cachés ni resultados de compilación. Mantener los archivos de bloqueo de dependencias y las migraciones.
+5. Validar backend con `pytest tests -v`, `alembic check` y `node --check`; validar móvil desde `mobile_app/` con `flutter analyze --no-pub` y `flutter test --no-pub`.
+6. No versionar bases locales (`restaurante.db` desindexado de Git), secretos, cachés ni resultados de compilación. Mantener los archivos de bloqueo de dependencias y las migraciones.
 
 ## Orden recomendado de evolución
 
