@@ -6,9 +6,9 @@
   <title>DONDE DAVID - Fresh & Tasty!</title>
   <link rel="manifest" href="/static/manifest.json">
   <meta name="theme-color" content="#FFBC0D">
-  <link rel="stylesheet" href="/static/css/global.css?v=5.2">
-  <link rel="stylesheet" href="/static/css/toon-theme.css?v=5.2">
-  <link rel="stylesheet" href="/static/css/index.css?v=5.2">
+  <link rel="stylesheet" href="/static/css/global.css?v=5.4">
+  <link rel="stylesheet" href="/static/css/toon-theme.css?v=5.4">
+  <link rel="stylesheet" href="/static/css/index.css?v=5.4">
   
   <!-- Leaflet Maps CSS & JS para Ubicación Exacta de Delivery -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
@@ -18,8 +18,8 @@
   <!-- HTML5 QR Code Scanner para Cámara Real -->
   <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 
-  <link rel="stylesheet" href="/static/css/pages/cliente-app.css?v=5.2">
-  <link rel="stylesheet" href="/static/css/utilities.css?v=5.2">
+  <link rel="stylesheet" href="/static/css/pages/cliente-app.css?v=5.4">
+  <link rel="stylesheet" href="/static/css/utilities.css?v=5.4">
 </head>
 <body class="toon-theme"><nav id="app-sidebar"></nav>
 
@@ -92,6 +92,9 @@
         <span class="u-background-rgba-255-255-255-0-05 u-border-1px-solid-token-toon-border u-padding-0-3rem-0-7rem u-border-radius-20px u-font-size-0-75rem u-font-weight-800 u-white-space-nowrap u-color-hex-fff">⚡ Preparación &lt;12 min</span>
         <span class="u-background-rgba-255-255-255-0-05 u-border-1px-solid-token-toon-border u-padding-0-3rem-0-7rem u-border-radius-20px u-font-size-0-75rem u-font-weight-800 u-white-space-nowrap u-color-hex-fff">📱 Pedido Directo Cocina</span>
       </div>
+
+      <!-- Notificaciones de Promociones y Combos Activos -->
+      <div id="client-promo-notifications" class="promo-notifications-bar u-display-none" aria-live="polite"></div>
 
       <!-- CARRUSEL INTERACTIVO DE FOTOS DE PRODUCTOS QUE ABRE EL MODAL AL HACER CLIC -->
       <div id="home-promo-banner-container" class="u-margin-bottom-1-25rem">
@@ -197,17 +200,17 @@
       <div id="section-checkout-mesa" class="checkout-step-card checkout-table-card">
         <div class="u-display-flex u-justify-content-space-between u-align-items-center">
           <h4 class="u-color-token-cyan-accent u-font-weight-800 u-margin-0 u-font-size-0-95rem">📱 UBICACIÓN VALIDADA POR QR</h4>
-          <button onclick="openQrScannerModal()" class="u-background-transparent u-border-1px-solid-token-cyan-accent u-color-token-cyan-accent u-font-size-0-75rem u-border-radius-12px u-padding-0-2rem-0-5rem u-cursor-pointer">📷 Escanear/Cambiar Mesa</button>
+          <button type="button" onclick="openQrScannerModal()" class="u-background-transparent u-border-1px-solid-token-cyan-accent u-color-token-cyan-accent u-font-size-0-75rem u-border-radius-12px u-padding-0-2rem-0-5rem u-cursor-pointer">📷 Escanear QR de Mesa</button>
         </div>
-        <p class="u-font-size-0-85rem u-color-hex-fff u-margin-0-5rem-0-0-75rem-0">Estás pidiendo directamente en: <strong id="checkout-mesa-name">Mesa #5</strong></p>
+        <p class="u-font-size-0-85rem u-color-hex-fff u-margin-0-5rem-0-0-75rem-0">Estás pidiendo directamente en: <strong id="checkout-mesa-name">Escanea el QR de tu mesa</strong></p>
         
         <label class="checkout-choice-label">MODALIDAD DE COBRO EN MESA</label>
         <div class="checkout-choice-grid">
           <label class="checkout-choice">
-            <input type="radio" name="modo_pago" value="PAGAR_ANTES" checked onchange="updateCheckoutPaymentFields()"> <span><strong>Pagar antes</strong><small>Pago anticipado en Caja o Pago Móvil.</small></span>
+            <input type="radio" name="modo_pago" value="PAGAR_ANTES" checked onchange="syncMesaPaymentMode(this.value)"> <span><strong>Pagar antes</strong><small>Pago anticipado en Caja o Pago Móvil.</small></span>
           </label>
           <label class="checkout-choice">
-            <input type="radio" name="modo_pago" value="PAGAR_DESPUES" onchange="updateCheckoutPaymentFields()"> <span><strong>Cuenta abierta</strong><small>Disfruta y paga en Caja al salir.</small></span>
+            <input type="radio" name="modo_pago" value="PAGAR_DESPUES" onchange="syncMesaPaymentMode(this.value)"> <span><strong>Pagar después (Cuenta abierta)</strong><small>Disfruta y paga en Caja al salir.</small></span>
           </label>
         </div>
       </div>
@@ -294,6 +297,21 @@
       </header>
       <section class="checkout-step-card checkout-pay-section">
         <div class="checkout-step-title"><span>4</span><div><h3>Elige el método de pago</h3><small>El estado se actualizará en seguimiento cuando Caja lo confirme.</small></div></div>
+        <div id="checkout-step4-mesa-mode" class="checkout-step4-mesa-card u-display-none">
+          <div class="u-display-flex u-justify-content-space-between u-align-items-center u-margin-bottom-0-5rem">
+            <strong class="u-color-token-cyan-accent u-font-size-0-85rem">🍽️ MESA ASIGNADA POR QR</strong>
+            <span id="checkout-step4-mesa-label" class="u-color-token-gold-accent u-font-weight-900 u-font-size-0-9rem">Sin mesa</span>
+          </div>
+          <label class="checkout-choice-label">MODALIDAD DE COBRO EN MESA</label>
+          <div class="checkout-choice-grid">
+            <label class="checkout-choice">
+              <input type="radio" name="modo_pago_step4" value="PAGAR_ANTES" checked onchange="syncMesaPaymentMode(this.value)"> <span><strong>Pagar antes</strong><small>Caja o Pago Móvil ahora.</small></span>
+            </label>
+            <label class="checkout-choice">
+              <input type="radio" name="modo_pago_step4" value="PAGAR_DESPUES" onchange="syncMesaPaymentMode(this.value)"> <span><strong>Pagar después</strong><small>Cuenta abierta al salir.</small></span>
+            </label>
+          </div>
+        </div>
         <div class="form-group" id="checkout-payment-method-group">
           <label for="checkout-payment">FORMA DE PAGO</label>
           <select id="checkout-payment" class="form-control" onchange="updateCheckoutPaymentFields()">
@@ -417,44 +435,58 @@
 
     <!-- MODAL DE REGISTRO DE CLIENTE USUARIO DENTRO DE LA PLATAFORMA -->
     <div class="product-modal-backdrop" id="client-register-modal">
-      <div class="product-modal-card u-max-width-450px u-padding-1-5rem">
-        <button class="modal-close-btn" onclick="closeModal('client-register-modal')">&times;</button>
-        <div class="u-text-align-center u-margin-bottom-1rem">
-          <span class="u-font-size-2-5rem">🎁</span>
-          <h3 class="u-font-size-1-3rem u-font-weight-900 u-color-token-gold-accent u-margin-top-0-2rem">REGISTRO DE CLIENTE USUARIO</h3>
-          <p class="u-color-token-text-muted u-font-size-0-82rem">Regístrate para acumular puntos y disfrutar de ofertas exclusivas.</p>
+      <div class="product-modal-card auth-modal-card">
+        <button class="modal-close-btn" type="button" onclick="closeModal('client-register-modal')">&times;</button>
+        <div class="auth-mode-tabs">
+          <button type="button" class="auth-mode-tab" onclick="closeModal('client-register-modal'); openModal('client-login-modal')">🔑 Iniciar Sesión</button>
+          <button type="button" class="auth-mode-tab is-active">🎁 Crear Cuenta (+50 Pts)</button>
+        </div>
+        <div class="auth-modal-header">
+          <div class="auth-modal-icon">🎁</div>
+          <h3 class="u-font-size-1-3rem u-font-weight-900 u-color-token-gold-accent u-margin-top-0-2rem">CREA TU CUENTA CLIENTE</h3>
+          <p class="u-color-token-text-muted u-font-size-0-82rem">Acumula puntos en cada pedido y repite tus favoritos en un clic.</p>
         </div>
 
-        <div class="form-group u-margin-bottom-0-75rem">
-          <label class="u-color-token-text-primary u-font-size-0-8rem">Nombre</label>
-          <input type="text" id="reg-nombre" class="form-control" placeholder="Ej. Carlos">
+        <div class="auth-form-grid-2">
+          <div class="form-group u-margin-bottom-0-75rem">
+            <label for="reg-nombre" class="u-color-token-text-primary u-font-size-0-8rem">Nombre</label>
+            <input type="text" id="reg-nombre" class="form-control" autocomplete="given-name" placeholder="Ej. Carlos">
+          </div>
+          <div class="form-group u-margin-bottom-0-75rem">
+            <label for="reg-apellido" class="u-color-token-text-primary u-font-size-0-8rem">Apellido</label>
+            <input type="text" id="reg-apellido" class="form-control" autocomplete="family-name" placeholder="Ej. Rodríguez">
+          </div>
         </div>
         <div class="form-group u-margin-bottom-0-75rem">
-          <label class="u-color-token-text-primary u-font-size-0-8rem">Apellido</label>
-          <input type="text" id="reg-apellido" class="form-control" placeholder="Ej. Rodríguez">
+          <label for="reg-email" class="u-color-token-text-primary u-font-size-0-8rem">Correo Electrónico</label>
+          <input type="email" id="reg-email" class="form-control" autocomplete="email" placeholder="carlos@mail.com">
         </div>
-        <div class="form-group u-margin-bottom-0-75rem">
-          <label class="u-color-token-text-primary u-font-size-0-8rem">Correo Electrónico</label>
-          <input type="email" id="reg-email" class="form-control" placeholder="carlos@mail.com">
-        </div>
-        <div class="form-group u-margin-bottom-0-75rem">
-          <label class="u-color-token-text-primary u-font-size-0-8rem">Teléfono de Contacto</label>
-          <input type="text" id="reg-tel" class="form-control" placeholder="+502 5123 4567">
-        </div>
-        <div class="form-group u-margin-bottom-0-75rem">
-          <label class="u-color-token-text-primary u-font-size-0-8rem">Nombre de Usuario</label>
-          <input type="text" id="reg-username" class="form-control" placeholder="carlos_david">
+        <div class="auth-form-grid-2">
+          <div class="form-group u-margin-bottom-0-75rem">
+            <label for="reg-tel" class="u-color-token-text-primary u-font-size-0-8rem">Teléfono</label>
+            <input type="tel" id="reg-tel" class="form-control" autocomplete="tel" placeholder="+58 414 123 4567">
+          </div>
+          <div class="form-group u-margin-bottom-0-75rem">
+            <label for="reg-username" class="u-color-token-text-primary u-font-size-0-8rem">Usuario</label>
+            <input type="text" id="reg-username" class="form-control" autocomplete="username" placeholder="carlos_david">
+          </div>
         </div>
         <div class="form-group u-margin-bottom-1-25rem">
-          <label class="u-color-token-text-primary u-font-size-0-8rem">Contraseña</label>
-          <input type="password" id="reg-pass" class="form-control" placeholder="Mínimo 12 caracteres" minlength="12" maxlength="72">
+          <label for="reg-pass" class="u-color-token-text-primary u-font-size-0-8rem">Contraseña</label>
+          <div class="password-input-wrapper">
+            <input type="password" id="reg-pass" class="form-control" placeholder="Mínimo 12 caracteres" minlength="12" maxlength="72" autocomplete="new-password">
+            <button type="button" class="password-toggle-btn" id="toggle-client-reg-pass" onclick="toggleClientPasswordVisibility('reg-pass', 'toggle-client-reg-pass')" aria-label="Mostrar u ocultar contraseña" aria-pressed="false">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+            </button>
+          </div>
+          <small class="auth-pass-hint">Usa al menos 12 caracteres entre letras y números.</small>
         </div>
 
-        <button class="btn-gold u-width-100 u-font-size-1-1rem u-padding-0-85rem" onclick="submitClientUserRegistration()">
+        <button type="button" class="btn-gold u-width-100 u-font-size-1-1rem u-padding-0-85rem" onclick="submitClientUserRegistration()">
           🚀 REGISTRARME Y GANAR +50 PUNTOS
         </button>
 
-        <div class="u-text-align-center u-margin-top-1rem u-font-size-0-85rem">
+        <div class="auth-modal-footer">
           <span class="u-color-token-text-muted">¿Ya tienes cuenta?</span>
           <a onclick="closeModal('client-register-modal'); openModal('client-login-modal')" class="u-color-token-cyan-accent u-font-weight-800 u-cursor-pointer u-margin-left-0-3rem">Iniciar Sesión</a>
         </div>
@@ -463,23 +495,29 @@
 
     <!-- MODAL DE INICIO DE SESIÓN CLIENTE -->
     <div class="product-modal-backdrop" id="client-login-modal">
-      <div class="product-modal-card u-max-width-440px u-padding-1-5rem">
-        <button class="modal-close-btn" onclick="closeModal('client-login-modal')">&times;</button>
-        <div class="u-text-align-center u-margin-bottom-1rem">
-          <span class="u-font-size-2-5rem">🔑</span>
-          <h3 class="u-font-size-1-3rem u-font-weight-900 u-color-token-gold-accent u-margin-top-0-2rem">INICIAR SESIÓN</h3>
-          <p class="u-color-token-text-muted u-font-size-0-82rem">Ingresa a tu cuenta para acumular puntos y repetir tus pedidos en 1-clic.</p>
+      <div class="product-modal-card auth-modal-card">
+        <button class="modal-close-btn" type="button" onclick="closeModal('client-login-modal')">&times;</button>
+        <div class="auth-mode-tabs">
+          <button type="button" class="auth-mode-tab is-active">🔑 Iniciar Sesión</button>
+          <button type="button" class="auth-mode-tab" onclick="closeModal('client-login-modal'); openModal('client-register-modal')">🎁 Crear Cuenta (+50 Pts)</button>
+        </div>
+        <div class="auth-modal-header">
+          <div class="auth-modal-icon">🔑</div>
+          <h3 class="u-font-size-1-3rem u-font-weight-900 u-color-token-gold-accent u-margin-top-0-2rem">BIENVENIDO DE NUEVO</h3>
+          <p class="u-color-token-text-muted u-font-size-0-82rem">Ingresa para canjear puntos y repetir tus pedidos favoritos.</p>
         </div>
 
         <div class="form-group u-margin-bottom-0-75rem">
-          <label class="u-color-token-text-primary u-font-size-0-8rem">Usuario o Correo Electrónico</label>
-          <input type="text" id="login-username-input" class="form-control" placeholder="Ej. carlos_david">
+          <label for="login-username-input" class="u-color-token-text-primary u-font-size-0-8rem">Usuario o Correo Electrónico</label>
+          <input type="text" id="login-username-input" class="form-control" autocomplete="username" placeholder="Ej. carlos_david">
         </div>
         <div class="form-group u-margin-bottom-0-75rem">
-          <label class="u-color-token-text-primary u-font-size-0-8rem">Contraseña</label>
+          <label for="login-pass-input" class="u-color-token-text-primary u-font-size-0-8rem">Contraseña</label>
           <div class="password-input-wrapper">
             <input type="password" id="login-pass-input" class="form-control" placeholder="••••••••" autocomplete="current-password">
-            <button type="button" class="password-toggle-btn" id="toggle-client-pass" onclick="toggleClientPasswordVisibility()" aria-label="Mostrar u ocultar contraseña">👁️</button>
+            <button type="button" class="password-toggle-btn" id="toggle-client-pass" onclick="toggleClientPasswordVisibility('login-pass-input', 'toggle-client-pass')" aria-label="Mostrar u ocultar contraseña" aria-pressed="false">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+            </button>
           </div>
         </div>
 
@@ -490,11 +528,11 @@
           </label>
         </div>
 
-        <button class="btn-gold u-width-100 u-font-size-1-1rem u-padding-0-85rem" onclick="submitClientLogin()">
+        <button type="button" class="btn-gold u-width-100 u-font-size-1-1rem u-padding-0-85rem" onclick="submitClientLogin()">
           🔑 INICIAR SESIÓN
         </button>
 
-        <div class="u-text-align-center u-margin-top-1rem u-font-size-0-85rem">
+        <div class="auth-modal-footer">
           <span class="u-color-token-text-muted">¿No tienes cuenta?</span>
           <a onclick="closeModal('client-login-modal'); openModal('client-register-modal')" class="u-color-token-cyan-accent u-font-weight-800 u-cursor-pointer u-margin-left-0-3rem">Regístrate (+50 Pts)</a>
         </div>
@@ -547,37 +585,21 @@
 
   </div>
 
-  <!-- MODAL ESCANER QR DE MESA Y USUARIOS CON CÁMARA REAL (REQUERIMIENTO #4 & #3) -->
+  <!-- MODAL ESCANER QR DE MESA CON CÁMARA REAL (SOLO MESAS REGISTRADAS O QR ESCANEADO) -->
   <div class="product-modal-backdrop" id="qr-scanner-modal">
     <div class="product-modal-card u-max-width-440px u-padding-1-75rem u-text-align-center">
-      <button class="modal-close-btn" onclick="closeQrScannerModal()">&times;</button>
+      <button type="button" class="modal-close-btn" onclick="closeQrScannerModal()">&times;</button>
       <span class="u-font-size-2-8rem">📷</span>
-      <h3 class="u-font-size-1-4rem u-font-weight-900 u-color-token-cyan-accent u-margin-top-0-3rem">ESCANEAR CÓDIGO QR</h3>
-      <p class="u-color-token-text-muted u-font-size-0-85rem u-margin-top-0-2rem u-margin-bottom-1rem">Apunta la cámara del dispositivo al código QR impreso en la mesa o carnet de usuario.</p>
+      <h3 class="u-font-size-1-4rem u-font-weight-900 u-color-token-cyan-accent u-margin-top-0-3rem">ESCANEAR CÓDIGO QR DE MESA</h3>
+      <p class="u-color-token-text-muted u-font-size-0-85rem u-margin-top-0-2rem u-margin-bottom-1rem">Apunta la cámara del dispositivo al código QR impreso en tu mesa. Solo se asignan mesas registradas por el administrador.</p>
 
       <!-- Visor de Cámara Real HTML5 QR Code -->
       <div id="qr-reader" class="u-width-100 u-max-width-320px u-min-height-200px u-margin-0-auto-1rem-auto u-border-radius-12px u-overflow-hidden u-border-2px-solid-token-cyan-accent u-background-hex-000 u-box-shadow-0-0-20px-rgba-0-245-212-0-3"></div>
 
-      <div class="form-group u-margin-1-25rem-0-0-8rem-0">
-        <label class="u-font-size-0-85rem u-font-weight-700 u-color-token-gold-accent">SELECCIÓN MANUAL DE MESA (1 A 20):</label>
-        <select id="client-scanner-table-select" class="form-control u-font-size-1-1rem u-font-weight-900 u-text-align-center u-color-token-gold-accent">
-          <option value="1">Mesa #1</option>
-          <option value="2">Mesa #2</option>
-          <option value="3">Mesa #3</option>
-          <option value="4">Mesa #4</option>
-          <option value="5" selected>Mesa #5</option>
-          <option value="6">Mesa #6</option>
-          <option value="7">Mesa #7</option>
-          <option value="8">Mesa #8</option>
-          <option value="9">Mesa #9</option>
-          <option value="10">Mesa #10</option>
-          <option value="11">Mesa #11</option>
-          <option value="12">Mesa #12</option>
-          <option value="15">Mesa #15</option>
-          <option value="20">Mesa #20</option>
-        </select>
+      <div id="qr-scanner-admin-status" class="qr-admin-status-box">
+        Verificando mesas registradas por el restaurante…
       </div>
-      <button class="btn-gold u-width-100 u-font-size-1-05rem" onclick="confirmQrScannerSelection()">✅ VALIDAR SELECCIÓN DE MESA</button>
+      <button type="button" class="btn btn-outline u-width-100" onclick="startRealCameraQrScanner()">🔄 Reintentar cámara QR</button>
     </div>
   </div>
 
@@ -728,46 +750,34 @@
       </div>
     </div>
   </div>
-  <!-- BOTÓN FLOTANTE CHATBOT IA DAVIDBOT (ESTILO GUSTICOS VALENCIA) -->
-  <div class="fab-chatbot" onclick="openModal('chatbot-modal')" title="Asistente Virtual DavidBot 💬">
-    💬
-  </div>
-
-  <!-- MODAL ASISTENTE VIRTUAL CHATBOT -->
-  <div class="product-modal-backdrop" id="chatbot-modal">
-    <div class="product-modal-card u-max-width-440px u-padding-1-5rem">
-      <button class="modal-close-btn" onclick="closeModal('chatbot-modal')">&times;</button>
-      <div class="u-display-flex u-align-items-center u-gap-0-65rem u-border-bottom-1px-solid-token-toon-border u-padding-bottom-0-75rem u-margin-bottom-1rem">
-        <span class="u-font-size-2rem">🤖</span>
+  <!-- MODAL GRUPO DE PRODUCTOS EN PROMOCIÓN -->
+  <div class="product-modal-backdrop" id="promo-products-modal">
+    <div class="product-modal-card promo-group-modal-card">
+      <button type="button" class="modal-close-btn" aria-label="Cerrar promoción" onclick="closeModal('promo-products-modal')">&times;</button>
+      <div class="promo-group-hero">
+        <img id="promo-modal-banner" class="promo-group-thumb" src="/static/img/logo.png" alt="Promoción">
         <div>
-          <h3 class="u-font-size-1-2rem u-font-weight-900 u-color-token-gold-accent u-margin-0">DAVIDBOT • ASISTENTE VIRTUAL</h3>
-          <small class="u-color-token-cyan-accent u-font-weight-800 u-font-size-0-72rem">Respuestas instantáneas en vivo</small>
+          <span id="promo-modal-discount" class="badge">🔥 PROMO</span>
+          <h3 id="promo-modal-title" class="u-font-size-1-2rem u-font-weight-900 u-color-token-gold-accent promo-group-title">Promoción activa</h3>
+          <p id="promo-modal-desc" class="u-color-token-text-muted u-font-size-0-82rem u-margin-0"></p>
+          <small id="promo-modal-coupon" class="u-color-token-cyan-accent u-font-weight-800"></small>
         </div>
       </div>
-
-      <div id="chat-messages-container" class="u-max-height-260px u-overflow-y-auto u-display-flex u-flex-direction-column u-gap-0-65rem u-margin-bottom-1rem u-padding-right-0-3rem">
-        <div class="u-background-rgba-255-255-255-0-06 u-padding-0-75rem u-border-radius-12px u-font-size-0-85rem u-color-hex-fff u-align-self-flex-start u-border-1px-solid-token-toon-border">
-          ¡Hola! Soy <strong>DavidBot</strong> 🍔. ¿En qué puedo ayudarte hoy? Puedes preguntarme sobre promociones, recomendaciones de la casa o el estado de tu pedido.
-        </div>
-      </div>
-
-      <div class="u-display-flex u-gap-0-5rem">
-        <input type="text" id="chat-input-msg" class="form-control" placeholder="Escribe tu consulta aquí..." onkeypress="if(event.key==='Enter') sendChatbotMessage()">
-        <button class="btn-gold u-padding-0-6rem-1rem u-min-width-fit-content" onclick="sendChatbotMessage()">Enviar</button>
-      </div>
+      <div id="promo-group-products-list" class="promo-group-products-list"></div>
+      <button type="button" id="promo-add-all-btn" class="btn-gold u-width-100" onclick="addAllPromoGroupToCart()">🛒 AGREGAR GRUPO AL CARRITO</button>
     </div>
   </div>
 
   <!-- Driver.js Library script para Tour Interactivo de Clientes -->
   <script src="https://cdn.jsdelivr.net/npm/driver.js@1.3.1/dist/driver.js.iife.js"></script>
 
-  <script src="/static/js/auth.js?v=5.3"></script>
-  <script src="/static/js/websocket.js?v=5.3"></script>
-  <script src="/static/js/cliente-toon.js?v=5.3"></script>
-  <script src="/static/js/appShell.js?v=5.3"></script>
+  <script src="/static/js/auth.js?v=5.4"></script>
+  <script src="/static/js/websocket.js?v=5.4"></script>
+  <script src="/static/js/cliente-toon.js?v=5.4"></script>
+  <script src="/static/js/appShell.js?v=5.4"></script>
   <script>
     if ("serviceWorker" in navigator && (location.protocol === "https:" || location.hostname === "localhost" || location.hostname === "127.0.0.1")) {
-      navigator.serviceWorker.register("/static/sw.js?v=5.3", { scope: "/static/" })
+      navigator.serviceWorker.register("/static/sw.js?v=5.4", { scope: "/static/" })
         .then(reg => {
           reg.update();
         })
@@ -834,7 +844,7 @@
       }
     }
 
-    function handleScannedQrResult(qrData) {
+    async function handleScannedQrResult(qrData) {
       try {
         let mesaVal = null;
         if (qrData.includes("mesa=")) {
@@ -844,45 +854,35 @@
           mesaVal = parseInt(qrData).toString();
         }
 
-        if (mesaVal) {
-          currentDetectedMesa = mesaVal;
-          document.getElementById("current-table-indicator").innerText = `📷 QR MESA #${mesaVal}`;
-          document.getElementById("checkout-mesa-name").innerText = `Mesa #${mesaVal}`;
-          if (document.getElementById("client-scanner-table-select")) {
-            document.getElementById("client-scanner-table-select").value = mesaVal;
-          }
-          showToast(`📸 QR Escaneado: Mesa #${mesaVal}`, "success");
-        } else {
+        if (!mesaVal) {
           showToast(`📸 QR Escaneado: ${qrData}`, "info");
+          closeQrScannerModal();
+          return;
         }
-      } catch(e) {
-        showToast(`📸 QR Escaneado: ${qrData}`, "info");
-      }
-      closeQrScannerModal();
-    }
-
-    async function confirmQrScannerSelection() {
-      const newMesa = document.getElementById("client-scanner-table-select").value;
-
-      if (currentPendingOrderId) {
-        try {
+        if (typeof isAdminConfiguredTable === "function" && !isAdminConfiguredTable(mesaVal)) {
+          showToast(`La Mesa #${mesaVal} no está registrada por el administrador.`, "danger");
+          closeQrScannerModal();
+          return;
+        }
+        if (currentPendingOrderId) {
           const res = await fetch(`/api/v1/cliente/pedidos/${currentPendingOrderId}/cambiar-mesa`, {
             method: "POST",
             headers: Auth.getHeaders(),
-            body: JSON.stringify({ nueva_mesa: parseInt(newMesa) })
+            body: JSON.stringify({ nueva_mesa: parseInt(mesaVal, 10) })
           });
           const data = await res.json();
           if (!res.ok) throw new Error(data.detail || "No se pudo cambiar la mesa.");
-        } catch (error) {
-          showToast(error.message || "No se pudo cambiar la mesa.", "danger");
-          return;
         }
+        if (typeof applyQrMesaSession === "function") {
+          applyQrMesaSession(mesaVal);
+        } else {
+          currentDetectedMesa = mesaVal;
+          isTableQrSession = true;
+        }
+        showToast(`📸 QR Escaneado: Mesa #${mesaVal}`, "success");
+      } catch(e) {
+        showToast(e.message || `No se pudo validar la mesa escaneada.`, "danger");
       }
-
-      currentDetectedMesa = newMesa;
-      document.getElementById("current-table-indicator").innerText = `📷 QR MESA #${newMesa}`;
-      document.getElementById("checkout-mesa-name").innerText = `Mesa #${newMesa}`;
-      showToast(`Mesa actualizada con éxito a Mesa #${newMesa}`, "success");
       closeQrScannerModal();
     }
 

@@ -80,6 +80,10 @@ document.addEventListener("DOMContentLoaded", () => {
       loadDashboardStats();
       loadMesas();
       loadInsumos();
+    } else if (event === "CONFIGURACION_ACTUALIZADA") {
+      loadPortalConfigsAdmin();
+    } else if (event === "PROMOCIONES_ACTUALIZADAS") {
+      loadPromosAdmin();
     }
   });
 });
@@ -591,6 +595,46 @@ async function loadPromosAdmin() {
   }
 }
 
+let promoSelectedProductIds = new Set();
+
+function renderPromoProductsPicker() {
+  const picker = document.getElementById("promo-products-picker");
+  const counter = document.getElementById("promo-products-selected-count");
+  if (counter) {
+    counter.textContent = `${promoSelectedProductIds.size} seleccionado(s)`;
+  }
+  if (!picker) return;
+  const query = (document.getElementById("promo-products-search")?.value || "").trim().toLowerCase();
+  const list = (adminProducts || []).filter(p => !query || String(p.nombre || "").toLowerCase().includes(query));
+  if (!list.length) {
+    picker.innerHTML = `<div style="padding:0.75rem;text-align:center;color:var(--text-muted);font-size:0.85rem;">No hay productos que coincidan.</div>`;
+    return;
+  }
+  picker.innerHTML = list.map(p => {
+    const checked = promoSelectedProductIds.has(Number(p.id)) ? "checked" : "";
+    const price = Number(p.precio_promocion || p.precio || 0).toFixed(2);
+    return `
+      <label class="promo-product-row">
+        <span>
+          <strong>${escapeAdminHtml(p.nombre)}</strong>
+          <small style="display:block;color:var(--text-muted)">$${price}${p.disponible ? "" : " · No disponible"}</small>
+        </span>
+        <input type="checkbox" ${checked} onchange="togglePromoProductSelection(${Number(p.id)}, this.checked)">
+      </label>
+    `;
+  }).join("");
+}
+
+function togglePromoProductSelection(productId, checked) {
+  const id = Number(productId);
+  if (checked) promoSelectedProductIds.add(id);
+  else promoSelectedProductIds.delete(id);
+  const counter = document.getElementById("promo-products-selected-count");
+  if (counter) {
+    counter.textContent = `${promoSelectedProductIds.size} seleccionado(s)`;
+  }
+}
+
 function renderPromosAdmin() {
   const tbody = document.getElementById("promos-tbody");
   if (!tbody) return;
@@ -599,11 +643,18 @@ function renderPromosAdmin() {
   adminPromos.forEach(p => {
     const rawImage = String(p.banner_url || "");
     const img = /^(https:\/\/|\/static\/)/i.test(rawImage) ? rawImage : "/static/img/logo.png";
+    const linkedProducts = Array.isArray(p.productos) ? p.productos : [];
+    const linkedLabel = linkedProducts.length
+      ? `${linkedProducts.length} prod.: ${linkedProducts.slice(0, 2).map(prod => escapeAdminHtml(prod.nombre)).join(", ")}${linkedProducts.length > 2 ? "…" : ""}`
+      : "Sin productos asignados";
     html += `
       <tr style="border-bottom: 1px solid var(--toon-border);">
         <td style="padding: 0.75rem;"><img src="${escapeAdminHtml(img)}" alt="${escapeAdminHtml(p.titulo)}" style="width: 60px; height: 40px; border-radius: 6px; object-fit: cover;"></td>
-        <td style="padding: 0.75rem; font-weight: 800; color: #fff;">${escapeAdminHtml(p.titulo)}</td>
+        <td style="padding: 0.75rem; font-weight: 800; color: #fff; cursor:pointer;" onclick="openEditPromo(${Number(p.id)})">${escapeAdminHtml(p.titulo)}</td>
         <td style="padding: 0.75rem; color: var(--text-muted); font-size: 0.85rem;">${escapeAdminHtml(p.descripcion || "")}</td>
+        <td style="padding: 0.75rem;">
+          <button type="button" class="btn btn-outline" style="padding: 0.3rem 0.6rem; font-size: 0.75rem;" onclick="openEditPromo(${Number(p.id)})">📦 ${linkedLabel}</button>
+        </td>
         <td style="padding: 0.75rem; font-weight: 900; color: var(--gold-accent);">${Number(p.descuento_pct) || 0}% OFF</td>
         <td style="padding: 0.75rem;"><span class="badge" style="background: var(--cyan-accent); color: #000; font-weight: 800;">${escapeAdminHtml(p.codigo_cupon || "Sin código")}</span></td>
         <td style="padding: 0.75rem; white-space:nowrap;">
@@ -614,11 +665,12 @@ function renderPromosAdmin() {
       </tr>
     `;
   });
-  tbody.innerHTML = html || `<tr><td colspan="6" style="padding:1rem;text-align:center;color:var(--text-muted)">No hay promociones. Crea una para publicarla en ambos carruseles.</td></tr>`;
+  tbody.innerHTML = html || `<tr><td colspan="7" style="padding:1rem;text-align:center;color:var(--text-muted)">No hay promociones. Crea una para publicarla en ambos carruseles.</td></tr>`;
 }
 
 function openNewPromoModal() {
   editingPromoId = null;
+  promoSelectedProductIds = new Set();
   document.getElementById("promo-modal-title").textContent = "🔥 NUEVA PROMOCIÓN";
   document.getElementById("promo-submit-btn").textContent = "GUARDAR PROMOCIÓN";
   document.getElementById("promo-titulo").value = "";
@@ -627,6 +679,8 @@ function openNewPromoModal() {
   document.getElementById("promo-codigo").value = "";
   document.getElementById("promo-img").value = "";
   document.getElementById("promo-activo").checked = true;
+  if (document.getElementById("promo-products-search")) document.getElementById("promo-products-search").value = "";
+  renderPromoProductsPicker();
   openModal("promo-modal");
 }
 
@@ -637,6 +691,7 @@ function openEditPromo(id) {
     return;
   }
   editingPromoId = Number(promo.id);
+  promoSelectedProductIds = new Set((promo.producto_ids || []).map(Number));
   document.getElementById("promo-modal-title").textContent = `✏️ EDITAR PROMOCIÓN #${promo.id}`;
   document.getElementById("promo-submit-btn").textContent = "GUARDAR CAMBIOS";
   document.getElementById("promo-titulo").value = promo.titulo || "";
@@ -645,6 +700,8 @@ function openEditPromo(id) {
   document.getElementById("promo-codigo").value = promo.codigo_cupon || "";
   document.getElementById("promo-img").value = promo.banner_url || "";
   document.getElementById("promo-activo").checked = Boolean(promo.activo);
+  if (document.getElementById("promo-products-search")) document.getElementById("promo-products-search").value = "";
+  renderPromoProductsPicker();
   openModal("promo-modal");
 }
 
@@ -661,7 +718,8 @@ async function submitCreatePromo() {
     descuento_pct: discount,
     codigo_cupon: document.getElementById("promo-codigo").value.trim(),
     banner_url: document.getElementById("promo-img").value.trim(),
-    activo: document.getElementById("promo-activo").checked
+    activo: document.getElementById("promo-activo").checked,
+    producto_ids: Array.from(promoSelectedProductIds)
   };
 
   try {
@@ -699,6 +757,48 @@ async function deletePromo(id) {
   }
 }
 
+let currentAdminIvaActive = true;
+let currentAdminIvaRate = "16.0";
+
+function syncAdminIvaUI(ivaActivo, rateValue) {
+  currentAdminIvaActive = ivaActivo !== false && ivaActivo !== "false";
+  currentAdminIvaRate = Number.isFinite(Number(rateValue)) ? String(rateValue) : "16.0";
+  const pill = document.getElementById("admin-iva-status-pill");
+  const btn = document.getElementById("admin-iva-toggle-btn");
+  const select = document.getElementById("cfg-iva-activo");
+  if (select) select.value = currentAdminIvaActive ? "true" : "false";
+  if (pill) {
+    pill.textContent = currentAdminIvaActive ? `🟢 IVA Activo (${currentAdminIvaRate}%)` : "🔴 IVA Deshabilitado (0%)";
+    pill.classList.toggle("is-disabled", !currentAdminIvaActive);
+  }
+  if (btn) {
+    btn.textContent = currentAdminIvaActive ? "Deshabilitar IVA" : "Habilitar IVA";
+  }
+}
+
+async function toggleAdminIvaQuick() {
+  const btn = document.getElementById("admin-iva-toggle-btn");
+  const nextState = !currentAdminIvaActive;
+  if (btn) btn.disabled = true;
+  try {
+    const res = await fetch("/api/v1/admin/configuraciones", {
+      method: "POST",
+      headers: Auth.getHeaders(),
+      body: JSON.stringify({ clave: "iva_activo", valor: nextState ? "true" : "false" })
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || "No se pudo actualizar el estado del IVA.");
+    }
+    syncAdminIvaUI(nextState, currentAdminIvaRate);
+    showToast(nextState ? "🧾 IVA habilitado en todo el sistema." : "🧾 IVA deshabilitado (0%).", "success");
+  } catch (err) {
+    showToast(err.message, "danger");
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+
 /* ==================== PORTAL CONFIGS & HISTORIA & TASA BS ==================== */
 async function loadPortalConfigsAdmin() {
   try {
@@ -730,6 +830,7 @@ async function loadPortalConfigsAdmin() {
       if (document.getElementById("cfg-costo-empaque")) document.getElementById("cfg-costo-empaque").value = cfg.costo_empaque || '3.00';
       if (document.getElementById("cfg-iva-activo")) document.getElementById("cfg-iva-activo").value = (cfg.iva_activo === "false" || cfg.iva_activo === false) ? "false" : "true";
       if (document.getElementById("cfg-impuesto-porcentaje")) document.getElementById("cfg-impuesto-porcentaje").value = Number.isFinite(Number(cfg.impuesto_porcentaje)) ? cfg.impuesto_porcentaje : "16.0";
+      syncAdminIvaUI(cfg.iva_activo, cfg.impuesto_porcentaje);
       if (document.getElementById("cfg-pm-banco")) document.getElementById("cfg-pm-banco").value = cfg.pago_movil_banco || '';
       if (document.getElementById("cfg-pm-telefono")) document.getElementById("cfg-pm-telefono").value = cfg.pago_movil_telefono || '';
       if (document.getElementById("cfg-pm-rif")) document.getElementById("cfg-pm-rif").value = cfg.pago_movil_rif || '';

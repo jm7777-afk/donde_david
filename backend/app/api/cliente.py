@@ -97,14 +97,61 @@ def get_configuraciones_publicas(db: Session = Depends(get_db)):
 def get_publicaciones_publicas(db: Session = Depends(get_db)):
     return db.query(Publicacion).filter(Publicacion.activo == True).order_by(Publicacion.fecha_creacion.desc()).all()
 
+@router.get("/mesas")
+def get_mesas_publicas(db: Session = Depends(get_db)):
+    mesas = db.query(Mesa).order_by(Mesa.numero_mesa.asc()).all()
+    return [
+        {
+            "id": m.id,
+            "numero_mesa": m.numero_mesa,
+            "capacidad": m.capacidad,
+            "estado": m.estado,
+        }
+        for m in mesas
+    ]
+
+
 @router.get("/promociones")
 def get_promociones(db: Session = Depends(get_db)):
-    return (
+    promos = (
         db.query(Promocion)
         .filter(Promocion.activo == True)
         .order_by(Promocion.id.asc())
         .all()
     )
+    result = []
+    for promo in promos:
+        linked = [
+            {
+                "id": prod.id,
+                "nombre": prod.nombre,
+                "descripcion": prod.descripcion,
+                "precio": float(prod.precio or 0),
+                "precio_promocion": float(prod.precio_promocion) if prod.precio_promocion is not None else None,
+                "imagen_url": prod.imagen_url,
+                "categoria_id": prod.categoria_id,
+                "disponible": bool(prod.disponible),
+                "stock": int(prod.stock or 0),
+                "puntos_fidelidad": int(prod.puntos_fidelidad or 0),
+                "tiempo_preparacion": int(prod.tiempo_preparacion or 15),
+            }
+            for prod in (promo.productos or [])
+            if prod.activo
+        ]
+        result.append({
+            "id": promo.id,
+            "titulo": promo.titulo,
+            "descripcion": promo.descripcion,
+            "descuento_pct": float(promo.descuento_pct or 0.0),
+            "codigo_cupon": promo.codigo_cupon,
+            "banner_url": promo.banner_url,
+            "activo": bool(promo.activo),
+            "fecha_inicio": promo.fecha_inicio.isoformat() if promo.fecha_inicio else None,
+            "fecha_fin": promo.fecha_fin.isoformat() if promo.fecha_fin else None,
+            "producto_ids": [item["id"] for item in linked],
+            "productos": linked,
+        })
+    return result
 
 @router.get("/resenas", response_model=List[ResenaOut])
 def get_resenas_publicas(db: Session = Depends(get_db)):

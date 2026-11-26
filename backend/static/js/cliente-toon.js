@@ -266,13 +266,88 @@ function getDeclaredAllergens(product) {
   if (!product?.alergenos) return [];
   return String(product.alergenos).split(",").map(item => item.trim()).filter(Boolean);
 }
-function toggleClientPasswordVisibility() {
-  const input = document.getElementById("login-pass-input");
-  const btn = document.getElementById("toggle-client-pass");
+let adminConfiguredMesas = [];
+let activePromoGroup = null;
+let promoGroupQuantities = {};
+let promoNotifAnnounced = false;
+
+const CLIENT_EYE_OPEN_SVG = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>';
+const CLIENT_EYE_CLOSED_SVG = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path><line x1="1" y1="1" x2="23" y2="23"></line></svg>';
+
+function toggleClientPasswordVisibility(inputId = "login-pass-input", btnId = "toggle-client-pass") {
+  const input = document.getElementById(inputId);
+  const btn = document.getElementById(btnId);
   if (!input || !btn) return;
   const isPass = input.type === "password";
   input.type = isPass ? "text" : "password";
-  btn.textContent = isPass ? "🙈" : "👁️";
+  btn.innerHTML = isPass ? CLIENT_EYE_CLOSED_SVG : CLIENT_EYE_OPEN_SVG;
+  btn.setAttribute("aria-pressed", String(isPass));
+}
+
+function isAdminConfiguredTable(mesaNum) {
+  const parsed = Number(mesaNum);
+  if (!Number.isInteger(parsed) || parsed <= 0) return false;
+  if (!Array.isArray(adminConfiguredMesas) || adminConfiguredMesas.length === 0) return true;
+  return adminConfiguredMesas.some(m => Number(m.numero_mesa) === parsed);
+}
+
+function applyQrMesaSession(mesaVal) {
+  const cleanMesa = String(mesaVal || "").trim();
+  if (!/^[1-9]\d*$/.test(cleanMesa)) return;
+  currentDetectedMesa = cleanMesa;
+  isTableQrSession = true;
+  selectedModality = "mesa";
+  try {
+    localStorage.setItem("dd-current-mesa", cleanMesa);
+    localStorage.setItem("dd-is-table-qr", "true");
+  } catch (e) {}
+  const checkoutType = document.getElementById("checkout-type");
+  if (checkoutType) checkoutType.value = "mesa";
+  const tableActions = document.getElementById("table-service-actions");
+  if (tableActions) tableActions.style.display = "flex";
+  if (document.getElementById("current-table-indicator")) {
+    document.getElementById("current-table-indicator").innerText = `🍽️ MESA #${currentDetectedMesa} (CONECTADA)`;
+  }
+  if (document.getElementById("checkout-mesa-name")) {
+    document.getElementById("checkout-mesa-name").innerText = `Mesa #${currentDetectedMesa} (QR validado)`;
+  }
+  if (document.getElementById("checkout-step4-mesa-label")) {
+    document.getElementById("checkout-step4-mesa-label").innerText = `Mesa #${currentDetectedMesa}`;
+  }
+  const hdrTableBadge = document.getElementById("header-table-badge");
+  if (hdrTableBadge) {
+    hdrTableBadge.innerText = `🍽️ MESA #${currentDetectedMesa}`;
+  }
+}
+
+async function loadPublicMesas() {
+  try {
+    const res = await fetch("/api/v1/cliente/mesas");
+    if (!res.ok) return;
+    const mesas = await res.json();
+    adminConfiguredMesas = Array.isArray(mesas) ? mesas : [];
+    const statusBox = document.getElementById("qr-scanner-admin-status");
+    if (statusBox) {
+      statusBox.textContent = adminConfiguredMesas.length
+        ? `Mesas habilitadas por administración: ${adminConfiguredMesas.map(m => `#${m.numero_mesa}`).join(", ")}`
+        : "No hay mesas registradas por el administrador todavía.";
+    }
+    if (currentDetectedMesa && adminConfiguredMesas.length > 0 && !isAdminConfiguredTable(currentDetectedMesa)) {
+      const invalidNum = currentDetectedMesa;
+      currentDetectedMesa = null;
+      isTableQrSession = false;
+      try {
+        localStorage.removeItem("dd-current-mesa");
+        localStorage.removeItem("dd-is-table-qr");
+      } catch (e) {}
+      if (document.getElementById("checkout-mesa-name")) {
+        document.getElementById("checkout-mesa-name").innerText = "Escanea el QR de tu mesa";
+      }
+      showToast(`La Mesa #${invalidNum} no existe en las mesas cargadas por el administrador.`, "warning");
+    }
+  } catch (err) {
+    console.warn("No se pudo cargar la lista pública de mesas:", err);
+  }
 }
 
 function loadClientSavedCredentials() {
@@ -315,35 +390,20 @@ document.addEventListener("DOMContentLoaded", () => {
   }
   const requestedScreen = window.location.hash === "#screen-perfil" ? "screen-perfil" : savedScreen;
   const mesaParam = urlParams.get("mesa");
+  const promoParam = Number(urlParams.get("promo"));
   if (mesaParam && /^[1-9]\d*$/.test(mesaParam)) {
-    currentDetectedMesa = mesaParam;
-    isTableQrSession = true;
-    selectedModality = "mesa";
-    try {
-      localStorage.setItem("dd-current-mesa", mesaParam);
-      localStorage.setItem("dd-is-table-qr", "true");
-    } catch(e){}
-    const checkoutType = document.getElementById("checkout-type");
-    if (checkoutType) checkoutType.value = "mesa";
-    const tableActions = document.getElementById("table-service-actions");
-    if (tableActions) tableActions.style.display = "flex";
-    if (document.getElementById("current-table-indicator")) {
-      document.getElementById("current-table-indicator").innerText = `🍽️ MESA #${currentDetectedMesa} (CONECTADA)`;
-    }
-    if (document.getElementById("checkout-mesa-name")) {
-      document.getElementById("checkout-mesa-name").innerText = `Mesa #${currentDetectedMesa}`;
-    }
-    const hdrTableBadge = document.getElementById("header-table-badge");
-    if (hdrTableBadge) {
-      hdrTableBadge.innerText = `🍽️ MESA #${currentDetectedMesa}`;
-    }
+    applyQrMesaSession(mesaParam);
     // Entrar directamente al menú interactivo en modo mesa QR (sin forjar sesión de usuario)
     showScreen("screen-home");
     setTimeout(() => {
       showToast(`🍽️ ¡Mesa #${currentDetectedMesa} conectada con éxito! Puedes ordenar directamente tus platos.`, "success");
     }, 250);
   } else {
-    currentDetectedMesa = "1";
+    currentDetectedMesa = null;
+    isTableQrSession = false;
+    if (document.getElementById("checkout-mesa-name")) {
+      document.getElementById("checkout-mesa-name").innerText = "Escanea el QR de tu mesa";
+    }
   }
   renderToonCart();
   updateCartNavBadge();
@@ -379,12 +439,17 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // ⚡ PETICIONES PARALELAS Y OPTIMIZADAS (Promise.all)
   Promise.all([
+    loadPublicMesas(),
     loadConfigPublica(),
     loadToonCategories(),
     loadToonProducts(),
     loadGuiaItems(),
     loadPromocionesToon()
   ]).then(() => {
+    renderPromoAndComboNotifications(true);
+    if (Number.isInteger(promoParam) && promoParam > 0) {
+      openPromoGroupModal(promoParam);
+    }
     console.log("⚡ Carga paralela optimizada completada.");
   }).catch(err => {
     console.error("Error en peticiones iniciales:", err);
@@ -395,9 +460,17 @@ document.addEventListener("DOMContentLoaded", () => {
     if (["CAMBIO_ESTADO_PEDIDO", "PAGO_CONFIRMADO", "PAGO_VALIDADO", "DELIVERY_ACTUALIZADO"].includes(event)) {
       if (Number(data.pedido_id) === Number(currentPendingOrderId)) refreshTrackedOrder();
     } else if (event === "PRODUCTOS_ACTUALIZADOS" || event === "NUEVO_PRODUCTO") {
-      loadToonProducts();
-      loadToonCategories();
+      Promise.all([loadToonProducts(), loadToonCategories()]).then(() => renderPromoAndComboNotifications(false));
       showToast("🍔 ¡Menú actualizado en tiempo real!", "info");
+    } else if (event === "PROMOCIONES_ACTUALIZADAS") {
+      loadPromocionesToon().then(() => {
+        renderPromoAndComboNotifications(true);
+        if (data?.titulo && data?.activo !== false) {
+          showToast(`🔥 Promoción activa: ${data.titulo}`, "info");
+        }
+      });
+    } else if (event === "CONFIGURACION_ACTUALIZADA") {
+      loadConfigPublica().then(() => renderToonCart());
     }
   });
   updateProfileUI();
@@ -507,6 +580,7 @@ async function loadPromocionesToon() {
     toonPromos = await res.json();
     if (!Array.isArray(toonPromos)) throw new Error("La respuesta de promociones no tiene el formato esperado.");
     renderPromoBanner();
+    renderPromoAndComboNotifications(false);
   } catch (err) {
     console.error("Error al cargar las promociones del cliente:", err);
     markClientNetworkFailure(err);
@@ -514,6 +588,61 @@ async function loadPromocionesToon() {
     if (container) {
       container.innerHTML = `<div role="status" style="padding:1.25rem;border:1px dashed var(--toon-border);border-radius:16px;text-align:center;color:var(--text-muted)">No se pudieron cargar las promociones.</div>`;
     }
+  }
+}
+
+function getActiveComboProducts() {
+  const comboCatIds = new Set(
+    (toonCategories || [])
+      .filter(c => String(c.nombre || "").toLowerCase().includes("combo"))
+      .map(c => Number(c.id))
+  );
+  return (toonProducts || []).filter(p =>
+    p && p.activo !== false && p.disponible !== false && Number(p.stock || 0) > 0
+    && (comboCatIds.has(Number(p.categoria_id)) || String(p.nombre || "").toLowerCase().includes("combo") || (Number(p.precio_promocion) > 0))
+  );
+}
+
+function renderPromoAndComboNotifications(announceToast = false) {
+  const container = document.getElementById("client-promo-notifications");
+  if (!container) return;
+  const activePromos = (toonPromos || []).filter(p => p && p.activo !== false);
+  const comboItems = getActiveComboProducts();
+
+  if (!activePromos.length && !comboItems.length) {
+    container.classList.add("u-display-none");
+    container.innerHTML = "";
+    return;
+  }
+
+  const chips = [
+    ...activePromos.map(p => `
+      <button type="button" class="promo-notif-chip" onclick="openPromoGroupModal(${Number(p.id)})">
+        🔥 ${escapeClientHtml(p.titulo)}${Number(p.descuento_pct) > 0 ? ` (-${Number(p.descuento_pct)}%)` : ""}${Array.isArray(p.productos) && p.productos.length ? ` · ${p.productos.length} prod.` : ""}
+      </button>
+    `),
+    ...comboItems.slice(0, 4).map(item => `
+      <button type="button" class="promo-notif-chip" onclick="openProductModal(${Number(item.id)})">
+        🎁 ${escapeClientHtml(item.nombre)} · $${Number(item.precio_promocion || item.precio || 0).toFixed(2)}
+      </button>
+    `)
+  ];
+
+  container.classList.remove("u-display-none");
+  container.innerHTML = `
+    <div class="promo-notifications-header">
+      <span>🔔 PROMOCIONES Y COMBOS ACTIVOS (${activePromos.length + comboItems.length})</span>
+      <small>Toca para ver o editar</small>
+    </div>
+    <div class="promo-notif-chips">${chips.join("")}</div>
+  `;
+
+  if (announceToast && !promoNotifAnnounced) {
+    promoNotifAnnounced = true;
+    const summaryParts = [];
+    if (activePromos.length) summaryParts.push(`${activePromos.length} promoción(es)`);
+    if (comboItems.length) summaryParts.push(`${comboItems.length} combo(s) disponibles`);
+    showToast(`🔥 Activo hoy: ${summaryParts.join(" y ")}. Toca una oferta para ver el grupo.`, "info");
   }
 }
 
@@ -624,11 +753,160 @@ function prevCarouselSlide(maxLen) {
 }
 
 function handleCarouselClick(promoId) {
-  if (toonProducts && toonProducts.length > 0) {
-    openProductModal(toonProducts[0].id);
-  } else {
+  openPromoGroupModal(promoId);
+}
+
+function openPromoGroupModal(promoId) {
+  const promo = (toonPromos || []).find(item => Number(item.id) === Number(promoId))
+    || (toonPromos || [])[0];
+  if (!promo) {
     showScreen("screen-menu");
+    return;
   }
+  activePromoGroup = promo;
+  promoGroupQuantities = {};
+
+  const banner = document.getElementById("promo-modal-banner");
+  const discount = document.getElementById("promo-modal-discount");
+  const title = document.getElementById("promo-modal-title");
+  const desc = document.getElementById("promo-modal-desc");
+  const coupon = document.getElementById("promo-modal-coupon");
+  const listEl = document.getElementById("promo-group-products-list");
+  const addAllBtn = document.getElementById("promo-add-all-btn");
+
+  if (banner) banner.src = getSafePromoMediaUrl(promo.banner_url);
+  if (discount) {
+    discount.textContent = Number(promo.descuento_pct) > 0
+      ? `🔥 -${Number(promo.descuento_pct)}% OFF`
+      : "🔥 PROMO ACTIVA";
+  }
+  if (title) title.textContent = promo.titulo || "Promoción Donde David";
+  if (desc) desc.textContent = promo.descripcion || "Personaliza y agrega los productos de esta promoción.";
+  if (coupon) coupon.textContent = promo.codigo_cupon ? `Código: ${promo.codigo_cupon}` : "";
+
+  let groupProducts = Array.isArray(promo.productos) && promo.productos.length
+    ? promo.productos.map(lp => (toonProducts || []).find(tp => Number(tp.id) === Number(lp.id)) || lp)
+    : [];
+  if (!groupProducts.length) {
+    groupProducts = getActiveComboProducts().slice(0, 4);
+  }
+
+  if (!groupProducts.length) {
+    if (listEl) {
+      listEl.innerHTML = `<div style="text-align:center;color:var(--text-muted);padding:1rem;">Esta promoción aún no tiene productos asignados.</div>`;
+    }
+    if (addAllBtn) addAllBtn.style.display = "none";
+    openModal("promo-products-modal");
+    return;
+  }
+
+  groupProducts.forEach(p => {
+    promoGroupQuantities[Number(p.id)] = 1;
+  });
+  if (addAllBtn) addAllBtn.style.display = "block";
+  renderPromoGroupProductsList(groupProducts);
+  openModal("promo-products-modal");
+}
+
+function renderPromoGroupProductsList(groupProducts) {
+  const listEl = document.getElementById("promo-group-products-list");
+  if (!listEl) return;
+  listEl.innerHTML = groupProducts.map(p => {
+    const pid = Number(p.id);
+    const qty = promoGroupQuantities[pid] || 1;
+    const price = Number(p.precio_promocion || p.precio || 0);
+    const imgUrl = getSafePromoMediaUrl(p.imagen_url);
+    const available = p.disponible !== false && Number(p.stock || 0) > 0;
+    return `
+      <div class="promo-group-item-card">
+        <div class="promo-group-item-left">
+          <img class="promo-group-item-img" src="${escapeClientHtml(imgUrl)}" alt="${escapeClientHtml(p.nombre)}">
+          <div>
+            <strong>${escapeClientHtml(p.nombre)}</strong>
+            <div style="font-size:0.82rem;color:var(--gold-accent);font-weight:800;">$${price.toFixed(2)}</div>
+            ${available ? "" : `<small style="color:var(--neon-red);font-weight:700;">Agotado</small>`}
+          </div>
+        </div>
+        <div class="promo-group-item-actions">
+          <button type="button" class="btn btn-outline" style="padding:0.25rem 0.55rem;" onclick="adjustPromoGroupItemQty(${pid}, -1)">-</button>
+          <strong id="promo-item-qty-${pid}">${qty}</strong>
+          <button type="button" class="btn btn-outline" style="padding:0.25rem 0.55rem;" onclick="adjustPromoGroupItemQty(${pid}, 1)">+</button>
+          <button type="button" class="btn btn-outline" style="padding:0.35rem 0.65rem;font-size:0.78rem;" onclick="editPromoGroupProduct(${pid})" ${available ? "" : "disabled"}>✏️ Editar</button>
+          <button type="button" class="btn-gold" style="padding:0.35rem 0.7rem;font-size:0.78rem;" onclick="addSinglePromoGroupItem(${pid})" ${available ? "" : "disabled"}>+ Agregar</button>
+        </div>
+      </div>
+    `;
+  }).join("");
+}
+
+function adjustPromoGroupItemQty(productId, delta) {
+  const pid = Number(productId);
+  const current = promoGroupQuantities[pid] || 1;
+  const next = Math.max(0, Math.min(20, current + delta));
+  promoGroupQuantities[pid] = next;
+  const qtyEl = document.getElementById(`promo-item-qty-${pid}`);
+  if (qtyEl) qtyEl.textContent = String(next);
+}
+
+function editPromoGroupProduct(productId) {
+  closeModal("promo-products-modal");
+  openProductModal(Number(productId));
+}
+
+function _pushPromoProductToCart(product, quantity) {
+  if (!product || quantity <= 0) return false;
+  if (product.disponible === false || Number(product.stock || 0) < quantity) return false;
+  const unitPrice = Number(product.precio_promocion || product.precio || 0);
+  toonCart.push({
+    producto_id: Number(product.id),
+    nombre: product.nombre,
+    precio_unitario: unitPrice,
+    cantidad: quantity,
+    subtotal: Math.round(unitPrice * quantity * 100) / 100,
+    imagen_url: product.imagen_url,
+    puntos_fidelidad: Math.max(0, Number(product.puntos_fidelidad) || 0),
+    tiempo_preparacion: Math.max(0, Number(product.tiempo_preparacion) || 15),
+    opciones: [],
+    extras: [],
+    observaciones: activePromoGroup?.codigo_cupon ? `Promo ${activePromoGroup.codigo_cupon}` : ""
+  });
+  return true;
+}
+
+function addSinglePromoGroupItem(productId) {
+  const pid = Number(productId);
+  const qty = Math.max(1, promoGroupQuantities[pid] || 1);
+  const promoList = (activePromoGroup?.productos || []).map(lp => (toonProducts || []).find(tp => Number(tp.id) === Number(lp.id)) || lp);
+  const product = (toonProducts || []).find(p => Number(p.id) === pid) || promoList.find(p => Number(p.id) === pid);
+  if (!product || !_pushPromoProductToCart(product, qty)) {
+    showToast("Este producto no tiene existencias disponibles.", "warning");
+    return;
+  }
+  updateCartNavBadge();
+  renderToonCart();
+  showToast(`🛒 ${qty}x ${product.nombre} agregado al carrito.`, "success");
+}
+
+function addAllPromoGroupToCart() {
+  if (!activePromoGroup) return;
+  let products = Array.isArray(activePromoGroup.productos) && activePromoGroup.productos.length
+    ? activePromoGroup.productos.map(lp => (toonProducts || []).find(tp => Number(tp.id) === Number(lp.id)) || lp)
+    : getActiveComboProducts().slice(0, 4);
+  let addedCount = 0;
+  products.forEach(p => {
+    const qty = Number(promoGroupQuantities[Number(p.id)] ?? 1);
+    if (qty > 0 && _pushPromoProductToCart(p, qty)) {
+      addedCount += qty;
+    }
+  });
+  if (!addedCount) {
+    showToast("Selecciona al menos 1 producto disponible del grupo para agregar.", "warning");
+    return;
+  }
+  updateCartNavBadge();
+  renderToonCart();
+  closeModal("promo-products-modal");
+  showToast(`🔥 Grupo de promoción agregado al carrito (${addedCount} artículo(s)).`, "success");
 }
 
 function renderPhotoCategories() {
@@ -1116,11 +1394,33 @@ function toggleCheckoutFields() {
   updateCheckoutOrderSummary();
 }
 
+function syncMesaPaymentMode(mode) {
+  const normalized = mode === "PAGAR_DESPUES" ? "PAGAR_DESPUES" : "PAGAR_ANTES";
+  selectedMesaPaymentMode = normalized;
+  document.querySelectorAll('input[name="modo_pago"], input[name="modo_pago_step4"]').forEach(radio => {
+    radio.checked = radio.value === normalized;
+  });
+  updateCheckoutOrderSummary();
+  updateCheckoutPaymentFields();
+}
+
 function updateCheckoutPaymentFields() {
   const method = document.getElementById("checkout-payment")?.value || "Efectivo";
-  const selectedMode = document.querySelector('input[name="modo_pago"]:checked')?.value || "PAGAR_ANTES";
+  const selectedMode = document.querySelector('input[name="modo_pago"]:checked')?.value || selectedMesaPaymentMode || "PAGAR_ANTES";
   selectedMesaPaymentMode = selectedMode;
-  const deferredPayment = document.getElementById("checkout-type")?.value === "mesa" && selectedMode === "PAGAR_DESPUES";
+  const orderType = document.getElementById("checkout-type")?.value;
+  const deferredPayment = orderType === "mesa" && selectedMode === "PAGAR_DESPUES";
+  const step4MesaCard = document.getElementById("checkout-step4-mesa-mode");
+  const step4MesaLabel = document.getElementById("checkout-step4-mesa-label");
+  if (step4MesaCard) {
+    step4MesaCard.classList.toggle("u-display-none", orderType !== "mesa");
+  }
+  if (step4MesaLabel) {
+    step4MesaLabel.textContent = currentDetectedMesa ? `Mesa #${currentDetectedMesa}` : "Sin mesa asignada";
+  }
+  document.querySelectorAll('input[name="modo_pago_step4"]').forEach(radio => {
+    radio.checked = radio.value === selectedMode;
+  });
   const currencyGroup = document.getElementById("checkout-currency-group");
   const referenceGroup = document.getElementById("checkout-payment-reference-group");
   const currencySelect = document.getElementById("checkout-currency");
@@ -1340,7 +1640,13 @@ async function submitFinalOrder() {
     return;
   }
 
-  let mesaName = `Mesa ${currentDetectedMesa || 1}`;
+  if (orderType === "mesa" && !currentDetectedMesa) {
+    showToast("Escanea el código QR de una mesa registrada antes de enviar tu pedido.", "warning");
+    openQrScannerModal();
+    return;
+  }
+
+  let mesaName = currentDetectedMesa ? `Mesa ${currentDetectedMesa}` : "Mostrador";
   let delivNombre = null;
   let delivTel = null;
   let delivDir = null;
@@ -1824,7 +2130,10 @@ function startCheckoutFlow() {
     showToast("Agrega productos al carrito antes de continuar.", "warning");
     return;
   }
-  enterCheckout(document.getElementById("checkout-type")?.value || "delivery");
+  const preferredModality = isTableQrSession && currentDetectedMesa
+    ? "mesa"
+    : (document.getElementById("checkout-type")?.value || "delivery");
+  enterCheckout(preferredModality);
 }
 
 function validateCheckoutDelivery() {
@@ -1832,6 +2141,13 @@ function validateCheckoutDelivery() {
   if (!["mesa", "delivery", "llevar"].includes(type)) {
     showToast("Selecciona cómo recibirás tu pedido.", "warning");
     return false;
+  }
+  if (type === "mesa") {
+    if (!currentDetectedMesa || !isAdminConfiguredTable(currentDetectedMesa)) {
+      showToast("Escanea el código QR de una mesa registrada por el restaurante.", "warning");
+      openQrScannerModal();
+      return false;
+    }
   }
   if (type === "delivery") {
     const deliveryFields = [
@@ -2216,45 +2532,6 @@ async function submitServiceRating() {
     closeModal("service-rating-modal");
     showScreen("screen-tracking");
   }
-}
-
-/* ==================== GUSTICOS VALENCIA INPIRED FUNCTIONS ==================== */
-function sendChatbotMessage() {
-  const input = document.getElementById("chat-input-msg");
-  const container = document.getElementById("chat-messages-container");
-  if (!input || !container) return;
-
-  const msg = input.value.trim();
-  if (!msg) return;
-
-  const userDiv = document.createElement("div");
-  userDiv.style.cssText = "background: var(--gold-gradient); color: #000; font-weight: 800; padding: 0.65rem 0.85rem; border-radius: 12px; font-size: 0.82rem; align-self: flex-end; max-width: 85%; box-shadow: 0 4px 12px rgba(255,188,13,0.3);";
-  userDiv.innerText = msg;
-  container.appendChild(userDiv);
-
-  input.value = "";
-  container.scrollTop = container.scrollHeight;
-
-  setTimeout(() => {
-    let reply = "¡Excelente consulta! Te recomendamos probar nuestra famosa **Hamburguesa Doble Toon** con Tocino o consultar nuestras promociones especiales.";
-    const lower = msg.toLowerCase();
-
-    if (lower.includes("promo") || lower.includes("oferta") || lower.includes("combo")) {
-      reply = "🔥 ¡Nuestra mejor promo es el **COMBO EXPLOSIVO TOON**! Incluye 2 Hamburguesas + Papas Fritas + 2 Refrescos por solo **$15.00**.";
-    } else if (lower.includes("horario") || lower.includes("abierto")) {
-      reply = "🕒 Estamos abiertos todos los días de **11:00 AM a 11:00 PM**. Pedidos QR en mesa y Delivery en vivo.";
-    } else if (lower.includes("pago") || lower.includes("banco") || lower.includes("zelle")) {
-      reply = "💳 Aceptamos Pago Móvil (Banesco/Mercantil), Efectivo ($/Bs), Tarjetas de Crédito/Débito y Zelle.";
-    } else if (lower.includes("pedido") || lower.includes("mi orden") || lower.includes("donde viene")) {
-      reply = `📋 Tu pedido actual registrado está en proceso. Puedes revisar el estado en vivo desde la pestaña de **Pedidos**.`;
-    }
-
-    const botDiv = document.createElement("div");
-    botDiv.style.cssText = "background: rgba(255,255,255,0.06); padding: 0.75rem; border-radius: 12px; font-size: 0.85rem; color: #fff; align-self: flex-start; border: 1px solid var(--toon-border); max-width: 88%;";
-    botDiv.innerHTML = `🤖 ${reply}`;
-    container.appendChild(botDiv);
-    container.scrollTop = container.scrollHeight;
-  }, 600);
 }
 
 async function submitClientUserRegistration() {

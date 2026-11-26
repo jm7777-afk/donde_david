@@ -481,3 +481,106 @@ def test_security_and_frontend_contract_hygiene():
     caja_html = (root / "backend/static/caja/panel.html").read_text(encoding="utf-8")
     assert 'id="view-btn-app-payments"' in caja_html
     assert 'id="pos-history-payment-filter"' in caja_html
+
+
+def test_promotions_support_editable_product_groups_and_public_mesas(client):
+    admin_headers = _login(client, "admin", "admin123")
+
+    mesas_resp = client.get("/api/v1/cliente/mesas")
+    assert mesas_resp.status_code == 200
+    assert isinstance(mesas_resp.json(), list)
+
+    prods = client.get("/api/v1/admin/productos", headers=admin_headers).json()
+    assert len(prods) >= 2
+    p1, p2 = prods[0]["id"], prods[1]["id"]
+
+    # Missing product ID rejected with 404
+    bad_promo = client.post("/api/v1/admin/promociones", headers=admin_headers, json={
+        "titulo": "Promo Invalida",
+        "descripcion": "No debe guardarse",
+        "descuento_pct": 10,
+        "activo": True,
+        "producto_ids": [99999999],
+    })
+    assert bad_promo.status_code == 404
+
+    created = client.post("/api/v1/admin/promociones", headers=admin_headers, json={
+        "titulo": f"Combo QA {uuid4().hex[:5]}",
+        "descripcion": "Grupo inicial de productos",
+        "descuento_pct": 15,
+        "codigo_cupon": f"QA{uuid4().hex[:6].upper()}",
+        "activo": True,
+        "producto_ids": [p1],
+    })
+    assert created.status_code == 200, created.text
+    promo = created.json()
+    assert promo["producto_ids"] == [p1]
+    assert len(promo["productos"]) == 1
+
+    # Public promotions return linked product group
+    public_promos = client.get("/api/v1/cliente/promociones").json()
+    matched = next(item for item in public_promos if item["id"] == promo["id"])
+    assert matched["producto_ids"] == [p1]
+
+    # Edit product group via dedicated endpoint
+    updated_group = client.put(
+        f"/api/v1/admin/promociones/{promo['id']}/productos",
+        headers=admin_headers,
+        json={"producto_ids": [p1, p2]},
+    )
+    assert updated_group.status_code == 200, updated_group.text
+    assert set(updated_group.json()["producto_ids"]) == {p1, p2}
+    assert len(updated_group.json()["productos"]) == 2
+
+    # Clean up promo
+    assert client.delete(f"/api/v1/admin/promociones/{promo['id']}", headers=admin_headers).status_code == 200
+
+
+def test_new_client_ui_qr_iva_promos_no_chatbot_and_high_priority_alerts():
+    root = Path(__file__).resolve().parent.parent
+    app_html = (root / "backend/static/cliente/app.html").read_text(encoding="utf-8")
+    login_html = (root / "backend/static/login.html").read_text(encoding="utf-8")
+    admin_html = (root / "backend/static/admin/index.html").read_text(encoding="utf-8")
+    caja_html = (root / "backend/static/caja/panel.html").read_text(encoding="utf-8")
+
+    cliente_js = (root / "backend/static/js/cliente-toon.js").read_text(encoding="utf-8")
+    websocket_js = (root / "backend/static/js/websocket.js").read_text(encoding="utf-8")
+    caja_js = (root / "backend/static/js/caja.js").read_text(encoding="utf-8")
+    mesero_js = (root / "backend/static/js/mesero.js").read_text(encoding="utf-8")
+    cocina_js = (root / "backend/static/js/cocina.js").read_text(encoding="utf-8")
+
+    # 1. Manual table selector removed from QR scanner modal
+    assert 'id="client-scanner-table-select"' not in app_html
+    assert "SELECCIÓN MANUAL DE MESA" not in app_html
+
+    # 2. IVA enable/disable controls present
+    assert 'id="admin-iva-toggle-btn"' in admin_html
+    assert 'id="pos-iva-status-badge"' in caja_html
+
+    # 3. Payment mode modifiable in Step 2 & Step 4
+    assert 'name="modo_pago"' in app_html
+    assert 'id="checkout-step4-mesa-mode"' in app_html
+    assert "syncMesaPaymentMode" in cliente_js
+
+    # 4. Monkey emoji removed; eye SVG toggle present on login and register
+    for content in (app_html, login_html, cliente_js):
+        for monkey in ("🙈", "🙉", "🙊"):
+            assert monkey not in content
+    assert 'id="toggle-client-pass"' in app_html
+    assert 'id="toggle-client-reg-pass"' in app_html
+    assert 'id="toggle-portal-pass"' in login_html
+
+    # 5 & 6. Promo group modal, promo product picker, and active promo/combo notifications
+    assert 'id="promo-products-picker"' in admin_html
+    assert 'id="promo-products-modal"' in app_html
+    assert 'id="client-promo-notifications"' in app_html
+
+    # 7. Chatbot completely removed
+    for chatbot_token in ("fab-chatbot", "chatbot-modal", "DavidBot", "sendChatbotMessage"):
+        assert chatbot_token not in app_html
+        assert chatbot_token not in cliente_js
+
+    # 8. High-priority notifications wired for Caja, Salón, and Cocina
+    assert "function notifyHighPriority" in websocket_js
+    for js_content in (caja_js, mesero_js, cocina_js):
+        assert "notifyHighPriority(" in js_content

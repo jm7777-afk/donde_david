@@ -1,6 +1,16 @@
-from sqlalchemy import Column, Integer, String, Float, Boolean, DateTime
 from datetime import datetime, timezone
+from sqlalchemy import Boolean, Column, DateTime, Float, ForeignKey, Integer, String, Table
+from sqlalchemy.orm import relationship
 from backend.app.core.database import Base
+
+
+promocion_productos = Table(
+    "promocion_productos",
+    Base.metadata,
+    Column("promocion_id", Integer, ForeignKey("promociones.id", ondelete="CASCADE"), primary_key=True),
+    Column("producto_id", Integer, ForeignKey("productos.id", ondelete="CASCADE"), primary_key=True),
+)
+
 
 class Promocion(Base):
     __tablename__ = "promociones"
@@ -14,3 +24,5 @@ class Promocion(Base):
     activo = Column(Boolean, default=True)
     fecha_inicio = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     fecha_fin = Column(DateTime, nullable=True)
+
+    productos = relationship("Producto", secondary=promocion_productos, lazy="selectin")

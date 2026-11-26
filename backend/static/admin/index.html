@@ -4,15 +4,15 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Donde David - Panel de Administración General</title>
-  <link rel="stylesheet" href="/static/css/global.css?v=5.3">
-  <link rel="stylesheet" href="/static/css/toon-theme.css?v=5.3">
-  <link rel="stylesheet" href="/static/css/index.css?v=5.3">
+  <link rel="stylesheet" href="/static/css/global.css?v=5.4">
+  <link rel="stylesheet" href="/static/css/toon-theme.css?v=5.4">
+  <link rel="stylesheet" href="/static/css/index.css?v=5.4">
   
   <!-- Driver.js CSS para Onboarding Tour Interactivo -->
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/driver.js@1.3.1/dist/driver.css">
 
-  <link rel="stylesheet" href="/static/css/pages/admin-index.css?v=5.3">
-  <link rel="stylesheet" href="/static/css/utilities.css?v=5.3">
+  <link rel="stylesheet" href="/static/css/pages/admin-index.css?v=5.4">
+  <link rel="stylesheet" href="/static/css/utilities.css?v=5.4">
 </head>
 <body class="toon-theme"><nav id="app-sidebar"></nav>
 
@@ -61,7 +61,18 @@
 
     <!-- TAB 1: DASHBOARD & MÉTRICAS DE VENTAS CON FILTROS -->
     <div id="tab-dashboard" class="tab-content active">
-      
+
+      <div class="admin-iva-quick-bar">
+        <div>
+          <strong class="u-color-token-gold-accent u-font-size-0-95rem">🧾 CONTROL RÁPIDO DE IVA</strong>
+          <div class="u-color-token-text-muted u-font-size-0-8rem">Habilita o deshabilita el cobro de impuesto en pedidos de clientes y caja POS al instante.</div>
+        </div>
+        <div class="admin-iva-quick-controls">
+          <span id="admin-iva-status-pill" class="iva-status-pill">🟢 IVA Activo (16%)</span>
+          <button type="button" id="admin-iva-toggle-btn" class="btn-gold" onclick="toggleAdminIvaQuick()">Deshabilitar IVA</button>
+        </div>
+      </div>
+
       <!-- Barra de Filtros de Ventas por Categoría y Método de Pago (Estilo Cashea) -->
       <div class="u-background-token-toon-card u-border-1px-solid-token-gold-accent u-border-radius-token-radius-md u-padding-1rem u-margin-bottom-1-25rem u-display-flex u-flex-wrap-wrap u-gap-1rem u-align-items-center u-justify-content-space-between">
         <div class="u-display-flex u-align-items-center u-gap-0-5rem">
@@ -277,6 +288,7 @@
               <th class="u-padding-0-75rem">Banner</th>
               <th class="u-padding-0-75rem">Título Promo</th>
               <th class="u-padding-0-75rem">Descripción</th>
+              <th class="u-padding-0-75rem">Productos en Promo</th>
               <th class="u-padding-0-75rem">Descuento</th>
               <th class="u-padding-0-75rem">Código Cupon</th>
               <th class="u-padding-0-75rem">Acciones</th>
@@ -827,7 +839,7 @@
 
   <!-- Modal Crear/Editar Promoción -->
   <div class="product-modal-backdrop" id="promo-modal">
-    <div class="product-modal-card u-max-width-450px u-padding-1-5rem">
+    <div class="product-modal-card promo-modal-wide u-padding-1-5rem">
       <button class="modal-close-btn" onclick="closeModal('promo-modal')">&times;</button>
       <h3 id="promo-modal-title" class="u-color-token-gold-accent u-margin-top-0">🔥 NUEVA PROMOCIÓN</h3>
       <div class="form-group"><label>Título Promocional</label><input type="text" id="promo-titulo" class="form-control" maxlength="150" placeholder="Ej. COMBO EXPLOSIVO TOON" required></div>
@@ -839,6 +851,14 @@
         <input type="file" accept="image/*" class="form-control" onchange="uploadLocalFile(event, 'promo-img')">
       </div>
       <div class="form-group"><label>Ruta Imagen</label><input type="text" id="promo-img" class="form-control" maxlength="500" placeholder="/static/uploads/banner.jpg"></div>
+      <div class="promo-products-section">
+        <div class="promo-products-header">
+          <label for="promo-products-search" class="u-font-weight-800 u-color-token-cyan-accent u-margin-0">🍔 Productos del grupo en promoción</label>
+          <span id="promo-products-selected-count" class="u-font-size-0-8rem u-color-token-gold-accent u-font-weight-800">0 seleccionados</span>
+        </div>
+        <input type="search" id="promo-products-search" class="form-control" placeholder="Buscar productos para incluir o editar..." oninput="renderPromoProductsPicker()">
+        <div id="promo-products-picker" class="promo-products-picker"></div>
+      </div>
       <label class="u-display-flex u-align-items-center u-gap-0p5rem"><input type="checkbox" id="promo-activo" checked> Visible en ambos carruseles</label>
       <button id="promo-submit-btn" class="btn-gold u-width-100 u-margin-top-1rem" onclick="submitCreatePromo()">GUARDAR PROMOCIÓN</button>
     </div>
@@ -1010,10 +1030,10 @@
 
   <!-- Driver.js Library script -->
   <script src="https://cdn.jsdelivr.net/npm/driver.js@1.3.1/dist/driver.js.iife.js"></script>
-  <script src="/static/js/auth.js?v=5.3"></script>
-  <script src="/static/js/appShell.js?v=5.3"></script>
-  <script src="/static/js/websocket.js?v=5.3"></script>
-  <script src="/static/js/admin-toon.js?v=5.3"></script>
+  <script src="/static/js/auth.js?v=5.4"></script>
+  <script src="/static/js/appShell.js?v=5.4"></script>
+  <script src="/static/js/websocket.js?v=5.4"></script>
+  <script src="/static/js/admin-toon.js?v=5.4"></script>
 
   <!-- Script para Autodisparo del Tour Interactivo Driver.js -->
   <script>

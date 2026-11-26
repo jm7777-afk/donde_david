@@ -425,3 +425,78 @@ body {
   clip: rect(0, 0, 0, 0) !important;
 }
 
+
+/* Notificaciones Operativas de Alta Prioridad (Caja, Salón, Cocina) */
+.priority-alerts-region {
+  max-width: 1200px;
+  margin: 0.75rem auto 0;
+  padding: 0 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+.priority-alerts-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+.priority-alert-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.85rem;
+  padding: 0.8rem 1rem;
+  border-radius: 12px;
+  background: rgba(16, 23, 38, 0.96);
+  border: 1px solid rgba(255, 188, 13, 0.55);
+  border-left: 6px solid var(--color-yellow, #ffbc0d);
+  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.45);
+  color: #ffffff;
+  animation: slideInDown 0.25s ease;
+}
+.priority-alert-card.is-critical {
+  border-color: rgba(239, 68, 68, 0.75);
+  border-left-color: #ef4444;
+  background: linear-gradient(90deg, rgba(239, 68, 68, 0.22), rgba(16, 23, 38, 0.96));
+}
+.priority-alert-badge {
+  display: inline-block;
+  font-size: 0.7rem;
+  font-weight: 900;
+  padding: 0.18rem 0.5rem;
+  border-radius: 999px;
+  background: var(--color-yellow, #ffbc0d);
+  color: #000000;
+  margin-right: 0.45rem;
+  letter-spacing: 0.04em;
+}
+.priority-alert-card.is-critical .priority-alert-badge {
+  background: #ef4444;
+  color: #ffffff;
+}
+.priority-alert-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  flex-shrink: 0;
+}
+.priority-alert-ack-btn {
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  background: rgba(255, 255, 255, 0.08);
+  color: #ffffff;
+  border-radius: 8px;
+  padding: 0.35rem 0.7rem;
+  font-size: 0.76rem;
+  font-weight: 800;
+  cursor: pointer;
+}
+.priority-alert-ack-btn:hover {
+  background: rgba(255, 255, 255, 0.18);
+}
+.toast-priority {
+  border-width: 2px;
+  border-left-width: 6px;
+  box-shadow: 0 12px 32px rgba(239, 68, 68, 0.35);
+}

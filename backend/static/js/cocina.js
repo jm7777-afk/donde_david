@@ -19,11 +19,26 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // Listen to WebSocket events
   new WSClient((event, data) => {
-    if (event === "NUEVO_PEDIDO" || event === "PAGO_CONFIRMADO") {
+    if (event === "NUEVO_PEDIDO" || event === "PAGO_CONFIRMADO" || (event === "PAGO_VALIDADO" && data.aprobado !== false)) {
       playChimeSound();
-      showToast(`¡Nuevo pedido / pago de ${data.numero_mesa || 'Caja'}!`, "warning");
+      notifyHighPriority({
+        area: "COCINA",
+        title: "Nueva comanda para preparar",
+        message: `Pedido #${data.id || data.pedido_id || ""} · ${data.numero_mesa || "Caja"}.`,
+        level: "critical",
+        tag: `cocina-new-${data.id || data.pedido_id || ""}`,
+      });
       loadKDSOrders();
     } else if (event === "CAMBIO_ESTADO_PEDIDO") {
+      if (data.nuevo_estado === "CANCELADO") {
+        notifyHighPriority({
+          area: "COCINA",
+          title: "Comanda cancelada",
+          message: `Pedido #${data.pedido_id || ""} fue cancelado.`,
+          level: "high",
+          tag: `cocina-cancel-${data.pedido_id || ""}`,
+        });
+      }
       loadKDSOrders();
     }
   });

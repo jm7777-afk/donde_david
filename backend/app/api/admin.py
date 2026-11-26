@@ -102,6 +102,11 @@ class PromocionCreateAdmin(BaseModel):
     codigo_cupon: Optional[str] = None
     banner_url: Optional[str] = None
     activo: Optional[bool] = True
+    producto_ids: List[int] = Field(default_factory=list)
+
+
+class PromocionProductosUpdate(BaseModel):
+    producto_ids: List[int] = Field(default_factory=list)
 
 class ResenaCreateAdmin(BaseModel):
     nombre_cliente: str
@@ -535,49 +540,153 @@ def delete_publicacion_admin(pub_id: int, db: Session = Depends(get_db)):
     return {"mensaje": "Publicación eliminada correctamente"}
 
 # ==================== PROMOCIONES CRUD (BOOM! PROMO DEL DIA) ====================
+def _resolve_promo_products(db: Session, producto_ids: List[int]) -> List[Producto]:
+    unique_ids: List[int] = []
+    for pid in producto_ids:
+        if pid not in unique_ids:
+            unique_ids.append(pid)
+    if not unique_ids:
+        return []
+    found = db.query(Producto).filter(Producto.id.in_(unique_ids)).all()
+    by_id = {prod.id: prod for prod in found}
+    missing = [pid for pid in unique_ids if pid not in by_id]
+    if missing:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Productos no encontrados para la promoción: {missing}",
+        )
+    return [by_id[pid] for pid in unique_ids]
+
+
+def _serialize_promocion(promo: Promocion) -> dict:
+    linked = [
+        {
+            "id": prod.id,
+            "nombre": prod.nombre,
+            "descripcion": prod.descripcion,
+            "precio": float(prod.precio or 0),
+            "precio_promocion": float(prod.precio_promocion) if prod.precio_promocion is not None else None,
+            "imagen_url": prod.imagen_url,
+            "categoria_id": prod.categoria_id,
+            "disponible": bool(prod.disponible),
+            "activo": bool(prod.activo),
+            "stock": int(prod.stock or 0),
+            "puntos_fidelidad": int(prod.puntos_fidelidad or 0),
+            "tiempo_preparacion": int(prod.tiempo_preparacion or 15),
+        }
+        for prod in (promo.productos or [])
+    ]
+    return {
+        "id": promo.id,
+        "titulo": promo.titulo,
+        "descripcion": promo.descripcion,
+        "descuento_pct": float(promo.descuento_pct or 0.0),
+        "codigo_cupon": promo.codigo_cupon,
+        "banner_url": promo.banner_url,
+        "activo": bool(promo.activo),
+        "fecha_inicio": promo.fecha_inicio.isoformat() if promo.fecha_inicio else None,
+        "fecha_fin": promo.fecha_fin.isoformat() if promo.fecha_fin else None,
+        "producto_ids": [item["id"] for item in linked],
+        "productos": linked,
+    }
+
+
 @router.get("/promociones")
 def list_promociones(db: Session = Depends(get_db)):
-    return db.query(Promocion).order_by(Promocion.id.asc()).all()
+    promos = db.query(Promocion).order_by(Promocion.id.asc()).all()
+    return [_serialize_promocion(promo) for promo in promos]
+
 
 @router.post("/promociones")
-def create_promocion(data: PromocionCreateAdmin, db: Session = Depends(get_db)):
+async def create_promocion(data: PromocionCreateAdmin, db: Session = Depends(get_db)):
+    selected_products = _resolve_promo_products(db, data.producto_ids)
     nueva = Promocion(
         titulo=data.titulo,
         descripcion=data.descripcion,
         descuento_pct=data.descuento_pct or 0.0,
-        codigo_cupon=data.codigo_cupon,
+        codigo_cupon=data.codigo_cupon or None,
         banner_url=data.banner_url,
-        activo=data.activo if data.activo is not None else True
+        activo=data.activo if data.activo is not None else True,
+        productos=selected_products,
     )
     db.add(nueva)
     db.commit()
     db.refresh(nueva)
-    return nueva
+    payload = _serialize_promocion(nueva)
+    await ws_manager.broadcast("PROMOCIONES_ACTUALIZADAS", {
+        "accion": "CREAR",
+        "promocion_id": nueva.id,
+        "titulo": nueva.titulo,
+        "activo": bool(nueva.activo),
+        "descuento_pct": float(nueva.descuento_pct or 0.0),
+        "productos_count": len(payload["producto_ids"]),
+    })
+    return payload
+
 
 @router.put("/promociones/{promo_id}")
-def update_promocion(promo_id: int, data: PromocionCreateAdmin, db: Session = Depends(get_db)):
+async def update_promocion(promo_id: int, data: PromocionCreateAdmin, db: Session = Depends(get_db)):
     p = db.query(Promocion).filter(Promocion.id == promo_id).first()
     if not p:
         raise HTTPException(status_code=404, detail="Promoción no encontrada")
-    
+
+    selected_products = _resolve_promo_products(db, data.producto_ids)
     p.titulo = data.titulo
     p.descripcion = data.descripcion
     p.descuento_pct = data.descuento_pct or 0.0
-    p.codigo_cupon = data.codigo_cupon
+    p.codigo_cupon = data.codigo_cupon or None
     p.banner_url = data.banner_url
     p.activo = data.activo if data.activo is not None else True
-    
+    p.productos = selected_products
+
     db.commit()
     db.refresh(p)
-    return p
+    payload = _serialize_promocion(p)
+    await ws_manager.broadcast("PROMOCIONES_ACTUALIZADAS", {
+        "accion": "ACTUALIZAR",
+        "promocion_id": p.id,
+        "titulo": p.titulo,
+        "activo": bool(p.activo),
+        "descuento_pct": float(p.descuento_pct or 0.0),
+        "productos_count": len(payload["producto_ids"]),
+    })
+    return payload
+
+
+@router.put("/promociones/{promo_id}/productos")
+async def update_promocion_productos(
+    promo_id: int,
+    data: PromocionProductosUpdate,
+    db: Session = Depends(get_db),
+):
+    p = db.query(Promocion).filter(Promocion.id == promo_id).first()
+    if not p:
+        raise HTTPException(status_code=404, detail="Promoción no encontrada")
+    p.productos = _resolve_promo_products(db, data.producto_ids)
+    db.commit()
+    db.refresh(p)
+    payload = _serialize_promocion(p)
+    await ws_manager.broadcast("PROMOCIONES_ACTUALIZADAS", {
+        "accion": "ACTUALIZAR_PRODUCTOS",
+        "promocion_id": p.id,
+        "titulo": p.titulo,
+        "activo": bool(p.activo),
+        "productos_count": len(payload["producto_ids"]),
+    })
+    return payload
+
 
 @router.delete("/promociones/{promo_id}")
-def delete_promocion(promo_id: int, db: Session = Depends(get_db)):
+async def delete_promocion(promo_id: int, db: Session = Depends(get_db)):
     p = db.query(Promocion).filter(Promocion.id == promo_id).first()
     if not p:
         raise HTTPException(status_code=404, detail="Promoción no encontrada")
     db.delete(p)
     db.commit()
+    await ws_manager.broadcast("PROMOCIONES_ACTUALIZADAS", {
+        "accion": "ELIMINAR",
+        "promocion_id": promo_id,
+    })
     return {"mensaje": "Promoción eliminada"}
 
 # ==================== RESEÑAS / TESTIMONIOS ====================

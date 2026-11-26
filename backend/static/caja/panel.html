@@ -4,11 +4,11 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>DONDE DAVID - Touch POS Registradora</title>
-  <link rel="stylesheet" href="/static/css/global.css?v=5.3">
-  <link rel="stylesheet" href="/static/css/toon-theme.css?v=5.3">
-  <link rel="stylesheet" href="/static/css/index.css?v=5.3">
-  <link rel="stylesheet" href="/static/css/pages/caja-panel.css?v=5.3">
-  <link rel="stylesheet" href="/static/css/utilities.css?v=5.3">
+  <link rel="stylesheet" href="/static/css/global.css?v=5.4">
+  <link rel="stylesheet" href="/static/css/toon-theme.css?v=5.4">
+  <link rel="stylesheet" href="/static/css/index.css?v=5.4">
+  <link rel="stylesheet" href="/static/css/pages/caja-panel.css?v=5.4">
+  <link rel="stylesheet" href="/static/css/utilities.css?v=5.4">
 </head>
 <body class="pos-body">
 <nav id="app-sidebar"></nav>
@@ -43,6 +43,10 @@
         <span id="shift-sales-label" class="u-color-token-color-success u-font-weight-900">$0.00</span>
       </div>
       <div id="shift-actions"></div>
+      <div class="u-display-flex u-align-items-center u-gap-0-4rem">
+        <span id="pos-iva-status-badge" class="badge">🧾 IVA: 16% Activo</span>
+        <button type="button" id="pos-iva-toggle-btn" class="btn btn-outline u-display-none" onclick="togglePosIva()">Deshabilitar IVA</button>
+      </div>
     </div>
 
   <!-- CONTENIDO 1: POS TOUCH -->
@@ -400,9 +404,9 @@
     </div>
   </div>
 
-  <script src="/static/js/auth.js?v=5.3"></script>
-  <script src="/static/js/appShell.js?v=5.3"></script>
-  <script src="/static/js/websocket.js?v=5.3"></script>
-  <script src="/static/js/caja.js?v=5.3"></script>
+  <script src="/static/js/auth.js?v=5.4"></script>
+  <script src="/static/js/appShell.js?v=5.4"></script>
+  <script src="/static/js/websocket.js?v=5.4"></script>
+  <script src="/static/js/caja.js?v=5.4"></script>
 </body>
 </html>

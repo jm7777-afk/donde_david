@@ -22,6 +22,39 @@ document.addEventListener("DOMContentLoaded", () => {
         || event === "SOLICITUD_MESA" || event === "SOLICITUD_MESA_ACTUALIZADA"
         || event === "MESA_ACTUALIZADA") {
       loadMeseroData();
+      if (event === "SOLICITUD_MESA") {
+        notifyHighPriority({
+          area: "SALÓN",
+          title: data.tipo === "SOLICITAR_CUENTA" ? "Mesa solicita la cuenta" : "Llamado urgente de mesa",
+          message: `Mesa #${data.mesa || ""} solicita atención del mesero.`,
+          level: "critical",
+          tag: `salon-req-${data.id || data.mesa || ""}`,
+        });
+      } else if (event === "CAMBIO_ESTADO_PEDIDO" && data.nuevo_estado === "LISTO") {
+        notifyHighPriority({
+          area: "SALÓN",
+          title: "Pedido listo en cocina",
+          message: `Pedido #${data.pedido_id || ""} (${data.numero_mesa || "Mesa"}) listo para llevar al comensal.`,
+          level: "critical",
+          tag: `salon-ready-${data.pedido_id || ""}`,
+        });
+      } else if (event === "NUEVO_PEDIDO" && (data.tipo === "mesa" || String(data.numero_mesa || "").toLowerCase().includes("mesa"))) {
+        notifyHighPriority({
+          area: "SALÓN",
+          title: "Nueva comanda en salón",
+          message: `Pedido #${data.id || ""} en ${data.numero_mesa || "Mesa"}.`,
+          level: "high",
+          tag: `salon-new-${data.id || ""}`,
+        });
+      } else if (event === "PAGO_CONFIRMADO") {
+        notifyHighPriority({
+          area: "SALÓN",
+          title: "Cuenta cobrada en Caja",
+          message: `Pedido #${data.pedido_id || data.id || ""} cobrado; verifica estado de la mesa.`,
+          level: "high",
+          tag: `salon-paid-${data.pedido_id || data.id || ""}`,
+        });
+      }
     }
   });
 });

@@ -58,6 +58,9 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   new WSClient((event, data) => {
+    if (event === "CONFIGURACION_ACTUALIZADA") {
+      loadPosConfig().then(() => renderPosTicket()).catch(() => {});
+    }
     if (event === "NUEVO_PEDIDO" || event === "PEDIDO_PENDIENTE_COBRO" || event === "PAGO_MOVIL_PENDIENTE"
         || event === "PAGO_CONFIRMADO" || event === "TURNO_ACTUALIZADO"
         || event === "CAMBIO_ESTADO_PEDIDO" || event === "MOVIMIENTO_CAJA") {
@@ -66,13 +69,65 @@ document.addEventListener("DOMContentLoaded", () => {
       loadPaidOrders();
       loadPickupOrders();
       if (event === "PAGO_MOVIL_PENDIENTE") {
-        showToast(`Nuevo Pago Móvil por verificar: pedido #${data.id}.`, "info");
+        notifyHighPriority({
+          area: "CAJA",
+          title: "Pago Móvil por validar",
+          message: `Pedido #${data.id || ""} requiere verificación manual de referencia.`,
+          level: "critical",
+          tag: `caja-pm-${data.id || ""}`,
+        });
       } else if (event === "PEDIDO_PENDIENTE_COBRO") {
-        showToast(`Nuevo pedido pendiente de cobro: #${data.id}.`, "info");
+        notifyHighPriority({
+          area: "CAJA",
+          title: "Nuevo pedido pendiente de cobro",
+          message: `Pedido #${data.id || ""} (${data.numero_mesa || "Mostrador"}) esperando confirmación en Caja.`,
+          level: "critical",
+          tag: `caja-cobro-${data.id || ""}`,
+        });
+      } else if (event === "NUEVO_PEDIDO") {
+        notifyHighPriority({
+          area: "CAJA",
+          title: "Nuevo pedido recibido",
+          message: `Pedido #${data.id || ""} · ${data.numero_mesa || "Mostrador"}.`,
+          level: "high",
+          tag: `caja-new-${data.id || ""}`,
+        });
+      } else if (event === "CAMBIO_ESTADO_PEDIDO" && (data.nuevo_estado === "LISTO" || data.estado_retiro === "LISTO_PARA_RETIRAR")) {
+        notifyHighPriority({
+          area: "CAJA",
+          title: "Pedido listo para entregar / retirar",
+          message: `Pedido #${data.pedido_id || ""} (${data.numero_mesa || "Mostrador"}) está listo.`,
+          level: "high",
+          tag: `caja-ready-${data.pedido_id || ""}`,
+        });
       }
     }
   });
 });
+
+async function togglePosIva() {
+  const btn = document.getElementById("pos-iva-toggle-btn");
+  const nextVal = btn?.dataset?.nextIva || (posTaxRate > 0 ? "false" : "true");
+  if (btn) btn.disabled = true;
+  try {
+    const res = await fetch("/api/v1/admin/configuraciones", {
+      method: "POST",
+      headers: Auth.getHeaders(),
+      body: JSON.stringify({ clave: "iva_activo", valor: nextVal })
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || "No se pudo cambiar el estado del IVA.");
+    }
+    await loadPosConfig();
+    renderPosTicket();
+    showToast(nextVal === "true" ? "🧾 IVA habilitado en Caja POS." : "🧾 IVA deshabilitado en Caja POS.", "success");
+  } catch (err) {
+    showToast(err.message, "danger");
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
 
 async function loadPosConfig() {
   const res = await fetch("/api/v1/cliente/configuraciones-publicas");
@@ -82,6 +137,23 @@ async function loadPosConfig() {
   tasaCambioBs = Number.isFinite(rate) && rate > 0 ? rate : null;
   const ivaActivo = cfg.iva_activo !== "false" && cfg.iva_activo !== false;
   posTaxRate = ivaActivo && Number.isFinite(Number(cfg.impuesto_porcentaje)) ? Number(cfg.impuesto_porcentaje) : (ivaActivo ? 16 : 0);
+  const posTaxLabel = document.getElementById("pos-tax-label");
+  if (posTaxLabel) posTaxLabel.textContent = ivaActivo ? `IVA (${posTaxRate}%):` : "IVA (0% · Exento):";
+  const ivaBadge = document.getElementById("pos-iva-status-badge");
+  if (ivaBadge) {
+    ivaBadge.textContent = ivaActivo ? `🧾 IVA: ${posTaxRate}% Activo` : "🧾 IVA: Deshabilitado (0%)";
+  }
+  const ivaToggleBtn = document.getElementById("pos-iva-toggle-btn");
+  const currentRole = String(Auth.getUser()?.rol || "").toLowerCase();
+  if (ivaToggleBtn) {
+    if (["admin", "supervisor"].includes(currentRole)) {
+      ivaToggleBtn.classList.remove("u-display-none");
+      ivaToggleBtn.textContent = ivaActivo ? "Deshabilitar IVA" : "Habilitar IVA";
+      ivaToggleBtn.dataset.nextIva = ivaActivo ? "false" : "true";
+    } else {
+      ivaToggleBtn.classList.add("u-display-none");
+    }
+  }
   posDeliveryFee = Number.isFinite(Number(cfg.costo_delivery)) ? Number(cfg.costo_delivery) : 5;
   posPackageFee = Number.isFinite(Number(cfg.costo_empaque)) ? Number(cfg.costo_empaque) : 3;
   tasaFuente = cfg.tasa_fuente || "";
