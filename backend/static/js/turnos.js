@@ -97,7 +97,17 @@ async function loadTurnosBoard() {
   }
 }
 
+function syncTurnosDeviceProfile() {
+  if (typeof document === "undefined" || typeof window === "undefined") return;
+  const w = window.innerWidth;
+  const device = w < 640 ? "mobile" : w < 1024 ? "tablet" : w < 1366 ? "laptop" : w < 1920 ? "desktop" : "tv";
+  document.documentElement.dataset.device = device;
+  document.documentElement.dataset.orientation = w >= window.innerHeight ? "landscape" : "portrait";
+}
+
 document.addEventListener("DOMContentLoaded", () => {
+  syncTurnosDeviceProfile();
+  window.addEventListener("resize", syncTurnosDeviceProfile);
   updateTurnosClock();
   loadTurnosBoard();
   setInterval(updateTurnosClock, 1000);

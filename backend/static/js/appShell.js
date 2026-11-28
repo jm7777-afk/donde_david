@@ -1,5 +1,39 @@
 // appShell.js – Universal Header & System Component for "Donde David"
-// Estética Cashea, adaptabilidad por rol y monitoreo en tiempo real
+// Estética Cashea, adaptabilidad por rol/dispositivo y monitoreo en tiempo real
+
+function getDeviceViewportClass(widthPx = (typeof window !== "undefined" ? window.innerWidth : 1280)) {
+  if (widthPx < 640) return "mobile";
+  if (widthPx < 1024) return "tablet";
+  if (widthPx < 1366) return "laptop";
+  if (widthPx < 1920) return "desktop";
+  return "tv";
+}
+
+function applyResponsiveDeviceMode() {
+  if (typeof document === "undefined" || typeof window === "undefined") return "desktop";
+  const device = getDeviceViewportClass(window.innerWidth);
+  const orientation = window.innerWidth >= window.innerHeight ? "landscape" : "portrait";
+  const root = document.documentElement;
+  if (root) {
+    root.dataset.device = device;
+    root.dataset.orientation = orientation;
+  }
+  return device;
+}
+
+if (typeof window !== "undefined") {
+  window.DondeDavidViewport = {
+    getDeviceType: getDeviceViewportClass,
+    applyResponsiveDeviceMode
+  };
+  applyResponsiveDeviceMode();
+  let _ddResizeTimer = null;
+  window.addEventListener("resize", () => {
+    clearTimeout(_ddResizeTimer);
+    _ddResizeTimer = setTimeout(applyResponsiveDeviceMode, 80);
+  });
+  window.addEventListener("orientationchange", applyResponsiveDeviceMode);
+}
 
 function openModal(id) {
   const el = document.getElementById(id);
@@ -66,7 +100,7 @@ function renderUniversalHeader() {
   let rightActions = "";
   if (role === "cocina") {
     rightActions = `
-      <div style="display: flex; gap: 0.3rem;" title="Escala de Pantalla KDS">
+      <div class="universal-kds-scale-hdr" style="display: flex; gap: 0.3rem;" title="Escala de Pantalla KDS">
         <button class="btn btn-outline" style="padding: 0.2rem 0.5rem; font-size: 0.75rem;" onclick="typeof setKDSGridScale === 'function' && setKDSGridScale('scale-sm')">🔍 80%</button>
         <button class="btn btn-outline" style="padding: 0.2rem 0.5rem; font-size: 0.75rem;" onclick="typeof setKDSGridScale === 'function' && setKDSGridScale('scale-md')">📐 100%</button>
         <button class="btn btn-outline" style="padding: 0.2rem 0.5rem; font-size: 0.75rem;" onclick="typeof setKDSGridScale === 'function' && setKDSGridScale('scale-lg')">🐘 120%</button>
@@ -172,7 +206,7 @@ if (typeof document !== "undefined") {
 if (typeof window !== "undefined" && "caches" in window) {
   caches.keys().then(names => {
     names.forEach(name => {
-      if (name.startsWith("donde-david-pwa-") && name !== "donde-david-pwa-v38") {
+      if (name.startsWith("donde-david-pwa-") && name !== "donde-david-pwa-v39") {
         caches.delete(name);
       }
     });

@@ -1,10 +1,11 @@
-const CACHE_NAME = "donde-david-pwa-v38";
+const CACHE_NAME = "donde-david-pwa-v39";
 const ASSETS_TO_CACHE = [
   "/static/index.html",
   "/static/cliente/app.html",
   "/static/css/global.css",
   "/static/css/toon-theme.css",
   "/static/css/index.css",
+  "/static/css/responsive-devices.css",
   "/static/js/auth.js",
   "/static/js/websocket.js",
   "/static/js/cliente-toon.js",

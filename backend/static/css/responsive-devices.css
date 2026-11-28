@@ -1,0 +1,690 @@
+/* ==========================================================================
+   SISTEMA ADAPTATIVO MULTI-DISPOSITIVO — DONDE DAVID
+   5 perfiles reales: Móvil (<640px), Tablet (640-1023px),
+   Laptop (1024-1365px), Escritorio (1366-1919px) y TV (>=1920px).
+   ========================================================================== */
+
+html {
+  box-sizing: border-box;
+  -webkit-text-size-adjust: 100%;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: inherit;
+}
+
+img,
+svg,
+video,
+canvas {
+  max-width: 100%;
+}
+
+/* --------------------------------------------------------------------------
+   1. MÓVIL (<= 639px | data-device="mobile")
+   Diseño vertical táctil, pantalla completa, bottom-sheet modals, 2 cols menú
+   -------------------------------------------------------------------------- */
+@media (max-width: 639px) {
+  body {
+    font-size: 0.94rem;
+  }
+
+  .app-container {
+    max-width: 100% !important;
+    margin: 0 !important;
+    border-radius: 0 !important;
+    border: 0 !important;
+    box-shadow: none !important;
+  }
+
+  .product-toon-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 0.65rem !important;
+  }
+
+  .category-photo-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 0.65rem !important;
+  }
+
+  .product-toon-card .product-toon-img {
+    height: 120px !important;
+  }
+
+  /* Bottom-sheet nativo para modales en móvil */
+  .product-modal-backdrop {
+    align-items: flex-end !important;
+    padding: 0 !important;
+  }
+
+  .product-modal-card {
+    max-width: 100% !important;
+    width: 100% !important;
+    max-height: 90dvh !important;
+    border-radius: 22px 22px 0 0 !important;
+    padding: 1.15rem 1rem calc(1.25rem + env(safe-area-inset-bottom)) !important;
+  }
+
+  .bottom-bar {
+    left: 0 !important;
+    right: 0 !important;
+    bottom: 0 !important;
+    max-width: 100% !important;
+    border-radius: 18px 18px 0 0 !important;
+  }
+
+  .floating-cart-widget {
+    width: calc(100% - 20px) !important;
+    max-width: 100% !important;
+    bottom: calc(66px + env(safe-area-inset-bottom)) !important;
+  }
+
+  /* Landing móvil */
+  .landing-hero-grid {
+    grid-template-columns: 1fr !important;
+    gap: 1.25rem !important;
+  }
+
+  .landing-cta-group,
+  .landing-cta-primary,
+  .landing-secondary-links {
+    width: 100%;
+  }
+
+  .landing-cta-primary {
+    text-align: center;
+  }
+
+  .landing-secondary-links .landing-cta-secondary {
+    flex: 1 1 140px;
+    text-align: center;
+  }
+
+  /* POS Caja móvil: pila vertical ordenada */
+  .mc-pos-container {
+    grid-template-columns: 1fr !important;
+    height: auto !important;
+  }
+
+  .mc-categories-bar {
+    flex-direction: row !important;
+    overflow-x: auto !important;
+    border-right: 0 !important;
+    border-bottom: 1px solid var(--color-border) !important;
+    padding: 0.5rem !important;
+  }
+
+  .mc-cat-btn {
+    min-width: 84px !important;
+    padding: 0.55rem 0.5rem !important;
+  }
+
+  .mc-products-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 0.6rem !important;
+  }
+
+  .mc-ticket-panel {
+    position: static !important;
+    border-left: 0 !important;
+    border-top: 2px solid var(--color-border) !important;
+  }
+
+  /* Cocina KDS móvil: 1 columna */
+  .kds-container {
+    padding: 0.75rem !important;
+  }
+
+  .kds-toolbar {
+    padding: 0.75rem !important;
+  }
+
+  .kds-toolbar-filters,
+  .kds-toolbar-controls {
+    width: 100%;
+  }
+
+  .kds-toolbar-filters > * {
+    flex: 1 1 100%;
+  }
+
+  .kds-columns-layout,
+  .kds-compact-grid {
+    grid-template-columns: 1fr !important;
+    gap: 0.85rem !important;
+  }
+
+  /* Mesero & Admin & Gerencia & Turnos móvil */
+  .mesas-grid-mesero,
+  .mesas-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 0.65rem !important;
+  }
+
+  .mesero-salon-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  .kpi-grid,
+  .manager-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  .turnos-tv-body {
+    padding: 0.85rem !important;
+  }
+
+  .turnos-tv-grid {
+    grid-template-columns: 1fr !important;
+    gap: 1rem !important;
+  }
+
+  .turnos-column {
+    min-height: auto !important;
+  }
+
+  .turnos-cards-list {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 0.65rem !important;
+  }
+}
+
+@media (max-width: 374px) {
+  .product-toon-grid,
+  .mc-products-grid,
+  .turnos-cards-list {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+/* --------------------------------------------------------------------------
+   2. TABLET (640px – 1023px | data-device="tablet")
+   Diseño híbrido táctil: grids de 2-3 cols, KDS 2 columnas, POS adaptativo
+   -------------------------------------------------------------------------- */
+@media (min-width: 640px) and (max-width: 1023px) {
+  .app-container {
+    max-width: 880px !important;
+    margin: 0.75rem auto !important;
+    border-radius: 22px !important;
+    border: 1px solid var(--toon-border) !important;
+    box-shadow: 0 18px 45px rgba(0, 0, 0, 0.55) !important;
+  }
+
+  .product-toon-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 1rem !important;
+  }
+
+  .category-photo-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  }
+
+  .bottom-bar {
+    left: 50% !important;
+    right: auto !important;
+    bottom: 10px !important;
+    transform: translateX(-50%);
+    width: min(640px, calc(100% - 24px)) !important;
+    border-radius: 20px !important;
+    border: 1px solid var(--toon-border) !important;
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.55) !important;
+  }
+
+  .floating-cart-widget {
+    max-width: 600px !important;
+    bottom: 84px !important;
+  }
+
+  /* POS Tablet Portrait (640-879): categorías horizontales arriba + ticket debajo */
+  .mc-pos-container {
+    grid-template-columns: 1fr !important;
+    height: auto !important;
+  }
+
+  .mc-categories-bar {
+    flex-direction: row !important;
+    overflow-x: auto !important;
+    border-right: 0 !important;
+    border-bottom: 1px solid var(--color-border) !important;
+  }
+
+  .mc-cat-btn {
+    min-width: 96px !important;
+  }
+
+  .mc-products-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  }
+
+  /* KDS Tablet: 2 columnas cómodas para evitar columnas angostas */
+  .kds-columns-layout,
+  .kds-compact-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 1rem !important;
+  }
+
+  .mesas-grid-mesero,
+  .mesas-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  }
+
+  .mesero-salon-summary {
+    grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+  }
+
+  .kpi-grid,
+  .manager-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  .turnos-tv-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+}
+
+/* Tablet Landscape (880px-1023px): POS 2 paneles lado a lado y 3 cols cliente */
+@media (min-width: 880px) and (max-width: 1023px) {
+  .product-toon-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  }
+
+  .mc-pos-container {
+    grid-template-columns: minmax(0, 1fr) 320px !important;
+    grid-template-rows: auto 1fr !important;
+    height: calc(100vh - 148px) !important;
+  }
+
+  .mc-categories-bar {
+    grid-column: 1 / -1;
+  }
+
+  .mc-ticket-panel {
+    overflow-y: auto !important;
+  }
+}
+
+/* --------------------------------------------------------------------------
+   3. LAPTOP (1024px – 1365px | data-device="laptop")
+   Diseño web compacto de 3 columnas para 1280x720 / 1366x768 sin desbordes
+   -------------------------------------------------------------------------- */
+@media (min-width: 1024px) and (max-width: 1365px) {
+  .app-container {
+    max-width: 1120px !important;
+    margin: 1rem auto !important;
+    border-radius: 22px !important;
+    border: 1px solid var(--toon-border) !important;
+    box-shadow: 0 22px 55px rgba(0, 0, 0, 0.72) !important;
+  }
+
+  .product-toon-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+    gap: 1.05rem !important;
+  }
+
+  .category-photo-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+  }
+
+  /* Dock flotante centrado tipo web-app en Laptop */
+  .bottom-bar {
+    left: 50% !important;
+    right: auto !important;
+    bottom: 12px !important;
+    transform: translateX(-50%);
+    width: min(580px, calc(100% - 40px)) !important;
+    border-radius: 999px !important;
+    border: 1px solid var(--toon-border) !important;
+    box-shadow: 0 12px 35px rgba(0, 0, 0, 0.65) !important;
+  }
+
+  .floating-cart-widget {
+    max-width: 560px !important;
+    bottom: 84px !important;
+  }
+
+  .side-nav-bar {
+    left: 16px !important;
+    top: 86px !important;
+  }
+
+  /* Landing compacto para altura de laptop */
+  .landing-container {
+    max-width: 1120px !important;
+  }
+
+  .landing-hero {
+    padding: 1.5rem 0 2rem !important;
+  }
+
+  /* POS 3 paneles ajustado a pantallas de laptop (1280x720+) */
+  .mc-pos-container {
+    grid-template-columns: 112px minmax(0, 1fr) 335px !important;
+    height: calc(100vh - 144px) !important;
+  }
+
+  .mc-products-grid {
+    grid-template-columns: repeat(auto-fill, minmax(138px, 1fr)) !important;
+    gap: 0.7rem !important;
+  }
+
+  .mc-ticket-panel {
+    overflow-y: auto !important;
+    padding: 0.8rem !important;
+  }
+
+  /* KDS Laptop: 3 carriles ajustados */
+  .kds-columns-layout {
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+    gap: 0.95rem !important;
+  }
+
+  .kds-compact-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  }
+
+  /* Mesero, Admin, Gerencia y Turnos Laptop */
+  .mesas-grid-mesero,
+  .mesas-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+  }
+
+  .kpi-grid,
+  .manager-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  }
+
+  .turnos-tv-grid {
+    grid-template-columns: 1fr 1.25fr !important;
+  }
+}
+
+/* --------------------------------------------------------------------------
+   4. ESCRITORIO (1366px – 1919px | data-device="desktop")
+   Widescreen equilibrado: 4 cols catálogo, 5 cols mesas, POS amplio
+   -------------------------------------------------------------------------- */
+@media (min-width: 1366px) and (max-width: 1919px) {
+  .app-container {
+    max-width: 1320px !important;
+    margin: 1.25rem auto !important;
+    border-radius: 24px !important;
+    border: 1px solid var(--toon-border) !important;
+    box-shadow: 0 24px 60px rgba(0, 0, 0, 0.78) !important;
+  }
+
+  .product-toon-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+    gap: 1.2rem !important;
+  }
+
+  .category-photo-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+  }
+
+  .bottom-bar {
+    left: 50% !important;
+    right: auto !important;
+    bottom: 14px !important;
+    transform: translateX(-50%);
+    width: 640px !important;
+    border-radius: 999px !important;
+    border: 1px solid var(--toon-border) !important;
+    box-shadow: 0 14px 38px rgba(0, 0, 0, 0.7) !important;
+  }
+
+  .floating-cart-widget {
+    max-width: 600px !important;
+    bottom: 88px !important;
+  }
+
+  .landing-container {
+    max-width: 1320px !important;
+  }
+
+  .mc-pos-container {
+    grid-template-columns: 140px minmax(0, 1fr) 390px !important;
+    height: calc(100vh - 148px) !important;
+  }
+
+  .mc-ticket-panel {
+    overflow-y: auto !important;
+  }
+
+  .kds-columns-layout {
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+    gap: 1.25rem !important;
+  }
+
+  .kds-compact-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+  }
+
+  .mesas-grid-mesero,
+  .mesas-grid {
+    grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
+  }
+
+  .kpi-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+  }
+
+  .manager-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+  }
+
+  .turnos-tv-grid {
+    grid-template-columns: 1fr 1.35fr !important;
+  }
+
+  .turnos-ticket-code {
+    font-size: 2.35rem !important;
+  }
+}
+
+/* --------------------------------------------------------------------------
+   5. TV / PANTALLA GRANDE (>= 1920px | data-device="tv")
+   Modo señalización / wallboard legible a distancia (Full HD / 4K Smart TV)
+   -------------------------------------------------------------------------- */
+@media (min-width: 1920px) {
+  body {
+    font-size: 1.08rem;
+  }
+
+  .universal-header {
+    padding: 0.75rem 2.25rem !important;
+  }
+
+  .universal-header .universal-brand img {
+    height: 62px !important;
+    max-height: 62px !important;
+  }
+
+  .universal-brand-copy strong {
+    font-size: 1.2rem !important;
+  }
+
+  .universal-role-badge,
+  .bcv-rate-badge,
+  .ws-pulse-indicator {
+    font-size: 0.9rem !important;
+    padding: 0.35rem 0.85rem !important;
+  }
+
+  .app-container {
+    max-width: 1680px !important;
+    margin: 1.5rem auto !important;
+    border-radius: 28px !important;
+    border: 1px solid var(--toon-border) !important;
+    box-shadow: 0 28px 70px rgba(0, 0, 0, 0.82) !important;
+  }
+
+  .product-toon-grid {
+    grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
+    gap: 1.4rem !important;
+  }
+
+  .category-photo-grid {
+    grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
+    gap: 1.3rem !important;
+  }
+
+  .bottom-bar {
+    left: 50% !important;
+    right: auto !important;
+    bottom: 18px !important;
+    transform: translateX(-50%);
+    width: 720px !important;
+    border-radius: 999px !important;
+    border: 1px solid var(--toon-border) !important;
+    box-shadow: 0 16px 42px rgba(0, 0, 0, 0.75) !important;
+  }
+
+  .floating-cart-widget {
+    max-width: 680px !important;
+    bottom: 94px !important;
+  }
+
+  .landing-container {
+    max-width: 1680px !important;
+  }
+
+  .mc-pos-container {
+    grid-template-columns: 170px minmax(0, 1fr) 440px !important;
+    height: calc(100vh - 160px) !important;
+  }
+
+  .mc-products-grid {
+    grid-template-columns: repeat(auto-fill, minmax(175px, 1fr)) !important;
+    gap: 1rem !important;
+  }
+
+  /* Cocina TV Wallboard */
+  .kds-container {
+    max-width: 2400px;
+    margin: 0 auto;
+    padding: 1.75rem 2.5rem !important;
+  }
+
+  .kds-columns-layout {
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+    gap: 1.5rem !important;
+  }
+
+  .kds-compact-grid {
+    grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
+    gap: 1.25rem !important;
+  }
+
+  .kds-card h3 {
+    font-size: 1.38rem !important;
+  }
+
+  .timer-badge {
+    font-size: 0.98rem !important;
+    padding: 0.35rem 0.85rem !important;
+  }
+
+  /* Turnos TV Full HD / 4K */
+  .turnos-tv-body {
+    max-width: 2400px;
+    margin: 0 auto;
+    padding: 2rem 3rem !important;
+  }
+
+  .turnos-tv-logo {
+    width: 78px !important;
+    height: 78px !important;
+  }
+
+  .turnos-tv-title {
+    font-size: clamp(2rem, 2.4vw, 3rem) !important;
+  }
+
+  .turnos-tv-clock {
+    font-size: 2rem !important;
+  }
+
+  .turnos-tv-grid {
+    grid-template-columns: 1fr 1.45fr !important;
+    gap: 2rem !important;
+  }
+
+  .turnos-col-header h2 {
+    font-size: 1.85rem !important;
+  }
+
+  .turnos-cards-list {
+    grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)) !important;
+    gap: 1.2rem !important;
+  }
+
+  .turnos-ticket-card {
+    padding: 1.4rem !important;
+    border-radius: 18px !important;
+  }
+
+  .turnos-ticket-code {
+    font-size: clamp(2.8rem, 3.2vw, 4.4rem) !important;
+  }
+
+  .turnos-ticket-client {
+    font-size: 1.2rem !important;
+  }
+
+  .turnos-tv-footer {
+    font-size: 1.15rem !important;
+    padding: 1rem 1.5rem !important;
+  }
+
+  /* Gerencia Wallboard TV, Mesero y Admin TV */
+  .manager-page,
+  .mesero-layout {
+    max-width: 2200px !important;
+    padding: 2rem 2.5rem !important;
+  }
+
+  .manager-grid,
+  .kpi-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+    gap: 1.5rem !important;
+  }
+
+  .manager-value {
+    font-size: clamp(2.2rem, 2.6vw, 3rem) !important;
+  }
+
+  .mesas-grid-mesero,
+  .mesas-grid {
+    grid-template-columns: repeat(6, minmax(0, 1fr)) !important;
+    gap: 1.25rem !important;
+  }
+}
+
+/* En tablets y móviles ocultamos controles duplicados de escala del header cuando KDS tiene barra propia */
+@media (max-width: 1023px) {
+  .universal-kds-scale-hdr {
+    display: none !important;
+  }
+}
+
+/* Carrito adaptativo: 1 col móvil/tablet, 2 cols en Laptop, Escritorio y TV */
+.client-cart-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 1rem;
+  align-items: start;
+}
+
+@media (min-width: 1024px) {
+  .client-cart-grid {
+    grid-template-columns: minmax(0, 1.35fr) minmax(300px, 0.95fr);
+    gap: 1.5rem;
+  }
+
+  .client-cart-summary-col {
+    position: sticky;
+    top: 84px;
+    margin: 0 !important;
+  }
+}
