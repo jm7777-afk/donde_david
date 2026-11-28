@@ -27,6 +27,7 @@ from backend.app.models.resena import Resena
 from backend.app.models.publicacion import Publicacion
 from backend.app.models.movimiento_inventario import MovimientoInventario
 from backend.app.models.favorito_cliente import FavoritoCliente
+from backend.app.models.archivo_media import ArchivoMedia
 from backend.app.schemas.schemas import (
     CategoriaOut,
     ProductoOut,
@@ -314,6 +315,21 @@ def get_guia_cliente(tipo: Optional[str] = None, db: Session = Depends(get_db)):
     if tipo:
         query = query.filter(GuiaItem.tipo_vista.in_([tipo, "ambos"]))
     return query.order_by(GuiaItem.orden.asc()).all()
+
+@router.get("/media/{media_id}")
+def get_media_cliente(media_id: str, db: Session = Depends(get_db)):
+    clean_id = (media_id or "").strip()
+    if not clean_id or len(clean_id) > 36:
+        raise HTTPException(status_code=404, detail="Imagen no encontrada.")
+    media = db.query(ArchivoMedia).filter(ArchivoMedia.id == clean_id).first()
+    if not media:
+        raise HTTPException(status_code=404, detail="Imagen no encontrada.")
+    return Response(
+        content=media.contenido,
+        media_type=media.content_type,
+        headers={"Cache-Control": "public, max-age=31536000, immutable"},
+    )
+
 
 @router.get("/categorias", response_model=List[CategoriaOut])
 def get_categorias(db: Session = Depends(get_db)):

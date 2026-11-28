@@ -112,7 +112,7 @@ function normalizeStoredCartItem(item) {
     precio_unitario: unitPrice,
     cantidad: quantity,
     subtotal: unitPrice * quantity,
-    imagen_url: typeof item.imagen_url === "string" && /^(https:\/\/|\/static\/)/i.test(item.imagen_url)
+    imagen_url: typeof item.imagen_url === "string" && /^(https:\/\/|\/static\/|\/api\/v1\/cliente\/media\/)/i.test(item.imagen_url)
       ? item.imagen_url.slice(0, 500)
       : "",
     puntos_fidelidad: Math.max(0, Number(item.puntos_fidelidad) || 0),
@@ -257,7 +257,7 @@ function escapeClientHtml(value) {
 
 function getSafePromoMediaUrl(value) {
   const url = String(value || "").trim();
-  return /^(https:\/\/|\/static\/)/i.test(url) && !url.startsWith("//")
+  return /^(https:\/\/|\/static\/|\/api\/v1\/cliente\/media\/)/i.test(url) && !url.startsWith("//")
     ? url
     : "/static/img/logo.png";
 }
@@ -1209,7 +1209,7 @@ function renderProductCards(products) {
   return products.map(product => {
     const pid = Number(product.id);
     const rawImage = String(product.imagen_url || "");
-    const image = /^(https:\/\/|\/static\/)/i.test(rawImage)
+    const image = /^(https:\/\/|\/static\/|\/api\/v1\/cliente\/media\/)/i.test(rawImage)
       ? escapeClientHtml(rawImage)
       : "/static/img/logo.png";
     const allergens = getDeclaredAllergens(product);
@@ -1221,7 +1221,7 @@ function renderProductCards(products) {
       <div class="product-toon-card" onclick="openProductModal(${pid})">
         <div class="product-img-container">
           <button type="button" class="product-fav-btn ${isFav ? "is-fav" : ""}" aria-label="Favorito" onclick="toggleFavoriteProduct(${pid}, event)">${isFav ? "❤️" : "🤍"}</button>
-          <img src="${image}" alt="${escapeClientHtml(product.nombre)}" loading="lazy">
+          <img src="${image}" alt="${escapeClientHtml(product.nombre)}" loading="lazy" onerror="this.onerror=null;this.src='/static/img/logo.png';">
           <span class="product-badge">${promoPrice ? "🔥 PROMO" : "🔥 TOON"}</span>
         </div>
         <div class="product-info">
@@ -1261,7 +1261,9 @@ function openProductModal(prodId) {
   if (addButton) addButton.textContent = "🛒 AGREGAR AL CARRITO";
   document.getElementById("modal-qty-val").innerText = "1";
   const productImage = String(currentSelectedModalProduct.imagen_url || "");
-  document.getElementById("modal-product-img").src = /^(https:\/\/|\/static\/)/i.test(productImage)
+  const modalImgEl = document.getElementById("modal-product-img");
+  modalImgEl.onerror = () => { modalImgEl.onerror = null; modalImgEl.src = "/static/img/logo.png"; };
+  modalImgEl.src = /^(https:\/\/|\/static\/|\/api\/v1\/cliente\/media\/)/i.test(productImage)
     ? productImage
     : "/static/img/logo.png";
   document.getElementById("modal-product-title").innerText = currentSelectedModalProduct.nombre;
@@ -1563,13 +1565,13 @@ function renderToonCart() {
   let html = "";
   toonCart.forEach((item, idx) => {
     subtotal += item.subtotal;
-    const image = /^(https:\/\/|\/static\/)/i.test(item.imagen_url || "")
+    const image = /^(https:\/\/|\/static\/|\/api\/v1\/cliente\/media\/)/i.test(item.imagen_url || "")
       ? escapeClientHtml(item.imagen_url)
       : "/static/img/logo.png";
     const customizations = [...item.opciones, ...(item.extras || []).map(extra => `Extra: ${extra}`)];
     html += `
       <article class="client-cart-item">
-        <img class="client-cart-item-image" src="${image}" alt="" loading="lazy">
+        <img class="client-cart-item-image" src="${image}" alt="" loading="lazy" onerror="this.onerror=null;this.src='/static/img/logo.png';">
         <div class="client-cart-item-content">
           <div class="client-cart-item-heading">
             <strong>${escapeClientHtml(item.nombre)}</strong>
@@ -1590,6 +1592,26 @@ function renderToonCart() {
       </article>
     `;
   });
+
+  const snap = computeCartPricingSnapshot();
+  const discountRow = document.getElementById("cart-discount-row");
+  const discountVal = document.getElementById("cart-discount");
+  const tipRow = document.getElementById("cart-tip-row");
+  const tipVal = document.getElementById("cart-tip");
+  if (discountRow) discountRow.style.display = snap.couponDiscount > 0 ? "flex" : "none";
+  if (discountVal) discountVal.innerHTML = `-${formatPriceDual(snap.couponDiscount)}`;
+  if (tipRow) tipRow.style.display = snap.tipAmount > 0 ? "flex" : "none";
+  if (tipVal) tipVal.innerHTML = formatPriceDual(snap.tipAmount);
+
+  container.innerHTML = html;
+  document.getElementById("cart-subtotal").innerHTML = formatPriceDual(snap.rawSubtotal);
+  document.getElementById("cart-tax").innerHTML = formatPriceDual(snap.tax);
+  if (document.getElementById("cart-delivery-cost")) document.getElementById("cart-delivery-cost").innerHTML = formatPriceDual(snap.delivCost);
+  if (document.getElementById("cart-empaque-cost")) document.getElementById("cart-empaque-cost").innerHTML = formatPriceDual(snap.empaqueCost);
+  document.getElementById("cart-total").innerHTML = formatPriceDual(snap.total);
+  renderCartUpsell();
+  updateCheckoutOrderSummary();
+}
 
 function computeCartPricingSnapshot() {
   const rawSubtotal = Math.round(toonCart.reduce((sum, item) => sum + Number(item.subtotal || 0), 0) * 100) / 100;
@@ -1694,7 +1716,7 @@ function renderCartUpsell() {
     const img = getSafePromoMediaUrl(p.imagen_url);
     return `
       <div class="cart-upsell-card">
-        <img src="${escapeClientHtml(img)}" alt="${escapeClientHtml(p.nombre)}">
+        <img src="${escapeClientHtml(img)}" alt="${escapeClientHtml(p.nombre)}" onerror="this.onerror=null;this.src='/static/img/logo.png';">
         <strong style="font-size:0.82rem;">${escapeClientHtml(p.nombre)}</strong>
         <span style="color:var(--gold-accent);font-weight:900;font-size:0.82rem;">$${price.toFixed(2)}</span>
         <button type="button" class="btn-gold" style="padding:0.3rem 0.5rem;font-size:0.75rem;" onclick="addUpsellProduct(${Number(p.id)})">+ Agregar</button>
@@ -1722,26 +1744,6 @@ function addUpsellProduct(prodId) {
   updateCartNavBadge();
   renderToonCart();
   showToast(`➕ ${prod.nombre} agregado al pedido.`, "success");
-}
-
-  const snap = computeCartPricingSnapshot();
-  const discountRow = document.getElementById("cart-discount-row");
-  const discountVal = document.getElementById("cart-discount");
-  const tipRow = document.getElementById("cart-tip-row");
-  const tipVal = document.getElementById("cart-tip");
-  if (discountRow) discountRow.style.display = snap.couponDiscount > 0 ? "flex" : "none";
-  if (discountVal) discountVal.innerHTML = `-${formatPriceDual(snap.couponDiscount)}`;
-  if (tipRow) tipRow.style.display = snap.tipAmount > 0 ? "flex" : "none";
-  if (tipVal) tipVal.innerHTML = formatPriceDual(snap.tipAmount);
-
-  container.innerHTML = html;
-  document.getElementById("cart-subtotal").innerHTML = formatPriceDual(snap.rawSubtotal);
-  document.getElementById("cart-tax").innerHTML = formatPriceDual(snap.tax);
-  if (document.getElementById("cart-delivery-cost")) document.getElementById("cart-delivery-cost").innerHTML = formatPriceDual(snap.delivCost);
-  if (document.getElementById("cart-empaque-cost")) document.getElementById("cart-empaque-cost").innerHTML = formatPriceDual(snap.empaqueCost);
-  document.getElementById("cart-total").innerHTML = formatPriceDual(snap.total);
-  renderCartUpsell();
-  updateCheckoutOrderSummary();
 }
 
 function removeToonCartItem(idx) {

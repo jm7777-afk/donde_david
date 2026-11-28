@@ -22,6 +22,7 @@ from backend.app.models.usuario import Usuario
 from backend.app.models.categoria import Categoria
 from backend.app.models.producto import Producto
 from backend.app.models.producto_insumo import ProductoInsumo
+from backend.app.models.archivo_media import ArchivoMedia
 from backend.app.models.pedido import Pedido
 from backend.app.models.detalle_pedido import DetallePedido
 from backend.app.models.turno import Turno
@@ -111,6 +112,7 @@ class ProductoUpdate(BaseModel):
     precio_promocion: Optional[float] = Field(default=None, ge=0, allow_inf_nan=False)
     costo_unitario: Optional[float] = Field(default=None, ge=0, allow_inf_nan=False)
     stock: Optional[int] = Field(default=None, ge=0)
+    stock_minimo: Optional[int] = Field(default=None, ge=0)
     puntos_fidelidad: Optional[int] = Field(default=None, ge=0, le=100000)
     tiempo_preparacion: Optional[int] = Field(default=None, ge=1, le=240)
     imagen_url: Optional[str] = None
@@ -215,10 +217,11 @@ def validate_product_json(value: Optional[str], field: str) -> None:
             if not (
                 (parsed_url.scheme == "https" and parsed_url.netloc and not parsed_url.username and not parsed_url.password)
                 or media_url.startswith("/static/uploads/")
+                or media_url.startswith("/api/v1/cliente/media/")
             ):
                 raise HTTPException(
                     status_code=422,
-                    detail="La URL multimedia debe usar HTTPS o una ruta local /static/uploads/.",
+                    detail="La URL multimedia debe usar HTTPS o una ruta guardada del servidor.",
                 )
 
 
@@ -295,22 +298,23 @@ MAX_UPLOAD_BYTES = 5 * 1024 * 1024
 logger = logging.getLogger(__name__)
 
 @router.post("/upload")
-async def upload_file(file: UploadFile = File(...)):
+async def upload_file(file: UploadFile = File(...), db: Session = Depends(get_db)):
     extension = os.path.splitext(file.filename or "")[1].lower()
     supported_types = {
-        ".jpg": ("image/jpeg", lambda content: content.startswith(b"\xff\xd8\xff")),
-        ".jpeg": ("image/jpeg", lambda content: content.startswith(b"\xff\xd8\xff")),
-        ".png": ("image/png", lambda content: content.startswith(b"\x89PNG\r\n\x1a\n")),
-        ".webp": ("image/webp", lambda content: content.startswith(b"RIFF") and content[8:12] == b"WEBP"),
+        ".jpg": ("image/jpeg", {"image/jpeg", "image/jpg", "image/pjpeg", "application/octet-stream", ""}, lambda content: content.startswith(b"\xff\xd8\xff")),
+        ".jpeg": ("image/jpeg", {"image/jpeg", "image/jpg", "image/pjpeg", "application/octet-stream", ""}, lambda content: content.startswith(b"\xff\xd8\xff")),
+        ".png": ("image/png", {"image/png", "image/x-png", "application/octet-stream", ""}, lambda content: content.startswith(b"\x89PNG\r\n\x1a\n")),
+        ".webp": ("image/webp", {"image/webp", "application/octet-stream", ""}, lambda content: content.startswith(b"RIFF") and content[8:12] == b"WEBP"),
     }
     file_type = supported_types.get(extension)
-    if not file_type or file.content_type != file_type[0]:
+    raw_mime = (file.content_type or "").split(";")[0].strip().lower()
+    if not file_type or raw_mime not in file_type[1]:
         raise HTTPException(status_code=415, detail="Solo se permiten imágenes JPEG, PNG o WEBP válidas.")
 
     content = await file.read(MAX_UPLOAD_BYTES + 1)
     if len(content) > MAX_UPLOAD_BYTES:
         raise HTTPException(status_code=413, detail="El archivo supera el límite de 5 MB.")
-    if not file_type[1](content):
+    if not file_type[2](content):
         raise HTTPException(status_code=415, detail="El contenido del archivo no coincide con una imagen válida.")
 
     cloud_name = os.getenv("CLOUDINARY_CLOUD_NAME", "").strip()
@@ -327,7 +331,7 @@ async def upload_file(file: UploadFile = File(...)):
                 resp = await client.post(
                     upload_endpoint,
                     data={"api_key": cloud_key, "timestamp": ts, "folder": folder, "signature": signature},
-                    files={"file": (file.filename or f"upload{extension}", content, file.content_type)},
+                    files={"file": (file.filename or f"upload{extension}", content, file_type[0])},
                 )
             if resp.status_code == 200:
                 cloud_data = resp.json()
@@ -335,23 +339,25 @@ async def upload_file(file: UploadFile = File(...)):
                 if secure_url:
                     return {"url": secure_url, "filename": cloud_data.get("public_id", ""), "provider": "cloudinary"}
         except Exception as exc:
-            logger.warning("Cloudinary upload fallback to local storage: %s", exc)
+            logger.warning("Cloudinary upload fallback to database storage: %s", exc)
 
-    unique_filename = f"{uuid.uuid4().hex}{extension}"
-    file_path = os.path.join(UPLOAD_DIR, unique_filename)
-    temporary_path = None
-    try:
-        with tempfile.NamedTemporaryFile(dir=UPLOAD_DIR, delete=False) as temporary_file:
-            temporary_path = temporary_file.name
-            temporary_file.write(content)
-        os.replace(temporary_path, file_path)
-        relative_url = f"/static/uploads/{unique_filename}"
-        return {"url": relative_url, "filename": unique_filename}
-    except OSError as exc:
-        if temporary_path and os.path.exists(temporary_path):
-            os.remove(temporary_path)
-        logger.exception("Failed to store uploaded image.")
-        raise HTTPException(status_code=500, detail="No se pudo guardar el archivo.") from exc
+    media_id = uuid.uuid4().hex
+    clean_filename = os.path.basename(file.filename or f"{media_id}{extension}")[:250]
+    media_record = ArchivoMedia(
+        id=media_id,
+        nombre_archivo=clean_filename,
+        content_type=file_type[0],
+        tamano_bytes=len(content),
+        contenido=content,
+    )
+    db.add(media_record)
+    db.commit()
+    return {
+        "url": f"/api/v1/cliente/media/{media_id}",
+        "filename": clean_filename,
+        "media_id": media_id,
+        "provider": "database",
+    }
 
 # ==================== DASHBOARD & METRICS ====================
 def _resolve_metric_category_ids(db: Session, categoria: Optional[str]) -> Optional[list[int]]:
@@ -1133,6 +1139,7 @@ async def update_producto_admin(
                 motivo="Ajuste manual de stock",
                 usuario_id=current_user.id
             ))
+    if data.stock_minimo is not None: p.stock_minimo = data.stock_minimo
     if data.puntos_fidelidad is not None: p.puntos_fidelidad = data.puntos_fidelidad
     if data.tiempo_preparacion is not None: p.tiempo_preparacion = data.tiempo_preparacion
     if data.imagen_url is not None: p.imagen_url = data.imagen_url

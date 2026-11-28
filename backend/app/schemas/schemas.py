@@ -163,7 +163,9 @@ class ProductoUpdate(BaseModel):
     precio_promocion: Optional[float] = Field(default=None, ge=0, allow_inf_nan=False)
     costo_unitario: Optional[float] = Field(default=None, ge=0, allow_inf_nan=False)
     stock: Optional[int] = Field(default=None, ge=0)
+    stock_minimo: Optional[int] = Field(default=None, ge=0)
     puntos_fidelidad: Optional[int] = Field(default=None, ge=0, le=100000)
+    tiempo_preparacion: Optional[int] = Field(default=None, ge=1, le=240)
     imagen_url: Optional[str] = None
     categoria_id: Optional[int] = None
     ingredientes_json: Optional[str] = None

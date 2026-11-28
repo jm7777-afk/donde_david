@@ -989,3 +989,80 @@ def test_promotion_global_price_bundle_pricing_and_validation(client):
 
     # Cleanup test promo
     assert client.delete(f"/api/v1/admin/promociones/{promo['id']}", headers=admin_headers).status_code == 200
+
+
+def test_media_db_storage_cliente_scope_and_database_format(client):
+    from pathlib import Path
+    from backend.scripts.seed_data import seed
+
+    root = Path(__file__).resolve().parent.parent
+    cliente_js = (root / "backend/static/js/cliente-toon.js").read_text(encoding="utf-8")
+    cocina_js = (root / "backend/static/js/cocina.js").read_text(encoding="utf-8")
+    assert "\nfunction computeCartPricingSnapshot(" in cliente_js
+    assert "\nfunction setKDSModeFilter(" in cocina_js
+    assert "\nfunction setKDSSearch(" in cocina_js
+
+    admin_headers = _login(client, "admin", "admin123")
+    cat_id = client.get("/api/v1/admin/categorias", headers=admin_headers).json()[0]["id"]
+
+    # 1. Upload PNG & JPEG (even with image/jpg MIME) -> stored in DB and served publicly
+    png_bytes = b"\x89PNG\r\n\x1a\n" + b"\x00" * 32
+    up_png = client.post(
+        "/api/v1/admin/upload",
+        headers=admin_headers,
+        files={"file": ("burger.png", png_bytes, "image/png")},
+    )
+    assert up_png.status_code == 200, up_png.text
+    up_data = up_png.json()
+    assert up_data["provider"] == "database"
+    assert up_data["url"].startswith("/api/v1/cliente/media/")
+
+    jpg_bytes = b"\xff\xd8\xff\xe0" + b"\x00" * 24
+    up_jpg = client.post(
+        "/api/v1/admin/upload",
+        headers=admin_headers,
+        files={"file": ("combo.JPG", jpg_bytes, "image/jpg")},
+    )
+    assert up_jpg.status_code == 200, up_jpg.text
+    assert up_jpg.json()["url"].startswith("/api/v1/cliente/media/")
+
+    served = client.get(up_data["url"])
+    assert served.status_code == 200
+    assert served.content == png_bytes
+    assert served.headers["content-type"].startswith("image/png")
+
+    prod_res = client.post("/api/v1/admin/productos", headers=admin_headers, json={
+        "nombre": f"Foto DB {uuid4().hex[:5]}",
+        "precio": 9.5,
+        "categoria_id": cat_id,
+        "imagen_url": up_data["url"],
+        "stock": 10,
+    })
+    assert prod_res.status_code == 200, prod_res.text
+    prod_id = prod_res.json()["id"]
+
+    public_prods = client.get("/api/v1/cliente/productos").json()
+    assert any(p["id"] == prod_id and p["imagen_url"] == up_data["url"] for p in public_prods)
+
+    # 2. Format DB endpoint requires explicit confirmation and wipes records cleanly
+    bad_fmt = client.post(
+        "/api/v1/admin/backups/formatear-bd",
+        headers=admin_headers,
+        json={"confirmacion": "NO"},
+    )
+    assert bad_fmt.status_code == 422
+
+    try:
+        ok_fmt = client.post(
+            "/api/v1/admin/backups/formatear-bd",
+            headers=admin_headers,
+            json={"confirmacion": "FORMATEAR"},
+        )
+        assert ok_fmt.status_code == 200, ok_fmt.text
+        assert client.get("/api/v1/cliente/productos").json() == []
+        assert client.get("/api/v1/cliente/categorias").json() == []
+        assert client.get(up_data["url"]).status_code == 404
+        users_left = client.get("/api/v1/admin/usuarios", headers=admin_headers).json()
+        assert len(users_left) == 1 and users_left[0]["rol"] == "admin"
+    finally:
+        seed()

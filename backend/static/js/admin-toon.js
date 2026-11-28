@@ -37,8 +37,8 @@ function parseProductEditorList(rawValue, kind) {
     if (!["imagen", "video"].includes(first.toLowerCase())) {
       throw new Error(`El tipo de contenido en la línea ${index + 1} debe ser imagen o video.`);
     }
-    if (!(second.startsWith("https://") || second.startsWith("/static/uploads/"))) {
-      throw new Error(`La URL multimedia en la línea ${index + 1} debe ser HTTPS o /static/uploads/.`);
+    if (!(second.startsWith("https://") || second.startsWith("/static/uploads/") || second.startsWith("/api/v1/cliente/media/"))) {
+      throw new Error(`La URL multimedia en la línea ${index + 1} debe ser HTTPS o una imagen subida al servidor.`);
     }
     return { tipo: first.toLowerCase(), url: second };
   });
@@ -121,7 +121,7 @@ async function uploadLocalFile(event, targetInputId) {
   const formData = new FormData();
   formData.append("file", file);
 
-  showToast("Subiendo archivo al servidor...", "info");
+  showToast("Subiendo archivo a la base de datos...", "info");
 
   try {
     const res = await fetch("/api/v1/admin/upload", {
@@ -129,12 +129,17 @@ async function uploadLocalFile(event, targetInputId) {
       headers: Auth.getToken() ? { Authorization: `Bearer ${Auth.getToken()}` } : {},
       body: formData
     });
-    if (!res.ok) throw new Error("Error al subir archivo");
-    const data = await res.json();
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.detail || "Error al subir archivo");
     document.getElementById(targetInputId).value = data.url;
-    showToast("¡Archivo guardado en el servidor con éxito!", "success");
+    showToast(
+      data.provider === "database"
+        ? "¡Imagen guardada en la base de datos con éxito!"
+        : "¡Archivo guardado en el servidor con éxito!",
+      "success"
+    );
   } catch (err) {
-    showToast(err.message, "danger");
+    showToast(err.message || "Error al subir archivo", "danger");
   }
 }
 
@@ -496,7 +501,7 @@ function renderProducts() {
 
     return `
       <tr style="border-bottom: 1px solid var(--toon-border);">
-        <td style="padding: 0.75rem;"><img src="${img}" alt="" loading="lazy" style="width: 44px; height: 44px; border-radius: 8px; object-fit: cover;"></td>
+        <td style="padding: 0.75rem;"><img src="${img}" alt="" loading="lazy" onerror="this.onerror=null;this.src='/static/img/logo.png';" style="width: 44px; height: 44px; border-radius: 8px; object-fit: cover;"></td>
         <td style="padding: 0.75rem;">${escapeAdminHtml(category)}</td>
         <td style="padding: 0.75rem; font-weight: 700; color: #fff;">${escapeAdminHtml(p.nombre)}</td>
         <td style="padding: 0.75rem; font-weight: 900;">${formatPriceDual(p.precio)}</td>
@@ -1430,7 +1435,7 @@ function renderCategories() {
     const img = escapeAdminHtml(c.imagen_url || "https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=500");
     html += `
       <tr style="border-bottom: 1px solid var(--toon-border);">
-        <td style="padding: 0.75rem;"><img src="${img}" alt="${escapeAdminHtml(c.nombre)}" style="width: 44px; height: 44px; border-radius: 8px; object-fit: cover;"></td>
+        <td style="padding: 0.75rem;"><img src="${img}" alt="${escapeAdminHtml(c.nombre)}" onerror="this.onerror=null;this.src='/static/img/logo.png';" style="width: 44px; height: 44px; border-radius: 8px; object-fit: cover;"></td>
         <td style="padding: 0.75rem; font-weight: 700; color: #fff;">${escapeAdminHtml(c.nombre)}</td>
         <td style="padding: 0.75rem; color: var(--text-muted);">${escapeAdminHtml(c.descripcion || '')}</td>
         <td style="padding: 0.75rem;"><button class="btn-gold" style="padding: 0.3rem 0.6rem; font-size: 0.75rem; background: var(--neon-red); color: #fff;" onclick="deleteCategoria(${Number(c.id)})">🗑️ Eliminar</button></td>
@@ -2085,6 +2090,48 @@ async function promptCreateBackup() {
   } catch (e) {
     console.error("Error al generar copia de seguridad:", e);
     showToast(e.message || "Error al generar la copia de seguridad", "error");
+  }
+}
+
+async function promptFormatDatabase() {
+  const confirmed = await window.showConfirmModal({
+    title: "⚠️ Formatear registros de la BD",
+    message: "Se eliminarán productos, categorías, promociones, mesas, pedidos, turnos, reseñas e imágenes almacenadas (se conservará únicamente tu usuario administrador activo y se generará un respaldo previo).",
+    confirmLabel: "Continuar",
+    danger: true
+  });
+  if (!confirmed) return;
+
+  const phrase = prompt("Escribe exactamente FORMATEAR para confirmar el reinicio completo de registros:");
+  if (phrase === null) return;
+  if (phrase.trim().toUpperCase() !== "FORMATEAR") {
+    showToast("Confirmación cancelada: debes escribir FORMATEAR.", "warning");
+    return;
+  }
+
+  try {
+    showToast("Formateando registros de la base de datos...", "info");
+    const res = await fetch("/api/v1/admin/backups/formatear-bd", {
+      method: "POST",
+      headers: { ...Auth.getHeaders(), "Content-Type": "application/json" },
+      body: JSON.stringify({ confirmacion: "FORMATEAR" })
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.detail || "No se pudo formatear la base de datos.");
+    showToast("Base de datos formateada correctamente.", "success");
+    await Promise.all([
+      loadDashboardStats(),
+      loadProducts(),
+      loadCategories(),
+      loadMesas(),
+      loadInsumos(),
+      loadPromosAdmin(),
+      loadResenasAdmin(),
+      loadPublicacionesAdmin(),
+      loadBackups()
+    ]);
+  } catch (err) {
+    showToast(err.message || "Error al formatear la base de datos.", "danger");
   }
 }
 

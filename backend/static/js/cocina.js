@@ -210,16 +210,6 @@ function renderKDSOrders() {
       });
     }
 
-    function setKDSModeFilter(value) {
-      kdsModeFilter = value;
-      loadKDSOrders();
-    }
-
-    function setKDSSearch(value) {
-      kdsSearchTerm = value;
-      renderKDSOrders();
-    }
-
     return `
       <div style="background: rgba(7, 26, 61, 0.6); border: 1px solid var(--color-border); border-radius: var(--radius-md); padding: 1rem; display: flex; flex-direction: column;">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; border-bottom: 2px solid var(--color-border); padding-bottom: 0.6rem;">
@@ -254,6 +244,16 @@ function renderKDSOrders() {
   `;
 
   container.innerHTML = htmlHtml;
+}
+
+function setKDSModeFilter(value) {
+  kdsModeFilter = value;
+  loadKDSOrders();
+}
+
+function setKDSSearch(value) {
+  kdsSearchTerm = value;
+  renderKDSOrders();
 }
 
 function toggleKDSLayout() {

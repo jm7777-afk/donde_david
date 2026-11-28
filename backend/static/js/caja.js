@@ -861,7 +861,7 @@ function renderPosTouchProducts(query = "") {
       const img = p.banner_url || "/static/img/logo.png";
       return `
         <div class="mc-product-touch-card" onclick="addPosPromoBundle(${Number(p.id)})" style="cursor:pointer;">
-          <img src="${escapeCajaHtml(img)}" alt="${escapeCajaHtml(p.titulo)}">
+          <img src="${escapeCajaHtml(img)}" alt="${escapeCajaHtml(p.titulo)}" onerror="this.onerror=null;this.src='/static/img/logo.png';">
           <div class="mc-product-title">🎁 ${escapeCajaHtml(p.titulo)}</div>
           <div class="mc-product-price">${formatPriceDual(Number(p.precio_global))}</div>
           <small style="color:var(--cyan-accent);font-size:0.72rem;font-weight:700;">${p.productos.length} productos · Precio global</small>
@@ -887,7 +887,7 @@ function renderPosTouchProducts(query = "") {
     const price = p.precio_promocion || p.precio;
     html += `
       <div class="mc-product-touch-card" data-product-id="${p.id}" style="position: relative; cursor: pointer;">
-        <img src="${img}" alt="${p.nombre}">
+        <img src="${img}" alt="${p.nombre}" onerror="this.onerror=null;this.src='/static/img/logo.png';">
         <div class="mc-product-title">${p.nombre}</div>
         <div class="mc-product-price">${formatPriceDual(price)}</div>
         <button type="button" data-customize-product="${p.id}" aria-label="Personalizar ${escapeCajaHtml(p.nombre)}" style="position: absolute; top: 6px; right: 6px; background: var(--gold-accent); color: #000; border: 0; border-radius: 12px; font-size: 0.72rem; padding: 0.2rem 0.5rem; font-weight: 900; z-index: 2; cursor: pointer; box-shadow: 0 2px 8px rgba(0,0,0,0.5);" title="Personalizar Ingredientes">

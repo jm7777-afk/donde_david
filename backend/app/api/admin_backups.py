@@ -7,6 +7,7 @@ copias de seguridad de la base de datos para garantizar la continuidad operativa
 from typing import List
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import FileResponse
+from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from backend.app.core.database import get_db
@@ -21,6 +22,8 @@ from backend.app.services.backup_service import (
     restore_database_backup
 )
 from backend.app.services.audit_service import record_audit
+from backend.app.services.db_format_service import format_database_records
+from backend.app.websockets.manager import ws_manager
 
 router = APIRouter(prefix="/admin/backups", tags=["Administración - Copias de Seguridad (Backups)"])
 
@@ -167,3 +170,51 @@ def eliminar_copia_seguridad(
         return {"mensaje": f"Copia de seguridad '{filename}' eliminada exitosamente."}
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+
+
+class FormatDatabaseRequest(BaseModel):
+    confirmacion: str = Field(min_length=1, max_length=32)
+
+
+@router.post("/formatear-bd")
+async def formatear_base_datos(
+    payload: FormatDatabaseRequest,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(require_roles(["admin"])),
+):
+    """Formatea los registros de negocio y catálogo conservando al administrador activo."""
+    if payload.confirmacion.strip().upper() != "FORMATEAR":
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Debes escribir exactamente 'FORMATEAR' para confirmar el reinicio de datos.",
+        )
+
+    checkpoint_name = None
+    try:
+        manifest = create_database_backup(
+            db=db,
+            usuario=current_user.nombre_usuario,
+            descripcion="Respaldo previo automático antes de formatear la BD",
+        )
+        checkpoint_name = manifest.get("filename")
+    except Exception:
+        checkpoint_name = None
+
+    deleted = format_database_records(db, preserve_admin_id=current_user.id)
+    record_audit(
+        db=db,
+        accion="DATABASE_FORMATTED",
+        usuario=current_user.nombre_usuario,
+        usuario_id=current_user.id,
+        recurso="sistema_bd",
+        recurso_id="all",
+        detalle=f"Base de datos formateada por {current_user.nombre_usuario}. Checkpoint: {checkpoint_name or 'N/A'}",
+        datos_nuevos=deleted,
+    )
+    await ws_manager.broadcast("PRODUCTOS_ACTUALIZADOS", {"formatted": True})
+    await ws_manager.broadcast("PROMOCIONES_ACTUALIZADAS", {"formatted": True})
+    return {
+        "mensaje": "Todos los registros de la base de datos fueron formateados correctamente.",
+        "checkpoint_previo": checkpoint_name,
+        "eliminados": deleted,
+    }
