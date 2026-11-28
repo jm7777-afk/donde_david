@@ -4,16 +4,16 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Donde David - Panel de Administración General</title>
-  <link rel="stylesheet" href="/static/css/global.css?v=5.9">
-  <link rel="stylesheet" href="/static/css/toon-theme.css?v=5.9">
-  <link rel="stylesheet" href="/static/css/index.css?v=5.9">
+  <link rel="stylesheet" href="/static/css/global.css?v=6.0">
+  <link rel="stylesheet" href="/static/css/toon-theme.css?v=6.0">
+  <link rel="stylesheet" href="/static/css/index.css?v=6.0">
   
   <!-- Driver.js CSS para Onboarding Tour Interactivo -->
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/driver.js@1.3.1/dist/driver.css">
 
-  <link rel="stylesheet" href="/static/css/pages/admin-index.css?v=5.9">
-  <link rel="stylesheet" href="/static/css/responsive-devices.css?v=5.9">
-  <link rel="stylesheet" href="/static/css/utilities.css?v=5.9">
+  <link rel="stylesheet" href="/static/css/pages/admin-index.css?v=6.0">
+  <link rel="stylesheet" href="/static/css/responsive-devices.css?v=6.0">
+  <link rel="stylesheet" href="/static/css/utilities.css?v=6.0">
 </head>
 <body class="toon-theme"><nav id="app-sidebar"></nav>
 
@@ -862,8 +862,9 @@
         <textarea id="edit-prod-extras" class="form-control" rows="3" placeholder="Queso cheddar | 1.00"></textarea>
       </div>
       <div class="form-group">
-        <label>Galería de fotos y videos (uno por línea: tipo | URL HTTPS o /static/uploads/)</label>
-        <textarea id="edit-prod-media" class="form-control" rows="3" placeholder="imagen | https://...&#10;video | https://..."></textarea>
+        <label>Galería de fotos y videos (uno por línea: tipo | URL HTTPS o imagen en BD)</label>
+        <input type="file" accept="image/*" multiple class="form-control u-margin-bottom-0-5rem" onchange="uploadProductGalleryFiles(event, 'edit-prod-media')">
+        <textarea id="edit-prod-media" class="form-control" rows="3" placeholder="imagen | /api/v1/cliente/media/...&#10;video | https://..."></textarea>
       </div>
       <div class="form-group"><label>Alérgenos declarados (separados por coma)</label><input type="text" id="edit-prod-alergenos" class="form-control" maxlength="500" placeholder="Ej. leche, gluten, huevo"></div>
       <div class="form-group"><label><input type="checkbox" id="edit-prod-disponible"> Disponible para pedidos</label></div>
@@ -1044,8 +1045,9 @@
         <textarea id="prod-extras" class="form-control" rows="3" placeholder="Queso cheddar | 1.00"></textarea>
       </div>
       <div class="form-group">
-        <label>Galería de fotos y videos (uno por línea: tipo | URL HTTPS o /static/uploads/)</label>
-        <textarea id="prod-media" class="form-control" rows="3" placeholder="imagen | https://...&#10;video | https://..."></textarea>
+        <label>Galería de fotos y videos (uno por línea: tipo | URL HTTPS o imagen en BD)</label>
+        <input type="file" accept="image/*" multiple class="form-control u-margin-bottom-0-5rem" onchange="uploadProductGalleryFiles(event, 'prod-media')">
+        <textarea id="prod-media" class="form-control" rows="3" placeholder="imagen | /api/v1/cliente/media/...&#10;video | https://..."></textarea>
       </div>
       <div class="form-group"><label>Alérgenos declarados (separados por coma)</label><input type="text" id="prod-alergenos" class="form-control" maxlength="500" placeholder="Ej. leche, gluten, huevo"></div>
       <div class="form-group"><label><input type="checkbox" id="prod-disponible" checked> Disponible para pedidos</label></div>
@@ -1120,10 +1122,10 @@
 
   <!-- Driver.js Library script -->
   <script src="https://cdn.jsdelivr.net/npm/driver.js@1.3.1/dist/driver.js.iife.js"></script>
-  <script src="/static/js/auth.js?v=5.9"></script>
-  <script src="/static/js/appShell.js?v=5.9"></script>
-  <script src="/static/js/websocket.js?v=5.9"></script>
-  <script src="/static/js/admin-toon.js?v=5.9"></script>
+  <script src="/static/js/auth.js?v=6.0"></script>
+  <script src="/static/js/appShell.js?v=6.0"></script>
+  <script src="/static/js/websocket.js?v=6.0"></script>
+  <script src="/static/js/admin-toon.js?v=6.0"></script>
 
   <!-- Script para Autodisparo del Tour Interactivo Driver.js -->
   <script>

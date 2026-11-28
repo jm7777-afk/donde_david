@@ -143,6 +143,38 @@ async function uploadLocalFile(event, targetInputId) {
   }
 }
 
+async function uploadProductGalleryFiles(event, textareaId) {
+  const files = Array.from(event.target.files || []);
+  const textarea = document.getElementById(textareaId);
+  if (!files.length || !textarea) return;
+
+  showToast(`Subiendo ${files.length} imagen(es) a la galería en BD...`, "info");
+  let uploadedCount = 0;
+  for (const file of files) {
+    const formData = new FormData();
+    formData.append("file", file);
+    try {
+      const res = await fetch("/api/v1/admin/upload", {
+        method: "POST",
+        headers: Auth.getToken() ? { Authorization: `Bearer ${Auth.getToken()}` } : {},
+        body: formData
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.detail || "No se pudo subir una imagen.");
+      const line = `imagen | ${data.url}`;
+      const existing = textarea.value.trim();
+      textarea.value = existing ? `${existing}\n${line}` : line;
+      uploadedCount += 1;
+    } catch (err) {
+      showToast(err.message || "Error subiendo imagen de galería.", "danger");
+    }
+  }
+  event.target.value = "";
+  if (uploadedCount > 0) {
+    showToast(`✅ ${uploadedCount} foto(s) agregada(s) a la galería del plato.`, "success");
+  }
+}
+
 function toggleAdminDrawer() {
   const drawer = document.getElementById("admin-sidebar-drawer");
   if (!drawer) return;

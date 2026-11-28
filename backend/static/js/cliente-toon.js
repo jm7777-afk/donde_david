@@ -391,6 +391,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const requestedScreen = window.location.hash === "#screen-perfil" ? "screen-perfil" : savedScreen;
   const mesaParam = urlParams.get("mesa");
   const promoParam = Number(urlParams.get("promo"));
+  const productParam = Number(urlParams.get("producto"));
   if (mesaParam && /^[1-9]\d*$/.test(mesaParam)) {
     applyQrMesaSession(mesaParam);
     // Entrar directamente al menú interactivo en modo mesa QR (sin forjar sesión de usuario)
@@ -449,6 +450,8 @@ document.addEventListener("DOMContentLoaded", () => {
     renderPromoAndComboNotifications(true);
     if (Number.isInteger(promoParam) && promoParam > 0) {
       openPromoGroupModal(promoParam);
+    } else if (Number.isInteger(productParam) && productParam > 0) {
+      openProductGalleryFromCard(productParam);
     }
     console.log("⚡ Carga paralela optimizada completada.");
   }).catch(err => {
@@ -1205,13 +1208,41 @@ function filterMenuProducts() {
   }
 }
 
+function _getProductGalleryItems(product) {
+  if (!product) return [{ tipo: "imagen", url: "/static/img/logo.png" }];
+  const rawMain = String(product.imagen_url || "").trim();
+  const mainUrl = /^(https:\/\/|\/static\/|\/api\/v1\/cliente\/media\/)/i.test(rawMain)
+    ? rawMain
+    : "/static/img/logo.png";
+  const items = [{ tipo: "imagen", url: mainUrl }];
+  try {
+    const parsed = JSON.parse(product.media_json || "[]");
+    if (Array.isArray(parsed)) {
+      parsed.forEach(entry => {
+        if (!entry || typeof entry.url !== "string") return;
+        const cleanUrl = entry.url.trim();
+        if (!/^(https:\/\/|\/static\/|\/api\/v1\/cliente\/media\/)/i.test(cleanUrl)) return;
+        const tipo = entry.tipo === "video" ? "video" : "imagen";
+        if (!items.some(existing => existing.url === cleanUrl && existing.tipo === tipo)) {
+          items.push({ tipo, url: cleanUrl });
+        }
+      });
+    }
+  } catch (err) {}
+  return items;
+}
+
+let dishLightboxItems = [];
+let dishLightboxIndex = 0;
+let dishLightboxProduct = null;
+let modalActiveHeroIndex = 0;
+
 function renderProductCards(products) {
   return products.map(product => {
     const pid = Number(product.id);
-    const rawImage = String(product.imagen_url || "");
-    const image = /^(https:\/\/|\/static\/|\/api\/v1\/cliente\/media\/)/i.test(rawImage)
-      ? escapeClientHtml(rawImage)
-      : "/static/img/logo.png";
+    const galleryItems = _getProductGalleryItems(product);
+    const image = escapeClientHtml(galleryItems[0].url);
+    const extraCount = Math.max(0, galleryItems.length - 1);
     const allergens = getDeclaredAllergens(product);
     const regularPrice = Number(product.precio) || 0;
     const promoPrice = Number(product.precio_promocion) > 0 ? Number(product.precio_promocion) : null;
@@ -1219,10 +1250,11 @@ function renderProductCards(products) {
     const isFav = clientFavorites.has(pid);
     return `
       <div class="product-toon-card" onclick="openProductModal(${pid})">
-        <div class="product-img-container">
+        <div class="product-img-container" onclick="event.stopPropagation(); openProductGalleryFromCard(${pid})" title="Toca la imagen para ver las fotos y detalles del plato">
           <button type="button" class="product-fav-btn ${isFav ? "is-fav" : ""}" aria-label="Favorito" onclick="toggleFavoriteProduct(${pid}, event)">${isFav ? "❤️" : "🤍"}</button>
           <img src="${image}" alt="${escapeClientHtml(product.nombre)}" loading="lazy" onerror="this.onerror=null;this.src='/static/img/logo.png';">
           <span class="product-badge">${promoPrice ? "🔥 PROMO" : "🔥 TOON"}</span>
+          <span class="product-gallery-pill">${extraCount > 0 ? `📸 ${galleryItems.length} fotos` : "🔍 Ver plato"}</span>
         </div>
         <div class="product-info">
           <div class="product-title">${escapeClientHtml(product.nombre)}</div>
@@ -1257,15 +1289,34 @@ function openProductModal(prodId) {
   if (!currentSelectedModalProduct) return;
 
   currentModalQty = 1;
+  modalActiveHeroIndex = 0;
   const addButton = document.getElementById("modal-add-to-cart-btn");
   if (addButton) addButton.textContent = "🛒 AGREGAR AL CARRITO";
   document.getElementById("modal-qty-val").innerText = "1";
-  const productImage = String(currentSelectedModalProduct.imagen_url || "");
+  const galleryItems = _getProductGalleryItems(currentSelectedModalProduct);
   const modalImgEl = document.getElementById("modal-product-img");
   modalImgEl.onerror = () => { modalImgEl.onerror = null; modalImgEl.src = "/static/img/logo.png"; };
-  modalImgEl.src = /^(https:\/\/|\/static\/|\/api\/v1\/cliente\/media\/)/i.test(productImage)
-    ? productImage
-    : "/static/img/logo.png";
+  modalImgEl.src = galleryItems[0].url;
+  const zoomBadge = document.getElementById("modal-hero-zoom-badge");
+  if (zoomBadge) {
+    zoomBadge.textContent = galleryItems.length > 1
+      ? `📸 Ver galería (${galleryItems.length})`
+      : "🔍 Toca para ampliar";
+  }
+  const thumbStrip = document.getElementById("modal-product-thumb-strip");
+  if (thumbStrip) {
+    if (galleryItems.length > 1) {
+      thumbStrip.hidden = false;
+      thumbStrip.innerHTML = galleryItems.map((item, idx) => `
+        <button type="button" class="dish-thumb-btn ${idx === 0 ? "is-active" : ""}" onclick="selectModalHeroSlide(${idx})" aria-label="Ver media ${idx + 1}">
+          ${item.tipo === "video" ? "🎥 Video" : `<img src="${escapeClientHtml(item.url)}" alt="" onerror="this.onerror=null;this.src='/static/img/logo.png';">`}
+        </button>
+      `).join("");
+    } else {
+      thumbStrip.hidden = true;
+      thumbStrip.innerHTML = "";
+    }
+  }
   document.getElementById("modal-product-title").innerText = currentSelectedModalProduct.nombre;
   const modalPrice = Number(currentSelectedModalProduct.precio_promocion) > 0
     ? Number(currentSelectedModalProduct.precio_promocion)
@@ -1286,13 +1337,13 @@ function openProductModal(prodId) {
     } catch (error) {
       console.error(`Contenido multimedia inválido para el producto ${currentSelectedModalProduct.id}.`, error);
     }
-    mediaContainer.innerHTML = media.map(item => {
+    mediaContainer.innerHTML = media.map((item, idx) => {
       if (!item || typeof item.url !== "string") return "";
       const url = escapeClientHtml(item.url);
       return item.tipo === "video"
         ? `<video src="${url}" controls playsinline preload="metadata" style="width:100%;max-height:260px;border-radius:12px;margin:.4rem 0"></video>`
         : item.tipo === "imagen"
-          ? `<img src="${url}" alt="${escapeClientHtml(currentSelectedModalProduct.nombre)}" loading="lazy" style="width:100%;max-height:260px;object-fit:cover;border-radius:12px;margin:.4rem 0">`
+          ? `<img src="${url}" alt="${escapeClientHtml(currentSelectedModalProduct.nombre)}" loading="lazy" onclick="openDishLightbox(${idx + 1})" onerror="this.onerror=null;this.src='/static/img/logo.png';" style="width:100%;max-height:260px;object-fit:cover;border-radius:12px;margin:.4rem 0;cursor:zoom-in;">`
           : "";
     }).join("");
   }
@@ -1383,6 +1434,124 @@ function openProductModal(prodId) {
 
   if (mediaContainer) mediaContainer.hidden = !mediaContainer.innerHTML.trim();
   document.getElementById("product-detail-modal").classList.add("open");
+}
+
+function selectModalHeroSlide(index) {
+  if (!currentSelectedModalProduct) return;
+  const gallery = _getProductGalleryItems(currentSelectedModalProduct);
+  const item = gallery[index];
+  if (!item) return;
+  if (item.tipo === "video") {
+    openDishLightbox(index);
+    return;
+  }
+  modalActiveHeroIndex = index;
+  const modalImgEl = document.getElementById("modal-product-img");
+  if (modalImgEl) modalImgEl.src = item.url;
+  document.querySelectorAll("#modal-product-thumb-strip .dish-thumb-btn").forEach((btn, idx) => {
+    btn.classList.toggle("is-active", idx === index);
+  });
+}
+
+function openProductGalleryFromCard(prodId) {
+  const product = (toonProducts || []).find(p => Number(p.id) === Number(prodId));
+  if (!product) return;
+  openDishLightbox(0, product);
+}
+
+function openDishLightbox(startIndex = null, productOverride = null) {
+  const targetProduct = productOverride || currentSelectedModalProduct;
+  if (!targetProduct) return;
+  dishLightboxProduct = targetProduct;
+  dishLightboxItems = _getProductGalleryItems(targetProduct);
+  const initialIndex = Number.isInteger(startIndex) ? startIndex : modalActiveHeroIndex;
+  dishLightboxIndex = Math.max(0, Math.min(dishLightboxItems.length - 1, initialIndex || 0));
+
+  const titleEl = document.getElementById("dish-lightbox-title");
+  const priceEl = document.getElementById("dish-lightbox-price");
+  const descEl = document.getElementById("dish-lightbox-desc");
+  const metaEl = document.getElementById("dish-lightbox-meta");
+  if (titleEl) titleEl.textContent = targetProduct.nombre || "Platillo";
+  const effectivePrice = Number(targetProduct.precio_promocion) > 0
+    ? Number(targetProduct.precio_promocion)
+    : Number(targetProduct.precio) || 0;
+  if (priceEl) priceEl.innerHTML = formatPriceDual(effectivePrice);
+  if (descEl) descEl.textContent = targetProduct.descripcion || "Preparado al instante en Donde David.";
+
+  if (metaEl) {
+    let ingredients = [];
+    try {
+      const parsed = JSON.parse(targetProduct.ingredientes_json || "[]");
+      if (Array.isArray(parsed)) ingredients = parsed.filter(Boolean);
+    } catch (e) {}
+    const allergens = getDeclaredAllergens(targetProduct);
+    metaEl.innerHTML = `
+      <div>⏱️ Preparación estimada: <strong>${Number(targetProduct.tiempo_preparacion) || 15} min</strong></div>
+      ${Number(targetProduct.puntos_fidelidad) > 0 ? `<div>🎁 Acumula <strong>${Number(targetProduct.puntos_fidelidad)} pts</strong> por unidad</div>` : ""}
+      ${ingredients.length ? `<div><strong>Ingredientes:</strong><div class="dish-lightbox-ing-chips">${ingredients.map(ing => `<span class="dish-lightbox-ing-chip">${escapeClientHtml(ing)}</span>`).join("")}</div></div>` : ""}
+      ${allergens.length ? `<div>⚠️ Alérgenos: <strong>${allergens.map(escapeClientHtml).join(", ")}</strong></div>` : ""}
+    `;
+  }
+
+  renderDishLightboxSlide();
+  const modal = document.getElementById("product-gallery-lightbox");
+  if (modal) modal.classList.add("open");
+}
+
+function renderDishLightboxSlide() {
+  const canvas = document.getElementById("dish-lightbox-canvas");
+  const counter = document.getElementById("dish-lightbox-counter");
+  const thumbs = document.getElementById("dish-lightbox-thumbs");
+  const prevBtn = document.getElementById("dish-lightbox-prev");
+  const nextBtn = document.getElementById("dish-lightbox-next");
+  if (!canvas || !dishLightboxItems.length) return;
+
+  const item = dishLightboxItems[dishLightboxIndex] || dishLightboxItems[0];
+  const safeUrl = escapeClientHtml(item.url);
+  canvas.innerHTML = item.tipo === "video"
+    ? `<video src="${safeUrl}" controls autoplay playsinline></video>`
+    : `<img src="${safeUrl}" alt="${escapeClientHtml(dishLightboxProduct?.nombre || "Plato")}" onerror="this.onerror=null;this.src='/static/img/logo.png';">`;
+
+  if (counter) counter.textContent = `${dishLightboxIndex + 1} / ${dishLightboxItems.length}`;
+  const hasMultiple = dishLightboxItems.length > 1;
+  if (prevBtn) prevBtn.hidden = !hasMultiple;
+  if (nextBtn) nextBtn.hidden = !hasMultiple;
+  if (thumbs) {
+    thumbs.innerHTML = hasMultiple
+      ? dishLightboxItems.map((entry, idx) => `
+          <button type="button" class="dish-thumb-btn ${idx === dishLightboxIndex ? "is-active" : ""}" onclick="selectDishLightboxSlide(${idx})" aria-label="Foto ${idx + 1}">
+            ${entry.tipo === "video" ? "🎥 Video" : `<img src="${escapeClientHtml(entry.url)}" alt="" onerror="this.onerror=null;this.src='/static/img/logo.png';">`}
+          </button>
+        `).join("")
+      : "";
+  }
+}
+
+function stepDishLightbox(delta) {
+  if (!dishLightboxItems.length) return;
+  dishLightboxIndex = (dishLightboxIndex + delta + dishLightboxItems.length) % dishLightboxItems.length;
+  renderDishLightboxSlide();
+}
+
+function selectDishLightboxSlide(index) {
+  if (!dishLightboxItems[index]) return;
+  dishLightboxIndex = index;
+  renderDishLightboxSlide();
+}
+
+function closeDishLightbox() {
+  const modal = document.getElementById("product-gallery-lightbox");
+  if (modal) modal.classList.remove("open");
+}
+
+function orderFromDishLightbox() {
+  const prod = dishLightboxProduct;
+  closeDishLightbox();
+  if (prod && (!currentSelectedModalProduct || Number(currentSelectedModalProduct.id) !== Number(prod.id))) {
+    openProductModal(Number(prod.id));
+  } else if (prod) {
+    document.getElementById("product-detail-modal")?.classList.add("open");
+  }
 }
 
 function closeProductModal() {
@@ -3540,4 +3709,23 @@ document.addEventListener("DOMContentLoaded", () => {
       else prevCarouselSlide(activeList.length);
     }, { passive: true });
   }
+  const lightboxStage = document.getElementById("dish-lightbox-stage");
+  if (lightboxStage) {
+    let lbStartX = 0;
+    lightboxStage.addEventListener("touchstart", e => {
+      lbStartX = e.changedTouches?.[0]?.clientX || 0;
+    }, { passive: true });
+    lightboxStage.addEventListener("touchend", e => {
+      const delta = (e.changedTouches?.[0]?.clientX || 0) - lbStartX;
+      if (Math.abs(delta) < 35) return;
+      stepDishLightbox(delta < 0 ? 1 : -1);
+    }, { passive: true });
+  }
+  document.addEventListener("keydown", e => {
+    const lb = document.getElementById("product-gallery-lightbox");
+    if (!lb || !lb.classList.contains("open")) return;
+    if (e.key === "Escape") closeDishLightbox();
+    else if (e.key === "ArrowRight") stepDishLightbox(1);
+    else if (e.key === "ArrowLeft") stepDishLightbox(-1);
+  });
 });

@@ -6,9 +6,9 @@
   <title>DONDE DAVID - Fresh & Tasty!</title>
   <link rel="manifest" href="/static/manifest.json">
   <meta name="theme-color" content="#FFBC0D">
-  <link rel="stylesheet" href="/static/css/global.css?v=5.9">
-  <link rel="stylesheet" href="/static/css/toon-theme.css?v=5.9">
-  <link rel="stylesheet" href="/static/css/index.css?v=5.9">
+  <link rel="stylesheet" href="/static/css/global.css?v=6.0">
+  <link rel="stylesheet" href="/static/css/toon-theme.css?v=6.0">
+  <link rel="stylesheet" href="/static/css/index.css?v=6.0">
   
   <!-- Leaflet Maps CSS & JS para Ubicación Exacta de Delivery -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
@@ -18,9 +18,9 @@
   <!-- HTML5 QR Code Scanner para Cámara Real -->
   <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 
-  <link rel="stylesheet" href="/static/css/pages/cliente-app.css?v=5.9">
-  <link rel="stylesheet" href="/static/css/responsive-devices.css?v=5.9">
-  <link rel="stylesheet" href="/static/css/utilities.css?v=5.9">
+  <link rel="stylesheet" href="/static/css/pages/cliente-app.css?v=6.0">
+  <link rel="stylesheet" href="/static/css/responsive-devices.css?v=6.0">
+  <link rel="stylesheet" href="/static/css/utilities.css?v=6.0">
 </head>
 <body class="toon-theme"><nav id="app-sidebar"></nav>
 
@@ -731,7 +731,11 @@
   <div class="product-modal-backdrop" id="product-detail-modal">
     <div class="product-modal-card product-detail-card">
       <button class="modal-close-btn" type="button" aria-label="Cerrar detalle del producto" onclick="closeProductModal()">&times;</button>
-      <img id="modal-product-img" src="" class="product-hero-img" alt="Producto">
+      <div class="product-hero-media-wrap" onclick="openDishLightbox()" role="button" tabindex="0" aria-label="Ampliar y ver galería de fotos del plato">
+        <img id="modal-product-img" src="" class="product-hero-img" alt="Producto">
+        <span id="modal-hero-zoom-badge" class="product-hero-zoom-badge">🔍 Toca para ver fotos</span>
+      </div>
+      <div id="modal-product-thumb-strip" class="dish-thumb-strip" hidden aria-label="Miniaturas del plato"></div>
       <div class="modal-content-body">
         <div class="product-detail-heading">
           <div><small>PREPARADO AL MOMENTO</small><h2 id="modal-product-title">Nombre del Producto</h2></div>
@@ -784,6 +788,30 @@
       </div>
     </div>
   </div>
+
+  <!-- VISOR AMPLIADO DE GALERÍA Y DETALLE DEL PLATO -->
+  <div class="dish-lightbox-backdrop" id="product-gallery-lightbox" role="dialog" aria-modal="true" aria-label="Galería y detalle del plato" onclick="if(event.target === this) closeDishLightbox()">
+    <div class="dish-lightbox-card">
+      <button type="button" class="modal-close-btn dish-lightbox-close" aria-label="Cerrar galería" onclick="closeDishLightbox()">&times;</button>
+      <div class="dish-lightbox-media-col">
+        <div id="dish-lightbox-stage" class="dish-lightbox-stage">
+          <button type="button" id="dish-lightbox-prev" class="dish-lightbox-nav prev" aria-label="Foto anterior" onclick="stepDishLightbox(-1)">&#8249;</button>
+          <div id="dish-lightbox-canvas" class="dish-lightbox-canvas"></div>
+          <button type="button" id="dish-lightbox-next" class="dish-lightbox-nav next" aria-label="Siguiente foto" onclick="stepDishLightbox(1)">&#8250;</button>
+          <span id="dish-lightbox-counter" class="dish-lightbox-counter">1 / 1</span>
+        </div>
+        <div id="dish-lightbox-thumbs" class="dish-lightbox-thumbs" aria-label="Imágenes del plato"></div>
+      </div>
+      <div class="dish-lightbox-detail-col">
+        <small class="dish-lightbox-kicker">DETALLE DEL PLATILLO</small>
+        <h2 id="dish-lightbox-title" class="dish-lightbox-title">Plato</h2>
+        <div id="dish-lightbox-price" class="dish-lightbox-price">$0.00</div>
+        <p id="dish-lightbox-desc" class="dish-lightbox-desc"></p>
+        <div id="dish-lightbox-meta" class="dish-lightbox-meta"></div>
+        <button type="button" id="dish-lightbox-order-btn" class="btn-gold u-width-100" onclick="orderFromDishLightbox()">🛒 Personalizar y pedir</button>
+      </div>
+    </div>
+  </div>
   <!-- MODAL GRUPO DE PRODUCTOS EN PROMOCIÓN -->
   <div class="product-modal-backdrop" id="promo-products-modal">
     <div class="product-modal-card promo-group-modal-card">
@@ -816,13 +844,13 @@
   <!-- Driver.js Library script para Tour Interactivo de Clientes -->
   <script src="https://cdn.jsdelivr.net/npm/driver.js@1.3.1/dist/driver.js.iife.js"></script>
 
-  <script src="/static/js/auth.js?v=5.9"></script>
-  <script src="/static/js/websocket.js?v=5.9"></script>
-  <script src="/static/js/cliente-toon.js?v=5.9"></script>
-  <script src="/static/js/appShell.js?v=5.9"></script>
+  <script src="/static/js/auth.js?v=6.0"></script>
+  <script src="/static/js/websocket.js?v=6.0"></script>
+  <script src="/static/js/cliente-toon.js?v=6.0"></script>
+  <script src="/static/js/appShell.js?v=6.0"></script>
   <script>
     if ("serviceWorker" in navigator && (location.protocol === "https:" || location.hostname === "localhost" || location.hostname === "127.0.0.1")) {
-      navigator.serviceWorker.register("/static/sw.js?v=5.9", { scope: "/static/" })
+      navigator.serviceWorker.register("/static/sw.js?v=6.0", { scope: "/static/" })
         .then(reg => {
           reg.update();
         })

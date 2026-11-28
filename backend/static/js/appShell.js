@@ -206,7 +206,7 @@ if (typeof document !== "undefined") {
 if (typeof window !== "undefined" && "caches" in window) {
   caches.keys().then(names => {
     names.forEach(name => {
-      if (name.startsWith("donde-david-pwa-") && name !== "donde-david-pwa-v40") {
+      if (name.startsWith("donde-david-pwa-") && name !== "donde-david-pwa-v41") {
         caches.delete(name);
       }
     });

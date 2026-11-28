@@ -14,12 +14,12 @@
   <link rel="manifest" href="/static/manifest.json">
   <meta name="theme-color" content="#071A3D">
 
-  <link rel="stylesheet" href="/static/css/global.css?v=5.9">
-  <link rel="stylesheet" href="/static/css/toon-theme.css?v=5.9">
+  <link rel="stylesheet" href="/static/css/global.css?v=6.0">
+  <link rel="stylesheet" href="/static/css/toon-theme.css?v=6.0">
 
-  <link rel="stylesheet" href="/static/css/pages/index.css?v=5.9">
-  <link rel="stylesheet" href="/static/css/responsive-devices.css?v=5.9">
-  <link rel="stylesheet" href="/static/css/utilities.css?v=5.9">
+  <link rel="stylesheet" href="/static/css/pages/index.css?v=6.0">
+  <link rel="stylesheet" href="/static/css/responsive-devices.css?v=6.0">
+  <link rel="stylesheet" href="/static/css/utilities.css?v=6.0">
 </head>
 <body class="toon-theme">
 
@@ -199,9 +199,9 @@
     </div>
   </footer>
 
-  <script src="/static/js/auth.js?v=5.9"></script>
-  <script src="/static/js/websocket.js?v=5.9"></script>
-  <script src="/static/js/appShell.js?v=5.9"></script>
+  <script src="/static/js/auth.js?v=6.0"></script>
+  <script src="/static/js/websocket.js?v=6.0"></script>
+  <script src="/static/js/appShell.js?v=6.0"></script>
 
   <script>
     let landingPromoIndex = 0;
@@ -384,7 +384,7 @@
 
         grid.innerHTML = featured.map(p => `
           <div class="product-toon-card">
-            <div style="position: relative; overflow: hidden; height: 160px;">
+            <div onclick="window.location.href='/static/cliente/app.html?producto=${p.id}'" style="position: relative; overflow: hidden; height: 160px; cursor: pointer;">
               <img src="${p.imagen_url || 'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=500'}" onerror="this.onerror=null;this.src='/static/img/logo.png';" style="width: 100%; height: 100%; object-fit: cover;" alt="${p.nombre}">
               <span style="position: absolute; top: 10px; right: 10px; background: rgba(0,0,0,0.75); border: 1px solid var(--gold-accent); color: var(--gold-accent); padding: 0.2rem 0.6rem; border-radius: 20px; font-weight: 900; font-size: 0.85rem;">
                 $${parseFloat(p.precio).toFixed(2)}
@@ -393,7 +393,7 @@
             <div style="padding: 1rem; display: flex; flex-direction: column; flex: 1;">
               <h3 style="font-size: 1.1rem; font-weight: 900; color: #fff; margin: 0 0 0.3rem 0;">${p.nombre}</h3>
               <p style="font-size: 0.82rem; color: var(--text-dim); margin-bottom: 1rem; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;">${p.descripcion || ''}</p>
-              <a href="/static/cliente/app.html" class="btn-gold" style="width: 100%; margin-top: auto; font-size: 0.85rem; text-decoration: none;">
+              <a href="/static/cliente/app.html?producto=${p.id}" class="btn-gold" style="width: 100%; margin-top: auto; font-size: 0.85rem; text-decoration: none;">
                 🛒 PEDIR PLATILLO
               </a>
             </div>

@@ -1064,5 +1064,19 @@ def test_media_db_storage_cliente_scope_and_database_format(client):
         assert client.get(up_data["url"]).status_code == 404
         users_left = client.get("/api/v1/admin/usuarios", headers=admin_headers).json()
         assert len(users_left) == 1 and users_left[0]["rol"] == "admin"
+
+        root = Path(__file__).resolve().parents[1]
+        cliente_html = (root / "backend" / "static" / "cliente" / "app.html").read_text(encoding="utf-8")
+        cliente_js = (root / "backend" / "static" / "js" / "cliente-toon.js").read_text(encoding="utf-8")
+        admin_html = (root / "backend" / "static" / "admin" / "index.html").read_text(encoding="utf-8")
+        admin_js = (root / "backend" / "static" / "js" / "admin-toon.js").read_text(encoding="utf-8")
+
+        assert 'id="product-gallery-lightbox"' in cliente_html
+        assert 'id="modal-product-thumb-strip"' in cliente_html
+        assert "openProductGalleryFromCard" in cliente_js
+        assert "openDishLightbox" in cliente_js
+        assert "_getProductGalleryItems" in cliente_js
+        assert "uploadProductGalleryFiles" in admin_html
+        assert "uploadProductGalleryFiles" in admin_js
     finally:
         seed()
