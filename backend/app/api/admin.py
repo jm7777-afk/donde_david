@@ -1,5 +1,8 @@
 import os
+import io
+import csv
 import uuid
+import hashlib
 import logging
 import math
 import tempfile
@@ -7,15 +10,18 @@ import json
 from urllib.parse import quote, urlsplit
 from datetime import datetime, timedelta, timezone
 from typing import List, Optional, Literal
+import httpx
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, File, Query, UploadFile, Request
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 from sqlalchemy import func
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, EmailStr, Field, field_validator
 from backend.app.core.database import get_db
 from backend.app.core.security import require_roles, get_password_hash
 from backend.app.models.usuario import Usuario
 from backend.app.models.categoria import Categoria
 from backend.app.models.producto import Producto
+from backend.app.models.producto_insumo import ProductoInsumo
 from backend.app.models.pedido import Pedido
 from backend.app.models.detalle_pedido import DetallePedido
 from backend.app.models.turno import Turno
@@ -29,6 +35,7 @@ from backend.app.models.resena import Resena
 from backend.app.models.publicacion import Publicacion
 from backend.app.models.movimiento_inventario import MovimientoInventario
 from backend.app.models.movimiento_caja import MovimientoCaja
+from backend.app.schemas.schemas import RecetaUpdateRequest
 from backend.app.services.exchange_rate import get_bcv_rate
 from backend.app.services.audit_service import record_audit
 from backend.app.websockets.manager import ws_manager
@@ -46,15 +53,33 @@ class IngresoCreate(BaseModel):
 class MesaCreate(BaseModel):
     numero_mesa: int = Field(gt=0)
     capacidad: Optional[int] = Field(default=4, gt=0)
+    zona: Optional[str] = Field(default="Salón", max_length=40)
+
+
+class MesaUpdate(BaseModel):
+    capacidad: Optional[int] = Field(default=None, gt=0)
+    zona: Optional[str] = Field(default=None, min_length=1, max_length=40)
 
 class InsumoCreate(BaseModel):
     nombre: str = Field(min_length=1, max_length=100)
     stock_actual: float = Field(ge=0, allow_inf_nan=False)
     stock_minimo: float = Field(ge=0, allow_inf_nan=False)
     unidad_medida: str = Field(min_length=1, max_length=20)
+    costo_unitario: float = Field(default=0.0, ge=0, allow_inf_nan=False)
 
 class InsumoIngreso(BaseModel):
     cantidad: float = Field(gt=0, allow_inf_nan=False)
+    costo_unitario: Optional[float] = Field(default=None, ge=0, allow_inf_nan=False)
+    proveedor: Optional[str] = Field(default=None, max_length=150)
+
+
+class CompraInventarioCreate(BaseModel):
+    insumo_id: Optional[int] = Field(default=None, gt=0)
+    producto_id: Optional[int] = Field(default=None, gt=0)
+    cantidad: float = Field(gt=0, allow_inf_nan=False)
+    costo_unitario: float = Field(ge=0, allow_inf_nan=False)
+    proveedor: Optional[str] = Field(default=None, max_length=150)
+    motivo: Optional[str] = Field(default="Compra / Reabastecimiento", max_length=255)
 
 class CategoriaCreate(BaseModel):
     nombre: str
@@ -67,6 +92,7 @@ class ProductoCreate(BaseModel):
     descripcion: Optional[str] = None
     precio: float = Field(ge=0, allow_inf_nan=False)
     precio_promocion: Optional[float] = Field(default=None, ge=0, allow_inf_nan=False)
+    costo_unitario: float = Field(default=0.0, ge=0, allow_inf_nan=False)
     categoria_id: int = Field(gt=0)
     imagen_url: Optional[str] = None
     stock: Optional[int] = Field(default=50, ge=0)
@@ -83,6 +109,7 @@ class ProductoUpdate(BaseModel):
     descripcion: Optional[str] = None
     precio: Optional[float] = Field(default=None, ge=0, allow_inf_nan=False)
     precio_promocion: Optional[float] = Field(default=None, ge=0, allow_inf_nan=False)
+    costo_unitario: Optional[float] = Field(default=None, ge=0, allow_inf_nan=False)
     stock: Optional[int] = Field(default=None, ge=0)
     puntos_fidelidad: Optional[int] = Field(default=None, ge=0, le=100000)
     tiempo_preparacion: Optional[int] = Field(default=None, ge=1, le=240)
@@ -103,7 +130,17 @@ class PromocionCreateAdmin(BaseModel):
     codigo_cupon: Optional[str] = None
     banner_url: Optional[str] = None
     activo: Optional[bool] = True
+    dias_semana: Optional[str] = Field(default=None, max_length=40)
+    hora_inicio: Optional[str] = Field(default=None, max_length=5)
+    hora_fin: Optional[str] = Field(default=None, max_length=5)
     producto_ids: List[int] = Field(default_factory=list)
+
+    @field_validator("hora_inicio", "hora_fin", "dias_semana", mode="before")
+    @classmethod
+    def _empty_schedule_to_none(cls, value):
+        if isinstance(value, str) and not value.strip():
+            return None
+        return value.strip() if isinstance(value, str) else value
 
 
 class PromocionProductosUpdate(BaseModel):
@@ -275,6 +312,30 @@ async def upload_file(file: UploadFile = File(...)):
         raise HTTPException(status_code=413, detail="El archivo supera el límite de 5 MB.")
     if not file_type[1](content):
         raise HTTPException(status_code=415, detail="El contenido del archivo no coincide con una imagen válida.")
+
+    cloud_name = os.getenv("CLOUDINARY_CLOUD_NAME", "").strip()
+    cloud_key = os.getenv("CLOUDINARY_API_KEY", "").strip()
+    cloud_secret = os.getenv("CLOUDINARY_API_SECRET", "").strip()
+    if cloud_name and cloud_key and cloud_secret:
+        ts = str(int(datetime.now(timezone.utc).timestamp()))
+        folder = os.getenv("CLOUDINARY_FOLDER", "donde_david").strip()
+        sig_payload = f"folder={folder}&timestamp={ts}{cloud_secret}"
+        signature = hashlib.sha1(sig_payload.encode("utf-8")).hexdigest()
+        upload_endpoint = f"https://api.cloudinary.com/v1_1/{cloud_name}/image/upload"
+        try:
+            async with httpx.AsyncClient(timeout=15.0) as client:
+                resp = await client.post(
+                    upload_endpoint,
+                    data={"api_key": cloud_key, "timestamp": ts, "folder": folder, "signature": signature},
+                    files={"file": (file.filename or f"upload{extension}", content, file.content_type)},
+                )
+            if resp.status_code == 200:
+                cloud_data = resp.json()
+                secure_url = cloud_data.get("secure_url")
+                if secure_url:
+                    return {"url": secure_url, "filename": cloud_data.get("public_id", ""), "provider": "cloudinary"}
+        except Exception as exc:
+            logger.warning("Cloudinary upload fallback to local storage: %s", exc)
 
     unique_filename = f"{uuid.uuid4().hex}{extension}"
     file_path = os.path.join(UPLOAD_DIR, unique_filename)
@@ -588,6 +649,9 @@ def _serialize_promocion(promo: Promocion) -> dict:
         "activo": bool(promo.activo),
         "fecha_inicio": promo.fecha_inicio.isoformat() if promo.fecha_inicio else None,
         "fecha_fin": promo.fecha_fin.isoformat() if promo.fecha_fin else None,
+        "dias_semana": promo.dias_semana,
+        "hora_inicio": promo.hora_inicio,
+        "hora_fin": promo.hora_fin,
         "producto_ids": [item["id"] for item in linked],
         "productos": linked,
     }
@@ -610,6 +674,9 @@ async def create_promocion(data: PromocionCreateAdmin, db: Session = Depends(get
         codigo_cupon=data.codigo_cupon or None,
         banner_url=data.banner_url,
         activo=data.activo if data.activo is not None else True,
+        dias_semana=data.dias_semana,
+        hora_inicio=data.hora_inicio,
+        hora_fin=data.hora_fin,
         productos=selected_products,
     )
     db.add(nueva)
@@ -642,6 +709,9 @@ async def update_promocion(promo_id: int, data: PromocionCreateAdmin, db: Sessio
     p.codigo_cupon = data.codigo_cupon or None
     p.banner_url = data.banner_url
     p.activo = data.activo if data.activo is not None else True
+    p.dias_semana = data.dias_semana
+    p.hora_inicio = data.hora_inicio
+    p.hora_fin = data.hora_fin
     p.productos = selected_products
 
     db.commit()
@@ -764,6 +834,7 @@ def create_mesa(data: MesaCreate, db: Session = Depends(get_db)):
     nueva = Mesa(
         numero_mesa=data.numero_mesa,
         capacidad=data.capacidad,
+        zona=(data.zona or "Salón").strip() or "Salón",
         estado="LIBRE",
         codigo_qr=f"QR_DONDE_DAVID_MESA_{data.numero_mesa}"
     )
@@ -771,6 +842,20 @@ def create_mesa(data: MesaCreate, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(nueva)
     return nueva
+
+
+@router.put("/mesas/{numero_mesa}")
+def update_mesa(numero_mesa: int, data: MesaUpdate, db: Session = Depends(get_db)):
+    mesa = db.query(Mesa).filter(Mesa.numero_mesa == numero_mesa).first()
+    if not mesa:
+        raise HTTPException(status_code=404, detail="Mesa no encontrada")
+    if data.capacidad is not None:
+        mesa.capacidad = data.capacidad
+    if data.zona is not None:
+        mesa.zona = data.zona.strip() or "Salón"
+    db.commit()
+    db.refresh(mesa)
+    return mesa
 
 @router.delete("/mesas/{numero_mesa}")
 def delete_mesa(numero_mesa: int, db: Session = Depends(get_db)):
@@ -857,6 +942,7 @@ def create_insumo(
         stock_actual=data.stock_actual,
         stock_minimo=data.stock_minimo,
         unidad_medida=data.unidad_medida,
+        costo_unitario=round(float(data.costo_unitario or 0), 2),
         estado=estado
     )
     db.add(nuevo)
@@ -868,6 +954,7 @@ def create_insumo(
             cantidad_cambio=data.stock_actual,
             cantidad_anterior=0,
             cantidad_nueva=data.stock_actual,
+            costo_unitario=round(float(data.costo_unitario or 0), 2),
             motivo="Stock inicial",
             usuario_id=current_user.id
         ))
@@ -888,6 +975,8 @@ def registrar_ingreso_insumo(
     
     stock_before = insumo.stock_actual
     insumo.stock_actual += data.cantidad
+    if data.costo_unitario is not None:
+        insumo.costo_unitario = round(float(data.costo_unitario), 2)
     insumo.estado = "CRITICO" if insumo.stock_actual <= insumo.stock_minimo else "NORMAL"
 
     db.add_all([
@@ -897,6 +986,8 @@ def registrar_ingreso_insumo(
             cantidad_cambio=data.cantidad,
             cantidad_anterior=stock_before,
             cantidad_nueva=insumo.stock_actual,
+            costo_unitario=round(float(data.costo_unitario), 2) if data.costo_unitario is not None else insumo.costo_unitario,
+            proveedor=data.proveedor.strip() if data.proveedor else None,
             motivo="Ingreso de inventario",
             usuario_id=current_user.id
         ),
@@ -981,6 +1072,7 @@ async def create_producto_admin(data: ProductoCreate, db: Session = Depends(get_
         descripcion=data.descripcion,
         precio=data.precio,
         precio_promocion=data.precio_promocion,
+        costo_unitario=round(float(data.costo_unitario or 0), 2),
         categoria_id=data.categoria_id,
         imagen_url=data.imagen_url or "https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=500",
         stock=data.stock if data.stock is not None else 50,
@@ -1027,6 +1119,7 @@ async def update_producto_admin(
     if data.descripcion is not None: p.descripcion = data.descripcion
     if data.precio is not None: p.precio = data.precio
     if "precio_promocion" in data.model_fields_set: p.precio_promocion = data.precio_promocion
+    if data.costo_unitario is not None: p.costo_unitario = round(float(data.costo_unitario), 2)
     if data.stock is not None:
         stock_before = int(p.stock or 0)
         p.stock = data.stock
@@ -1273,3 +1366,315 @@ def update_usuario_admin(
         datos_nuevos={"id": u.id, "nombre_usuario": u.nombre_usuario, "rol": u.rol, "activo": u.activo}
     )
     return u
+
+
+# ==================== RECETAS, COMPRAS, STOCK CRÍTICO Y REPORTES ====================
+@router.get("/productos/{producto_id}/receta")
+def get_producto_receta(producto_id: int, db: Session = Depends(get_db)):
+    prod = db.query(Producto).filter(Producto.id == producto_id).first()
+    if not prod:
+        raise HTTPException(status_code=404, detail="Producto no encontrado")
+    rows = db.query(ProductoInsumo).filter(ProductoInsumo.producto_id == producto_id).all()
+    return [
+        {
+            "id": row.id,
+            "producto_id": row.producto_id,
+            "insumo_id": row.insumo_id,
+            "insumo_nombre": row.insumo.nombre if row.insumo else None,
+            "unidad_medida": row.insumo.unidad_medida if row.insumo else None,
+            "cantidad_por_unidad": float(row.cantidad_por_unidad or 0),
+        }
+        for row in rows
+    ]
+
+
+@router.put("/productos/{producto_id}/receta")
+def update_producto_receta(
+    producto_id: int,
+    data: RecetaUpdateRequest,
+    db: Session = Depends(get_db),
+    current_user=Depends(require_roles(["admin", "supervisor"])),
+):
+    prod = db.query(Producto).filter(Producto.id == producto_id).with_for_update().first()
+    if not prod:
+        raise HTTPException(status_code=404, detail="Producto no encontrado")
+
+    seen_insumos = set()
+    for item in data.items:
+        if item.insumo_id in seen_insumos:
+            raise HTTPException(status_code=422, detail="No repitas el mismo insumo en la receta.")
+        seen_insumos.add(item.insumo_id)
+        if not db.query(Insumo).filter(Insumo.id == item.insumo_id).first():
+            raise HTTPException(status_code=404, detail=f"Insumo #{item.insumo_id} no encontrado.")
+
+    db.query(ProductoInsumo).filter(ProductoInsumo.producto_id == producto_id).delete()
+    for item in data.items:
+        db.add(ProductoInsumo(
+            producto_id=producto_id,
+            insumo_id=item.insumo_id,
+            cantidad_por_unidad=float(item.cantidad_por_unidad),
+        ))
+    record_audit(
+        db=db,
+        accion="RECIPE_UPDATE",
+        usuario=current_user.nombre_usuario,
+        usuario_id=current_user.id,
+        recurso="producto_insumos",
+        recurso_id=str(producto_id),
+        detalle=f"Receta actualizada para '{prod.nombre}' ({len(data.items)} insumos)",
+        auto_commit=False,
+    )
+    db.commit()
+    return get_producto_receta(producto_id, db)
+
+
+@router.post("/inventario/compra")
+async def registrar_compra_inventario(
+    data: CompraInventarioCreate,
+    db: Session = Depends(get_db),
+    current_user=Depends(require_roles(["admin", "supervisor"])),
+):
+    if bool(data.insumo_id) == bool(data.producto_id):
+        raise HTTPException(status_code=422, detail="Indica exactamente un producto_id o un insumo_id para reabastecer.")
+
+    proveedor_clean = data.proveedor.strip() if data.proveedor else None
+    motivo_clean = (data.motivo or "Compra a proveedor").strip()
+    costo_clean = round(float(data.costo_unitario), 2)
+
+    if data.insumo_id:
+        ins = db.query(Insumo).filter(Insumo.id == data.insumo_id).with_for_update().first()
+        if not ins:
+            raise HTTPException(status_code=404, detail="Insumo no encontrado.")
+        prev = round(float(ins.stock_actual or 0), 4)
+        ins.stock_actual = round(prev + float(data.cantidad), 4)
+        ins.costo_unitario = costo_clean
+        ins.estado = "CRITICO" if ins.stock_actual <= float(ins.stock_minimo or 0) else "NORMAL"
+        ins.fecha_actualizacion = datetime.now(timezone.utc)
+        mov = MovimientoInventario(
+            insumo_id=ins.id,
+            tipo_movimiento="ENTRADA",
+            cantidad_cambio=data.cantidad,
+            cantidad_anterior=prev,
+            cantidad_nueva=ins.stock_actual,
+            costo_unitario=costo_clean,
+            proveedor=proveedor_clean,
+            motivo=motivo_clean,
+            usuario_id=current_user.id,
+        )
+        db.add(mov)
+        # Re-enable dependent products that have own stock > 0
+        dep_ids = [
+            row.producto_id
+            for row in db.query(ProductoInsumo.producto_id).filter(ProductoInsumo.insumo_id == ins.id).all()
+        ]
+        if dep_ids and ins.stock_actual > 0:
+            db.query(Producto).filter(Producto.id.in_(dep_ids), Producto.stock > 0).update(
+                {Producto.disponible: True},
+                synchronize_session=False,
+            )
+        target_name = ins.nombre
+        stock_new = ins.stock_actual
+    else:
+        prod = db.query(Producto).filter(Producto.id == data.producto_id).with_for_update().first()
+        if not prod:
+            raise HTTPException(status_code=404, detail="Producto no encontrado.")
+        qty_int = int(round(data.cantidad))
+        if qty_int <= 0:
+            raise HTTPException(status_code=422, detail="La cantidad de producto debe ser al menos 1 unidad.")
+        prev = int(prod.stock or 0)
+        prod.stock = prev + qty_int
+        prod.costo_unitario = costo_clean
+        if prod.stock > 0:
+            prod.disponible = True
+        mov = MovimientoInventario(
+            producto_id=prod.id,
+            tipo_movimiento="ENTRADA",
+            cantidad_cambio=qty_int,
+            cantidad_anterior=prev,
+            cantidad_nueva=prod.stock,
+            costo_unitario=costo_clean,
+            proveedor=proveedor_clean,
+            motivo=motivo_clean,
+            usuario_id=current_user.id,
+        )
+        db.add(mov)
+        target_name = prod.nombre
+        stock_new = prod.stock
+
+    record_audit(
+        db=db,
+        accion="INVENTORY_PURCHASE",
+        usuario=current_user.nombre_usuario,
+        usuario_id=current_user.id,
+        recurso="movimientos_inventario",
+        recurso_id=str(data.insumo_id or data.producto_id),
+        detalle=f"Compra +{data.cantidad} {target_name} (${costo_clean:.2f}/u · {proveedor_clean or 'Sin proveedor'})",
+        auto_commit=False,
+    )
+    db.commit()
+    await ws_manager.broadcast("PRODUCTOS_ACTUALIZADOS", {"compra": target_name})
+    return {
+        "mensaje": f"Reabastecimiento registrado para {target_name}",
+        "stock_nuevo": stock_new,
+        "costo_unitario": costo_clean,
+        "proveedor": proveedor_clean,
+    }
+
+
+@router.get("/stock-alertas")
+def get_stock_alertas(db: Session = Depends(get_db)):
+    productos_bajos = db.query(Producto).filter(
+        Producto.activo == True,
+        Producto.stock <= Producto.stock_minimo,
+    ).order_by(Producto.stock.asc()).all()
+    insumos_bajos = db.query(Insumo).filter(
+        (Insumo.estado == "CRITICO") | (Insumo.stock_actual <= Insumo.stock_minimo)
+    ).order_by(Insumo.stock_actual.asc()).all()
+    return {
+        "productos": [
+            {"id": p.id, "nombre": p.nombre, "stock": int(p.stock or 0), "stock_minimo": int(p.stock_minimo or 0)}
+            for p in productos_bajos
+        ],
+        "insumos": [
+            {
+                "id": i.id,
+                "nombre": i.nombre,
+                "stock_actual": float(i.stock_actual or 0),
+                "stock_minimo": float(i.stock_minimo or 0),
+                "unidad_medida": i.unidad_medida,
+            }
+            for i in insumos_bajos
+        ],
+    }
+
+
+@router.get("/cocina/sla")
+def get_cocina_sla(db: Session = Depends(get_db)):
+    now = datetime.now(timezone.utc)
+    today_start = datetime.combine(now.date(), datetime.min.time(), tzinfo=timezone.utc)
+    delivered = db.query(Pedido).filter(
+        Pedido.fecha_entrega.isnot(None),
+        Pedido.fecha_creacion.isnot(None),
+        Pedido.fecha_creacion >= today_start - timedelta(days=7),
+        Pedido.estado != "CANCELADO",
+    ).all()
+    durations = []
+    for order in delivered:
+        c = order.fecha_creacion if order.fecha_creacion.tzinfo else order.fecha_creacion.replace(tzinfo=timezone.utc)
+        d = order.fecha_entrega if order.fecha_entrega.tzinfo else order.fecha_entrega.replace(tzinfo=timezone.utc)
+        mins = max(0.0, (d - c).total_seconds() / 60.0)
+        durations.append(mins)
+    avg_minutes = round(sum(durations) / len(durations), 1) if durations else 0.0
+    active_orders = db.query(Pedido).filter(
+        Pedido.estado.in_(["PENDIENTE", "COBRADO", "EN_PREPARACION", "LISTO"])
+    ).all()
+    overdue_count = 0
+    for order in active_orders:
+        if order.fecha_creacion:
+            c = order.fecha_creacion if order.fecha_creacion.tzinfo else order.fecha_creacion.replace(tzinfo=timezone.utc)
+            if (now - c).total_seconds() >= 15 * 60:
+                overdue_count += 1
+    return {
+        "pedidos_medidos": len(durations),
+        "tiempo_promedio_min": avg_minutes,
+        "activos_en_cocina": len(active_orders),
+        "atrasados_mas_15_min": overdue_count,
+    }
+
+
+@router.get("/reportes/rentabilidad")
+def get_reporte_rentabilidad(db: Session = Depends(get_db)):
+    rows = (
+        db.query(
+            Producto.id,
+            Producto.nombre,
+            Producto.precio,
+            Producto.costo_unitario,
+            func.coalesce(func.sum(DetallePedido.cantidad), 0).label("unidades"),
+            func.coalesce(func.sum(DetallePedido.subtotal), 0).label("ingresos"),
+        )
+        .join(DetallePedido, DetallePedido.producto_id == Producto.id)
+        .join(Pedido, Pedido.id == DetallePedido.pedido_id)
+        .filter(Pedido.estado_pago == "PAGADO", Pedido.estado != "CANCELADO")
+        .group_by(Producto.id, Producto.nombre, Producto.precio, Producto.costo_unitario)
+        .order_by(func.sum(DetallePedido.subtotal).desc())
+        .all()
+    )
+    items = []
+    total_ingresos = 0.0
+    total_costos = 0.0
+    for row in rows:
+        recipe_rows = db.query(ProductoInsumo).filter(ProductoInsumo.producto_id == row.id).all()
+        recipe_cost = sum(
+            float(r.cantidad_por_unidad or 0) * float(r.insumo.costo_unitario or 0)
+            for r in recipe_rows
+            if r.insumo
+        )
+        unit_cost = recipe_cost if recipe_cost > 0 else float(row.costo_unitario or 0)
+        unidades = int(row.unidades or 0)
+        ingresos = round(float(row.ingresos or 0), 2)
+        costo_total = round(unit_cost * unidades, 2)
+        margen = round(ingresos - costo_total, 2)
+        margen_pct = round((margen / ingresos * 100.0), 1) if ingresos > 0 else 0.0
+        total_ingresos = round(total_ingresos + ingresos, 2)
+        total_costos = round(total_costos + costo_total, 2)
+        items.append({
+            "producto_id": row.id,
+            "nombre": row.nombre,
+            "unidades_vendidas": unidades,
+            "ingresos_usd": ingresos,
+            "costo_unitario_usd": round(unit_cost, 2),
+            "costo_total_usd": costo_total,
+            "margen_usd": margen,
+            "margen_pct": margen_pct,
+        })
+    return {
+        "total_ingresos_usd": total_ingresos,
+        "total_costos_usd": total_costos,
+        "utilidad_bruta_usd": round(total_ingresos - total_costos, 2),
+        "productos": items,
+    }
+
+
+@router.get("/reportes/exportar")
+def exportar_reporte_ventas(
+    formato: Literal["csv", "excel"] = "csv",
+    db: Session = Depends(get_db),
+):
+    orders = (
+        db.query(Pedido)
+        .filter(Pedido.estado_pago == "PAGADO", Pedido.estado != "CANCELADO")
+        .order_by(Pedido.fecha_creacion.desc())
+        .limit(1000)
+        .all()
+    )
+    delimiter = ";" if formato == "excel" else ","
+    output = io.StringIO()
+    output.write("\ufeff")
+    writer = csv.writer(output, delimiter=delimiter)
+    writer.writerow([
+        "Pedido_ID", "Fecha", "Factura", "Tipo", "Mesa", "Estado",
+        "Subtotal_USD", "IVA_USD", "Descuento_USD", "Propina_USD", "Total_USD", "Metodo_Pago", "Moneda"
+    ])
+    for o in orders:
+        writer.writerow([
+            o.id,
+            o.fecha_creacion.isoformat() if o.fecha_creacion else "",
+            o.factura_numero or "",
+            o.tipo or "",
+            o.numero_mesa or "",
+            o.estado or "",
+            f"{float(o.subtotal or 0):.2f}",
+            f"{float(o.impuesto or 0):.2f}",
+            f"{float(o.descuento or 0):.2f}",
+            f"{float(o.propina or 0):.2f}",
+            f"{float(o.total or 0):.2f}",
+            o.metodo_pago or "",
+            o.moneda_pago or "USD",
+        ])
+    filename = "reporte_ventas_donde_david.csv"
+    return StreamingResponse(
+        iter([output.getvalue()]),
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )

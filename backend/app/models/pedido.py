@@ -17,6 +17,7 @@ class Pedido(Base):
     impuesto = Column(Numeric(12, 2), nullable=False, default=0.00) # 16% IVA
     costo_empaque = Column(Numeric(12, 2), default=0.00)
     descuento = Column(Numeric(12, 2), default=0.00)
+    propina = Column(Numeric(12, 2), nullable=False, default=0.00, server_default="0")
     total = Column(Numeric(12, 2), nullable=False, default=0.00)
     puntos_otorgados = Column(Integer, nullable=True, default=None)
     observaciones = Column(Text, nullable=True)
@@ -43,6 +44,7 @@ class Pedido(Base):
     monto_pago = Column(Numeric(12, 2), nullable=True)
     tasa_cambio_pago = Column(Numeric(12, 4), nullable=True)
     referencia_pago = Column(String(100), nullable=True)
+    pagos_mixtos_json = Column(Text, nullable=True)
     repartidor_id = Column(Integer, ForeignKey("usuarios.id"), nullable=True)
     estado_delivery = Column(String(30), nullable=True)
     fecha_retiro = Column(DateTime, nullable=True)

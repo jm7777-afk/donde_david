@@ -17,6 +17,8 @@ from backend.app.models.movimiento_inventario import MovimientoInventario
 from backend.app.models.solicitud_mesa import SolicitudMesa
 from backend.app.models.movimiento_caja import MovimientoCaja
 from backend.app.models.arqueo_turno import ArqueoTurno
+from backend.app.models.producto_insumo import ProductoInsumo
+from backend.app.models.favorito_cliente import FavoritoCliente
 
 __all__ = [
     "Usuario",
@@ -38,5 +40,7 @@ __all__ = [
     "MovimientoInventario",
     "SolicitudMesa",
     "MovimientoCaja",
-    "ArqueoTurno"
+    "ArqueoTurno",
+    "ProductoInsumo",
+    "FavoritoCliente",
 ]

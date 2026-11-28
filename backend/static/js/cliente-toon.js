@@ -1105,6 +1105,72 @@ function renderPhotoCategories() {
   }
 }
 
+let clientMenuModeFilter = "todos";
+let clientFavorites = new Set();
+let appliedCouponData = null;
+let selectedTipMode = "none";
+
+async function loadClientFavorites() {
+  if (typeof Auth === "undefined" || !Auth.isAuthenticated || !Auth.isAuthenticated()) {
+    clientFavorites = new Set();
+    return;
+  }
+  try {
+    const res = await fetch("/api/v1/cliente/favoritos", { headers: Auth.getHeaders() });
+    if (res.ok) {
+      const ids = await res.json();
+      clientFavorites = new Set(Array.isArray(ids) ? ids.map(Number) : []);
+      if (typeof renderToonProducts === "function" && Array.isArray(toonProducts) && toonProducts.length) {
+        renderToonProducts();
+      }
+    }
+  } catch (err) {
+    console.warn("No se pudieron cargar favoritos:", err);
+  }
+}
+
+async function toggleFavoriteProduct(prodId, evt) {
+  if (evt) evt.stopPropagation();
+  const pid = Number(prodId);
+  if (typeof Auth === "undefined" || !Auth.isAuthenticated || !Auth.isAuthenticated()) {
+    showToast("Inicia sesión como cliente para guardar tus favoritos.", "warning");
+    openModal("client-login-modal");
+    return;
+  }
+  const isFav = clientFavorites.has(pid);
+  try {
+    const res = await fetch(`/api/v1/cliente/favoritos/${pid}`, {
+      method: isFav ? "DELETE" : "POST",
+      headers: Auth.getHeaders()
+    });
+    if (!res.ok) throw new Error("No se pudo actualizar favoritos.");
+    if (isFav) clientFavorites.delete(pid);
+    else clientFavorites.add(pid);
+    renderToonProducts();
+    filterMenuProducts();
+  } catch (err) {
+    showToast(err.message, "danger");
+  }
+}
+
+function setMenuModeFilter(mode) {
+  clientMenuModeFilter = mode || "todos";
+  document.querySelectorAll("#menu-filter-pills .menu-filter-pill").forEach(btn => {
+    btn.classList.toggle("is-active", btn.getAttribute("data-menu-filter") === clientMenuModeFilter);
+  });
+  filterMenuProducts();
+}
+
+function _applyModeFilter(list) {
+  if (clientMenuModeFilter === "promo") {
+    return list.filter(p => Number(p.precio_promocion) > 0);
+  }
+  if (clientMenuModeFilter === "favoritos") {
+    return list.filter(p => clientFavorites.has(Number(p.id)));
+  }
+  return list;
+}
+
 function filterCategoryToon(catId) {
   activeCategoryFilter = catId;
   renderPhotoCategories();
@@ -1117,26 +1183,31 @@ function renderToonProducts() {
     list = toonProducts.filter(p => p.categoria_id === activeCategoryFilter);
   }
 
-  const html = renderProductCards(list);
   const featured = document.getElementById("home-featured-grid");
   const menu = document.getElementById("menu-products-grid");
-  if (featured) featured.innerHTML = html;
-  if (menu) menu.innerHTML = html;
+  if (featured) featured.innerHTML = renderProductCards(list);
+  if (menu) menu.innerHTML = renderProductCards(_applyModeFilter(list));
 }
 
 function filterMenuProducts() {
   const query = (document.getElementById("menu-search-input")?.value || "").trim().toLocaleLowerCase();
-  const filtered = toonProducts.filter(product => {
+  const base = _applyModeFilter(toonProducts);
+  const filtered = base.filter(product => {
     const category = toonCategories.find(item => item.id === product.categoria_id)?.nombre || "";
     return `${product.nombre} ${product.descripcion || ""} ${category}`
       .toLocaleLowerCase().includes(query);
   });
   const container = document.getElementById("menu-products-grid");
-  if (container) container.innerHTML = renderProductCards(filtered);
+  if (container) {
+    container.innerHTML = filtered.length
+      ? renderProductCards(filtered)
+      : `<div style="grid-column:1/-1;text-align:center;color:var(--text-muted);padding:1.5rem;">No hay productos que coincidan con este filtro.</div>`;
+  }
 }
 
 function renderProductCards(products) {
   return products.map(product => {
+    const pid = Number(product.id);
     const rawImage = String(product.imagen_url || "");
     const image = /^(https:\/\/|\/static\/)/i.test(rawImage)
       ? escapeClientHtml(rawImage)
@@ -1145,11 +1216,13 @@ function renderProductCards(products) {
     const regularPrice = Number(product.precio) || 0;
     const promoPrice = Number(product.precio_promocion) > 0 ? Number(product.precio_promocion) : null;
     const displayedPrice = promoPrice || regularPrice;
+    const isFav = clientFavorites.has(pid);
     return `
-      <div class="product-toon-card" onclick="openProductModal(${Number(product.id)})">
+      <div class="product-toon-card" onclick="openProductModal(${pid})">
         <div class="product-img-container">
+          <button type="button" class="product-fav-btn ${isFav ? "is-fav" : ""}" aria-label="Favorito" onclick="toggleFavoriteProduct(${pid}, event)">${isFav ? "❤️" : "🤍"}</button>
           <img src="${image}" alt="${escapeClientHtml(product.nombre)}" loading="lazy">
-          <span class="product-badge">🔥 TOON</span>
+          <span class="product-badge">${promoPrice ? "🔥 PROMO" : "🔥 TOON"}</span>
         </div>
         <div class="product-info">
           <div class="product-title">${escapeClientHtml(product.nombre)}</div>
@@ -1511,19 +1584,156 @@ function renderToonCart() {
     `;
   });
 
-  const tax = subtotal * (checkoutTaxRate / 100);
-  const isDelivery = document.getElementById("checkout-type").value === "delivery";
-  const isLlevar = document.getElementById("checkout-type").value === "llevar";
-  const delivCost = isDelivery ? checkoutDeliveryFee : 0.0;
-  const empaqueCost = isLlevar ? checkoutPackageFee : 0.0;
-  const total = subtotal + tax + delivCost + empaqueCost;
+function computeCartPricingSnapshot() {
+  const rawSubtotal = Math.round(toonCart.reduce((sum, item) => sum + Number(item.subtotal || 0), 0) * 100) / 100;
+  let couponDiscount = 0;
+  if (appliedCouponData && Number(appliedCouponData.descuento_pct) > 0) {
+    const allowedPids = new Set((appliedCouponData.producto_ids || []).map(Number));
+    const eligibleSum = toonCart.reduce((sum, item) => {
+      if (item.promo_bundle_seq) return sum;
+      if (allowedPids.size && !allowedPids.has(Number(item.producto_id))) return sum;
+      return sum + Number(item.subtotal || 0);
+    }, 0);
+    couponDiscount = Math.round(eligibleSum * (Number(appliedCouponData.descuento_pct) / 100) * 100) / 100;
+  }
+  const netSubtotal = Math.round(Math.max(0, rawSubtotal - couponDiscount) * 100) / 100;
+  const tax = Math.round(netSubtotal * (checkoutTaxRate / 100) * 100) / 100;
+  const type = document.getElementById("checkout-type")?.value || "mesa";
+  const delivCost = type === "delivery" ? checkoutDeliveryFee : 0.0;
+  const empaqueCost = type === "llevar" ? checkoutPackageFee : 0.0;
+  let tipAmount = 0.0;
+  if (selectedTipMode === "5pct") tipAmount = Math.round(netSubtotal * 0.05 * 100) / 100;
+  else if (selectedTipMode === "10pct") tipAmount = Math.round(netSubtotal * 0.10 * 100) / 100;
+  else if (selectedTipMode === "2usd") tipAmount = 2.0;
+  const total = Math.round((netSubtotal + tax + delivCost + empaqueCost + tipAmount) * 100) / 100;
+  return { rawSubtotal, couponDiscount, netSubtotal, tax, delivCost, empaqueCost, tipAmount, total };
+}
+
+function setCheckoutTipMode(mode) {
+  selectedTipMode = mode || "none";
+  document.querySelectorAll("#cart-tip-pills .tip-pill-btn").forEach(btn => {
+    btn.classList.toggle("is-active", btn.getAttribute("data-tip-mode") === selectedTipMode);
+  });
+  renderToonCart();
+  updateCheckoutAmountHint();
+}
+
+async function applyCheckoutCoupon() {
+  const input = document.getElementById("checkout-coupon-code");
+  const statusEl = document.getElementById("checkout-coupon-status");
+  const code = (input?.value || "").trim();
+  if (!code) {
+    appliedCouponData = null;
+    if (statusEl) statusEl.textContent = "";
+    renderToonCart();
+    updateCheckoutAmountHint();
+    return;
+  }
+  try {
+    const res = await fetch("/api/v1/cliente/cupones/validar", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        codigo_cupon: code,
+        producto_ids: toonCart.map(item => Number(item.producto_id))
+      })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || "Cupón inválido.");
+    appliedCouponData = data;
+    if (statusEl) {
+      statusEl.textContent = `✅ Cupón ${data.codigo_cupon} aplicado (-${Number(data.descuento_pct)}% OFF)`;
+    }
+    showToast(`🎟️ Cupón ${data.codigo_cupon} aplicado (-${Number(data.descuento_pct)}%).`, "success");
+  } catch (err) {
+    appliedCouponData = null;
+    if (statusEl) statusEl.textContent = `❌ ${err.message}`;
+    showToast(err.message, "warning");
+  }
+  renderToonCart();
+  updateCheckoutAmountHint();
+}
+
+function renderCartUpsell() {
+  const section = document.getElementById("cart-upsell-section");
+  const grid = document.getElementById("cart-upsell-grid");
+  if (!section || !grid) return;
+  if (!toonCart.length || !Array.isArray(toonProducts) || !toonProducts.length) {
+    section.hidden = true;
+    grid.innerHTML = "";
+    return;
+  }
+  const inCartIds = new Set(toonCart.map(i => Number(i.producto_id)));
+  const complementKeywords = ["bebida", "refresco", "papa", "postre", "malteada", "teque", "jugo"];
+  const complementCatIds = new Set(
+    (toonCategories || [])
+      .filter(c => complementKeywords.some(k => String(c.nombre || "").toLowerCase().includes(k)))
+      .map(c => Number(c.id))
+  );
+  const candidates = toonProducts.filter(p =>
+    p && p.activo !== false && p.disponible !== false && Number(p.stock || 0) > 0
+    && !inCartIds.has(Number(p.id))
+    && (complementCatIds.has(Number(p.categoria_id)) || complementKeywords.some(k => String(p.nombre || "").toLowerCase().includes(k)))
+  );
+  const picks = (candidates.length ? candidates : toonProducts.filter(p => !inCartIds.has(Number(p.id)) && Number(p.stock || 0) > 0)).slice(0, 4);
+  if (!picks.length) {
+    section.hidden = true;
+    grid.innerHTML = "";
+    return;
+  }
+  section.hidden = false;
+  grid.innerHTML = picks.map(p => {
+    const price = Number(p.precio_promocion || p.precio || 0);
+    const img = getSafePromoMediaUrl(p.imagen_url);
+    return `
+      <div class="cart-upsell-card">
+        <img src="${escapeClientHtml(img)}" alt="${escapeClientHtml(p.nombre)}">
+        <strong style="font-size:0.82rem;">${escapeClientHtml(p.nombre)}</strong>
+        <span style="color:var(--gold-accent);font-weight:900;font-size:0.82rem;">$${price.toFixed(2)}</span>
+        <button type="button" class="btn-gold" style="padding:0.3rem 0.5rem;font-size:0.75rem;" onclick="addUpsellProduct(${Number(p.id)})">+ Agregar</button>
+      </div>
+    `;
+  }).join("");
+}
+
+function addUpsellProduct(prodId) {
+  const prod = toonProducts.find(p => Number(p.id) === Number(prodId));
+  if (!prod || prod.disponible === false || Number(prod.stock || 0) <= 0) return;
+  const price = Number(prod.precio_promocion || prod.precio || 0);
+  toonCart.push({
+    producto_id: Number(prod.id),
+    nombre: prod.nombre,
+    imagen_url: prod.imagen_url || "",
+    precio_unitario: price,
+    cantidad: 1,
+    subtotal: price,
+    puntos_fidelidad: Math.max(0, Number(prod.puntos_fidelidad) || 0),
+    opciones: [],
+    extras: [],
+    tiempo_preparacion: Number(prod.tiempo_preparacion) || 15
+  });
+  updateCartNavBadge();
+  renderToonCart();
+  showToast(`➕ ${prod.nombre} agregado al pedido.`, "success");
+}
+
+  const snap = computeCartPricingSnapshot();
+  const discountRow = document.getElementById("cart-discount-row");
+  const discountVal = document.getElementById("cart-discount");
+  const tipRow = document.getElementById("cart-tip-row");
+  const tipVal = document.getElementById("cart-tip");
+  if (discountRow) discountRow.style.display = snap.couponDiscount > 0 ? "flex" : "none";
+  if (discountVal) discountVal.innerHTML = `-${formatPriceDual(snap.couponDiscount)}`;
+  if (tipRow) tipRow.style.display = snap.tipAmount > 0 ? "flex" : "none";
+  if (tipVal) tipVal.innerHTML = formatPriceDual(snap.tipAmount);
 
   container.innerHTML = html;
-  document.getElementById("cart-subtotal").innerHTML = formatPriceDual(subtotal);
-  document.getElementById("cart-tax").innerHTML = formatPriceDual(tax);
-  if (document.getElementById("cart-delivery-cost")) document.getElementById("cart-delivery-cost").innerHTML = formatPriceDual(delivCost);
-  if (document.getElementById("cart-empaque-cost")) document.getElementById("cart-empaque-cost").innerHTML = formatPriceDual(empaqueCost);
-  document.getElementById("cart-total").innerHTML = formatPriceDual(total);
+  document.getElementById("cart-subtotal").innerHTML = formatPriceDual(snap.rawSubtotal);
+  document.getElementById("cart-tax").innerHTML = formatPriceDual(snap.tax);
+  if (document.getElementById("cart-delivery-cost")) document.getElementById("cart-delivery-cost").innerHTML = formatPriceDual(snap.delivCost);
+  if (document.getElementById("cart-empaque-cost")) document.getElementById("cart-empaque-cost").innerHTML = formatPriceDual(snap.empaqueCost);
+  document.getElementById("cart-total").innerHTML = formatPriceDual(snap.total);
+  renderCartUpsell();
   updateCheckoutOrderSummary();
 }
 
@@ -1725,10 +1935,8 @@ function updateCheckoutAmountHint() {
   if (!hint) return;
   const method = document.getElementById("checkout-payment")?.value || "Efectivo";
   const currency = document.getElementById("checkout-currency")?.value || "USD";
-  const subtotal = toonCart.reduce((sum, item) => sum + item.subtotal, 0);
-  const orderType = document.getElementById("checkout-type")?.value || "mesa";
-  const extra = orderType === "delivery" ? checkoutDeliveryFee : (orderType === "llevar" ? checkoutPackageFee : 0);
-  const total = Math.round((subtotal * (1 + checkoutTaxRate / 100) + extra) * 100) / 100;
+  const snap = computeCartPricingSnapshot();
+  const total = snap.total;
   updateCheckoutOrderSummary();
   const paymentInstructions = document.getElementById("checkout-payment-instructions");
   if (paymentInstructions) paymentInstructions.hidden = method !== "Pago Móvil";
@@ -1810,12 +2018,13 @@ async function copyCheckoutValue(value, label) {
 }
 
 function updateCheckoutOrderSummary() {
-  const subtotal = toonCart.reduce((sum, item) => sum + item.subtotal, 0);
-  const tax = Math.round(subtotal * checkoutTaxRate / 100 * 100) / 100;
+  const snap = computeCartPricingSnapshot();
+  const subtotal = snap.rawSubtotal;
+  const tax = snap.tax;
   const type = document.getElementById("checkout-type")?.value || "mesa";
-  const deliveryFee = type === "delivery" ? checkoutDeliveryFee : 0;
-  const packageFee = type === "llevar" ? checkoutPackageFee : 0;
-  const total = Math.round((subtotal + tax + deliveryFee + packageFee) * 100) / 100;
+  const deliveryFee = snap.delivCost;
+  const packageFee = snap.empaqueCost;
+  const total = snap.total;
   const destinationSummary = document.getElementById("checkout-summary-destination");
   if (destinationSummary) {
     const destination = type === "mesa"
@@ -1846,17 +2055,25 @@ function updateCheckoutOrderSummary() {
   );
   const values = {
     "checkout-summary-subtotal": subtotal,
+    "checkout-summary-discount": snap.couponDiscount,
     "checkout-summary-tax": tax,
     "checkout-summary-delivery": deliveryFee,
     "checkout-summary-package": packageFee,
+    "checkout-summary-tip": snap.tipAmount,
     "checkout-summary-total": total,
   };
   Object.entries(values).forEach(([id, value]) => {
     const element = document.getElementById(id);
-    if (element) element.innerHTML = formatPriceDual(value);
+    if (element) {
+      element.innerHTML = id === "checkout-summary-discount" ? `-${formatPriceDual(value)}` : formatPriceDual(value);
+    }
   });
+  const discountRow = document.getElementById("checkout-summary-discount-row");
+  const tipRow = document.getElementById("checkout-summary-tip-row");
   const deliveryRow = document.getElementById("checkout-summary-delivery-row");
   const packageRow = document.getElementById("checkout-summary-package-row");
+  if (discountRow) discountRow.style.display = snap.couponDiscount > 0 ? "flex" : "none";
+  if (tipRow) tipRow.style.display = snap.tipAmount > 0 ? "flex" : "none";
   if (deliveryRow) deliveryRow.style.display = deliveryFee > 0 ? "flex" : "none";
   if (packageRow) packageRow.style.display = packageFee > 0 ? "flex" : "none";
   const pointsSummary = document.getElementById("checkout-summary-points");
@@ -1934,6 +2151,7 @@ async function submitFinalOrder() {
     cantidad
   }));
 
+  const pricingSnap = computeCartPricingSnapshot();
   const payload = {
     numero_mesa: mesaName,
     tipo: orderType,
@@ -1946,6 +2164,8 @@ async function submitFinalOrder() {
     metodo_pago: paymentMethod,
     moneda_pago: paymentCurrency,
     referencia_pago: paymentMethod === "Pago Móvil" ? paymentReference : null,
+    codigo_cupon: appliedCouponData?.codigo_cupon || null,
+    propina: pricingSnap.tipAmount,
     detalles: toonCart.map(item => ({
       producto_id: item.producto_id,
       cantidad: item.cantidad,
@@ -1991,6 +2211,15 @@ async function submitFinalOrder() {
     }
     cachedTrackingProgress = null;
     toonCart = [];
+    appliedCouponData = null;
+    selectedTipMode = "none";
+    const couponInputEl = document.getElementById("checkout-coupon-code");
+    const couponStatusEl = document.getElementById("checkout-coupon-status");
+    if (couponInputEl) couponInputEl.value = "";
+    if (couponStatusEl) couponStatusEl.textContent = "";
+    document.querySelectorAll("#cart-tip-pills .tip-pill-btn").forEach(btn => {
+      btn.classList.toggle("is-active", btn.getAttribute("data-tip-mode") === "none");
+    });
     updateCartNavBadge();
 
     document.getElementById("track-order-num").innerText = `PEDIDO #${order.id}`;
@@ -2076,6 +2305,8 @@ async function submitOtpVerification() {
   }
 }
 
+let clientHistoryOrdersCache = [];
+
 async function loadHistorialPedidos() {
   try {
     const res = await fetch("/api/v1/cliente/pedidos/historial", {
@@ -2083,12 +2314,13 @@ async function loadHistorialPedidos() {
     });
     if (!res.ok) return;
     const pedidos = await res.json();
+    clientHistoryOrdersCache = Array.isArray(pedidos) ? pedidos : [];
     
     let html = "";
-    if (!pedidos || pedidos.length === 0) {
+    if (!clientHistoryOrdersCache.length) {
       html = `<p style="color: var(--text-muted); text-align: center;">No tienes pedidos anteriores registrados.</p>`;
     } else {
-      pedidos.forEach(p => {
+      clientHistoryOrdersCache.forEach(p => {
         const isActive = !["ENTREGADO", "CANCELADO"].includes(p.estado);
         html += `
           <div style="background: var(--toon-card); border: 1px solid var(--toon-border); padding: 1rem; border-radius: var(--radius-sm); margin-bottom: 0.85rem;">
@@ -2097,7 +2329,10 @@ async function loadHistorialPedidos() {
               <span>${formatPriceDual(p.total)}</span>
             </div>
             <div style="font-size: 0.8rem; color: var(--text-muted); margin-top: 0.3rem;">Estado: <strong style="color: var(--neon-green);">${escapeClientHtml(p.estado_delivery || p.estado)}</strong></div>
-            ${isActive ? `<button class="btn-gold" style="margin-top:.65rem;width:100%" onclick="trackOrderById(${Number(p.id)})">📍 Seguir pedido</button>` : ""}
+            <div class="historial-actions-row">
+              ${isActive ? `<button type="button" class="btn-gold" onclick="trackOrderById(${Number(p.id)})">📍 Seguir pedido</button>` : ""}
+              ${Array.isArray(p.detalles) && p.detalles.length ? `<button type="button" class="btn btn-outline" onclick="reorderHistoryOrder(${Number(p.id)})">⚡ Volver a pedir</button>` : ""}
+            </div>
           </div>
         `;
       });
@@ -2106,6 +2341,40 @@ async function loadHistorialPedidos() {
   } catch (err) {
     console.error(err);
   }
+}
+
+function reorderHistoryOrder(orderId) {
+  const order = clientHistoryOrdersCache.find(o => Number(o.id) === Number(orderId));
+  if (!order || !Array.isArray(order.detalles) || !order.detalles.length) return;
+  let added = 0;
+  order.detalles.forEach(d => {
+    const product = (toonProducts || []).find(p => Number(p.id) === Number(d.producto_id));
+    if (!product || product.activo === false || product.disponible === false || Number(product.stock || 0) < Number(d.cantidad || 1)) {
+      return;
+    }
+    const price = Number(product.precio_promocion || product.precio || 0);
+    toonCart.push({
+      producto_id: product.id,
+      nombre: product.nombre,
+      imagen_url: product.imagen_url || "",
+      precio_unitario: price,
+      cantidad: Number(d.cantidad || 1),
+      subtotal: Math.round(price * Number(d.cantidad || 1) * 100) / 100,
+      puntos_fidelidad: Math.max(0, Number(product.puntos_fidelidad) || 0),
+      opciones: [],
+      extras: [],
+      tiempo_preparacion: Number(product.tiempo_preparacion) || 15
+    });
+    added += Number(d.cantidad || 1);
+  });
+  if (!added) {
+    showToast("Ninguno de los productos de ese pedido está disponible ahora.", "warning");
+    return;
+  }
+  updateCartNavBadge();
+  renderToonCart();
+  showScreen("screen-carrito");
+  showToast(`⚡ Se cargaron ${added} producto(s) del pedido #${orderId} al carrito.`, "success");
 }
 
 function trackOrderById(orderId) {
@@ -2285,6 +2554,22 @@ async function refreshTrackedOrder() {
     }
 
     const progress = document.getElementById("track-order-progress");
+    const visualStepper = document.getElementById("track-visual-stepper");
+    if (visualStepper) {
+      const visualStages = [
+        { key: "recibido", label: "1. Recibido" },
+        { key: "cocina", label: "2. Cocina" },
+        { key: "listo", label: result.tipo === "delivery" ? "3. En Ruta" : "3. Listo" },
+        { key: "entregado", label: "4. Entregado" }
+      ];
+      let activeStage = 0;
+      if (result.estado === "EN_PREPARACION" || result.estado === "COBRADO") activeStage = 1;
+      if (result.estado === "LISTO" || result.estado_delivery === "RECOGIDO" || result.estado_delivery === "EN_CAMINO") activeStage = 2;
+      if (result.estado === "ENTREGADO") activeStage = 3;
+      visualStepper.innerHTML = visualStages.map((s, idx) => `
+        <div class="tracking-step-chip ${idx < activeStage ? "is-done" : idx === activeStage ? "is-current" : ""}">${s.label}</div>
+      `).join("");
+    }
     if (progress) {
       const deliveryStates = ["PENDIENTE", "ASIGNADO", "RECOGIDO", "EN_CAMINO", "ENTREGADO"];
       const kitchenStates = ["PAGO_PENDIENTE", "PENDIENTE", "COBRADO", "EN_PREPARACION", "LISTO", "ENTREGADO"];
@@ -2782,24 +3067,41 @@ function setRatingStars(count) {
 }
 
 async function submitServiceRating() {
-  const comment = document.getElementById("rating-comment-input")?.value || "Excelente atención y comida deliciosa";
+  const comment = document.getElementById("rating-comment-input")?.value.trim() || "Excelente atención y comida deliciosa";
   const u = Auth.getUser();
   const name = u ? `${u.nombre} ${u.apellido}` : "Cliente Satisfecho";
 
   try {
-    await fetch("/api/v1/cliente/resenas", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        nombre_cliente: name,
-        comentario: comment,
-        estrellas: currentRatingStars
-      })
-    });
+    let saved = false;
+    if (currentPendingOrderId) {
+      const hdrs = { ...Auth.getHeaders(), "Content-Type": "application/json" };
+      if (currentTrackingToken) hdrs["X-Order-Tracking-Token"] = currentTrackingToken;
+      const orderRes = await fetch(`/api/v1/cliente/pedidos/${currentPendingOrderId}/resena`, {
+        method: "POST",
+        headers: hdrs,
+        body: JSON.stringify({
+          nombre_cliente: name,
+          comentario: comment,
+          estrellas: currentRatingStars
+        })
+      });
+      if (orderRes.ok) saved = true;
+    }
+    if (!saved) {
+      await fetch("/api/v1/cliente/resenas", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          nombre_cliente: name,
+          comentario: comment,
+          estrellas: currentRatingStars
+        })
+      });
+    }
     showToast("🌟 ¡Gracias por calificar nuestro servicio!", "success");
     closeModal("service-rating-modal");
     showScreen("screen-tracking");
-  } catch(e) {
+  } catch (e) {
     closeModal("service-rating-modal");
     showScreen("screen-tracking");
   }
@@ -3211,3 +3513,22 @@ async function sendTableServiceRequest(type) {
     showToast(error.message || "No se pudo enviar la solicitud.", "danger");
   }
 }
+
+document.addEventListener("DOMContentLoaded", () => {
+  loadClientFavorites();
+  const homeCarousel = document.getElementById("home-promo-banner-container");
+  if (homeCarousel) {
+    let homeTouchStartX = 0;
+    homeCarousel.addEventListener("touchstart", e => {
+      homeTouchStartX = e.changedTouches?.[0]?.clientX || 0;
+    }, { passive: true });
+    homeCarousel.addEventListener("touchend", e => {
+      const activeList = (toonPromos || []).filter(p => p && p.activo !== false);
+      if (activeList.length < 2) return;
+      const delta = (e.changedTouches?.[0]?.clientX || 0) - homeTouchStartX;
+      if (Math.abs(delta) < 40) return;
+      if (delta < 0) nextCarouselSlide(activeList.length);
+      else prevCarouselSlide(activeList.length);
+    }, { passive: true });
+  }
+});

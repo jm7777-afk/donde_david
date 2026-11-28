@@ -4,15 +4,15 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Donde David - Panel de Administración General</title>
-  <link rel="stylesheet" href="/static/css/global.css?v=5.4">
-  <link rel="stylesheet" href="/static/css/toon-theme.css?v=5.4">
-  <link rel="stylesheet" href="/static/css/index.css?v=5.4">
+  <link rel="stylesheet" href="/static/css/global.css?v=5.6">
+  <link rel="stylesheet" href="/static/css/toon-theme.css?v=5.6">
+  <link rel="stylesheet" href="/static/css/index.css?v=5.6">
   
   <!-- Driver.js CSS para Onboarding Tour Interactivo -->
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/driver.js@1.3.1/dist/driver.css">
 
-  <link rel="stylesheet" href="/static/css/pages/admin-index.css?v=5.4">
-  <link rel="stylesheet" href="/static/css/utilities.css?v=5.4">
+  <link rel="stylesheet" href="/static/css/pages/admin-index.css?v=5.6">
+  <link rel="stylesheet" href="/static/css/utilities.css?v=5.6">
 </head>
 <body class="toon-theme"><nav id="app-sidebar"></nav>
 
@@ -38,6 +38,7 @@
       <button class="admin-sidebar-btn" onclick="window.location.href='/static/mesero/panel.html'">🍽️ Meseros & Salón</button>
       <button class="admin-sidebar-btn" onclick="window.location.href='/static/delivery/panel.html'">🛵 Despacho Delivery</button>
       <button class="admin-sidebar-btn" onclick="window.location.href='/static/gerencia/panel.html'">📈 Panel de Gerencia</button>
+      <button class="admin-sidebar-btn" onclick="window.location.href='/static/turnos/pantalla.html'">📺 Pantalla Turnos TV</button>
       <button class="admin-sidebar-btn" onclick="window.location.href='/static/cliente/app.html'">📱 Menú Clientes (PWA)</button>
       <button class="admin-sidebar-btn" onclick="window.location.href='/static/index.html'">🌐 Portada Web Oficial</button>
       <p class="admin-sidebar-group">Menú y contenido</p>
@@ -94,6 +95,9 @@
             <option value="Tarjeta">💳 Tarjeta Débito / Crédito</option>
             <option value="Divisas">💰 Divisas USD</option>
           </select>
+          <button type="button" class="btn btn-outline" onclick="exportSalesReportCsv('excel')">📥 Exportar Excel/CSV</button>
+          <button type="button" class="btn btn-outline" onclick="loadProfitabilityAndSlaReport()">📊 Rentabilidad &amp; SLA</button>
+          <button type="button" class="btn btn-outline" onclick="printAdminDashboardSummary()">🖨️ Imprimir Resumen</button>
         </div>
       </div>
 
@@ -212,6 +216,14 @@
         <h3 class="u-font-size-1-2rem u-font-weight-900 u-color-token-gold-accent u-margin-top-0">🏆 Top Productos e Ingredientes Más Vendidos</h3>
         <div id="top-products-container"></div>
       </div>
+
+      <section id="admin-profit-sla-panel" class="u-background-token-toon-card u-border-1px-solid-token-toon-border u-border-radius-token-radius-md u-padding-1-5rem u-margin-top-1rem u-display-none">
+        <div class="u-display-flex u-justify-content-space-between u-align-items-center u-flex-wrap-wrap u-gap-0-5rem u-margin-bottom-0-75rem">
+          <h3 class="u-margin-0 u-color-token-cyan-accent">📈 REPORTE DE RENTABILIDAD &amp; SLA DE COCINA</h3>
+          <span id="admin-sla-summary-pill" class="badge">⏱️ Cargando SLA...</span>
+        </div>
+        <div id="admin-profitability-list"></div>
+      </section>
     </div>
 
     <!-- TAB 2: PRODUCTOS Y EDICION DE INGREDIENTES -->
@@ -416,6 +428,25 @@
           </div>
         </div>
 
+        <h3>🕒 Horario Comercial de Pedidos</h3>
+        <div class="u-display-grid u-grid-template-columns-repeat-auto-fit-minmax-min-100-240px-1fr u-gap-0-1rem">
+          <div class="form-group">
+            <label for="cfg-validar-horario">Restringir pedidos fuera de horario</label>
+            <select id="cfg-validar-horario" class="form-control">
+              <option value="false">🟢 Desactivado (24h / Pruebas)</option>
+              <option value="true">🔒 Activo según horario</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="cfg-horario-apertura">Hora Apertura</label>
+            <input type="time" id="cfg-horario-apertura" class="form-control" value="09:00">
+          </div>
+          <div class="form-group">
+            <label for="cfg-horario-cierre">Hora Cierre</label>
+            <input type="time" id="cfg-horario-cierre" class="form-control" value="23:00">
+          </div>
+        </div>
+
         <h3>📱 Datos para Pago Móvil</h3>
         <p class="u-color-token-text-muted u-font-size-0p85rem">Estos datos se muestran al cliente. No se guardan credenciales bancarias.</p>
         <div class="form-group"><label>Banco</label><input type="text" id="cfg-pm-banco" class="form-control" maxlength="100"></div>
@@ -439,9 +470,12 @@
 
     <!-- TAB 9: INVENTARIO -->
     <div id="tab-inventario" class="tab-content">
-      <div class="u-display-flex u-justify-content-space-between u-align-items-center u-margin-bottom-1-25rem">
+      <div class="u-display-flex u-justify-content-space-between u-align-items-center u-flex-wrap-wrap u-gap-0-5rem u-margin-bottom-1-25rem">
         <h2>📦 CONTROL DE INSUMOS E INVENTARIO</h2>
-        <button class="btn-gold" onclick="openModal('add-insumo-modal')">➕ Nuevo Insumo</button>
+        <div class="u-display-flex u-gap-0-5rem u-flex-wrap-wrap">
+          <button type="button" class="btn btn-outline" onclick="openCompraInventarioModal()">🛒 Registrar Compra / Proveedor</button>
+          <button class="btn-gold" onclick="openModal('add-insumo-modal')">➕ Nuevo Insumo</button>
+        </div>
       </div>
       <div class="u-background-token-toon-card u-border-1px-solid-token-toon-border u-border-radius-token-radius-md u-overflow-x-auto">
         <table class="u-width-100 u-border-collapse-collapse u-text-align-left">
@@ -814,6 +848,7 @@
       <div class="form-group"><label>Categoría</label><select id="edit-prod-cat-select" class="form-control" required></select></div>
       <div class="form-group"><label>Descripción</label><input type="text" id="edit-prod-desc" class="form-control"></div>
       <div class="form-group"><label>Precio Regular ($ USD)</label><input type="number" step="0.01" id="edit-prod-price" class="form-control" required></div>
+      <div class="form-group"><label>Costo Unitario ($ USD)</label><input type="number" step="0.01" min="0" id="edit-prod-costo" class="form-control" value="0.00"></div>
       <div class="form-group"><label>Precio Promoción ($ USD) (opcional)</label><input type="number" step="0.01" id="edit-prod-price-promo" class="form-control"></div>
       <div class="form-group"><label>Puntos de fidelización por unidad vendida</label><input type="number" min="0" max="100000" step="1" id="edit-prod-points" class="form-control" value="0"><small>Se acreditan en la cuenta del cliente cuando Caja confirma el pago.</small></div>
       <div class="form-group"><label>Preparación estimada (minutos)</label><input type="number" min="1" max="240" id="edit-prod-tiempo-preparacion" class="form-control" required></div>
@@ -851,6 +886,11 @@
       </div>
       <div class="form-group"><label>Porcentaje Descuento (%) <small>(Opcional / Referencial)</small></label><input type="number" id="promo-pct" class="form-control" value="20"></div>
       <div class="form-group"><label>Código Cupon</label><input type="text" id="promo-codigo" class="form-control" value="COMBO20"></div>
+      <div class="form-group"><label>Días vigentes (opcional, ej. L,M,X,J,V)</label><input type="text" id="promo-dias-semana" class="form-control" maxlength="40" placeholder="Todos los días si está vacío"></div>
+      <div class="u-display-flex u-gap-1rem">
+        <div class="form-group u-flex-1"><label>Hora inicio (opcional)</label><input type="time" id="promo-hora-inicio" class="form-control"></div>
+        <div class="form-group u-flex-1"><label>Hora fin (opcional)</label><input type="time" id="promo-hora-fin" class="form-control"></div>
+      </div>
       <div class="form-group">
         <label>Subir Imagen Banner</label>
         <input type="file" accept="image/*" class="form-control" onchange="uploadLocalFile(event, 'promo-img')">
@@ -946,6 +986,14 @@
       <h3 class="u-color-token-gold-accent u-margin-top-0">➕ AGREGAR NUEVA MESA</h3>
       <div class="form-group"><label>Número de Mesa</label><input type="number" id="new-mesa-num" class="form-control" placeholder="Ej. 21"></div>
       <div class="form-group"><label>Capacidad (personas)</label><input type="number" id="new-mesa-cap" class="form-control" value="4"></div>
+      <div class="form-group">
+        <label>Zona del Salón</label>
+        <select id="new-mesa-zona" class="form-control">
+          <option value="Salón">Salón</option>
+          <option value="Terraza">Terraza</option>
+          <option value="Barra">Barra</option>
+        </select>
+      </div>
       <button class="btn-gold u-width-100 u-margin-top-1rem" onclick="submitCreateMesa()">AGREGAR Y GENERAR QR</button>
     </div>
   </div>
@@ -983,6 +1031,7 @@
       <div class="form-group"><label>Categoría</label><select id="prod-cat-select" class="form-control" required></select></div>
       <div class="form-group"><label>Descripción</label><input type="text" id="prod-desc" class="form-control"></div>
       <div class="form-group"><label>Precio ($ USD)</label><input type="number" step="0.01" id="prod-price" class="form-control" required></div>
+      <div class="form-group"><label>Costo Unitario ($ USD)</label><input type="number" step="0.01" min="0" id="prod-costo" class="form-control" value="0.00"></div>
       <div class="form-group"><label>Puntos de fidelización por unidad vendida</label><input type="number" min="0" max="100000" step="1" id="prod-points" class="form-control" value="0"><small>Se acreditan en la cuenta del cliente cuando Caja confirma el pago.</small></div>
       <div class="form-group"><label>Preparación estimada (minutos)</label><input type="number" min="1" max="240" id="prod-tiempo-preparacion" class="form-control" value="15" required></div>
       <div class="form-group"><label>Ingredientes (separados por coma)</label><input type="text" id="prod-ingredientes" class="form-control" placeholder="Ej. Carne 150g, Queso Cheddar, Tomate, Cebolla"></div>
@@ -1021,6 +1070,38 @@
     </div>
   </div>
 
+  <!-- Modal Compra / Reabastecimiento a Proveedor -->
+  <div class="product-modal-backdrop" id="compra-inventario-modal">
+    <div class="product-modal-card u-max-width-440px u-padding-1-5rem">
+      <button class="modal-close-btn" onclick="closeModal('compra-inventario-modal')">&times;</button>
+      <h3 class="u-color-token-gold-accent u-margin-top-0">🛒 COMPRA / REABASTECIMIENTO</h3>
+      <div class="form-group">
+        <label for="compra-target-type">Tipo de ítem</label>
+        <select id="compra-target-type" class="form-control" onchange="populateCompraTargetOptions()">
+          <option value="insumo">Insumo / Materia prima</option>
+          <option value="producto">Producto terminado</option>
+        </select>
+      </div>
+      <div class="form-group"><label for="compra-target-id">Seleccionar ítem</label><select id="compra-target-id" class="form-control"></select></div>
+      <div class="form-group"><label for="compra-cantidad">Cantidad ingresada</label><input type="number" step="0.1" min="0.1" id="compra-cantidad" class="form-control" value="10"></div>
+      <div class="form-group"><label for="compra-costo">Costo unitario ($ USD)</label><input type="number" step="0.01" min="0" id="compra-costo" class="form-control" value="0.00"></div>
+      <div class="form-group"><label for="compra-proveedor">Proveedor (opcional)</label><input type="text" id="compra-proveedor" class="form-control" placeholder="Ej. Distribuidora Central"></div>
+      <button type="button" class="btn-gold u-width-100 u-margin-top-1rem" onclick="submitCompraInventario()">💾 REGISTRAR COMPRA</button>
+    </div>
+  </div>
+
+  <!-- Modal Receta de Producto (Insumos por Unidad) -->
+  <div class="product-modal-backdrop" id="recipe-modal">
+    <div class="product-modal-card u-max-width-480px u-padding-1-5rem">
+      <button class="modal-close-btn" onclick="closeModal('recipe-modal')">&times;</button>
+      <h3 class="u-color-token-cyan-accent u-margin-top-0">🧪 RECETA DE INSUMOS · <span id="recipe-product-name">Producto</span></h3>
+      <p class="u-color-token-text-muted u-font-size-0-82rem">Cada venta descontará automáticamente estas cantidades de tus insumos base.</p>
+      <div id="recipe-rows-list" class="u-max-height-260px u-overflow-y-auto u-margin-bottom-1rem"></div>
+      <button type="button" class="btn btn-outline u-width-100 u-margin-bottom-0-75rem" onclick="addRecipeRowUI()">➕ Añadir insumo a receta</button>
+      <button type="button" class="btn-gold u-width-100" onclick="submitProductRecipe()">💾 GUARDAR RECETA</button>
+    </div>
+  </div>
+
   <!-- Modal Crear Reseña -->
   <div class="product-modal-backdrop" id="resena-modal">
     <div class="product-modal-card u-max-width-440px u-padding-1-5rem">
@@ -1035,10 +1116,10 @@
 
   <!-- Driver.js Library script -->
   <script src="https://cdn.jsdelivr.net/npm/driver.js@1.3.1/dist/driver.js.iife.js"></script>
-  <script src="/static/js/auth.js?v=5.4"></script>
-  <script src="/static/js/appShell.js?v=5.4"></script>
-  <script src="/static/js/websocket.js?v=5.4"></script>
-  <script src="/static/js/admin-toon.js?v=5.4"></script>
+  <script src="/static/js/auth.js?v=5.6"></script>
+  <script src="/static/js/appShell.js?v=5.6"></script>
+  <script src="/static/js/websocket.js?v=5.6"></script>
+  <script src="/static/js/admin-toon.js?v=5.6"></script>
 
   <!-- Script para Autodisparo del Tour Interactivo Driver.js -->
   <script>

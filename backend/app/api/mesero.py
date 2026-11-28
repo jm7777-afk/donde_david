@@ -1,14 +1,25 @@
 from typing import List
 from datetime import datetime, timezone
-from fastapi import APIRouter, Depends, HTTPException
+import hashlib
+import secrets
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import and_, or_
 from sqlalchemy.orm import Session
 from backend.app.core.database import get_db
 from backend.app.core.security import require_roles
 from backend.app.models.pedido import Pedido
 from backend.app.models.mesa import Mesa
+from backend.app.models.turno import Turno
 from backend.app.models.solicitud_mesa import SolicitudMesa
-from backend.app.schemas.schemas import PedidoOut, CambiarMesaRequest, SolicitudMesaEstado, MesaLimpiezaRequest
+from backend.app.schemas.schemas import PedidoOut, PedidoCreate, CambiarMesaRequest, SolicitudMesaEstado, MesaLimpiezaRequest
+from backend.app.services.orders import (
+    get_pricing_config,
+    prepare_order_items,
+    apply_promo_bundles_pricing,
+    apply_coupon_discount,
+    collect_stock_alerts,
+    deduct_order_stock,
+)
 from backend.app.services.tables import has_active_table_orders, parse_table_number, refresh_table_state
 from backend.app.websockets.manager import ws_manager
 
@@ -47,6 +58,7 @@ def get_mesas_mesero(
         summaries.append({
             "id": mesa.id,
             "numero_mesa": mesa.numero_mesa,
+            "zona": mesa.zona or "Salón",
             "estado": mesa.estado,
             "codigo_qr": mesa.codigo_qr,
             "capacidad": mesa.capacidad,
@@ -238,3 +250,86 @@ async def marcar_pedido_entregado(
     })
 
     return {"mensaje": f"Pedido #{pedido.id} marcado como ENTREGADO por el mesero {user.nombre}."}
+
+
+@router.post("/pedidos", status_code=status.HTTP_201_CREATED)
+async def crear_pedido_mesero(
+    pedido_in: PedidoCreate,
+    db: Session = Depends(get_db),
+    user=Depends(require_roles(["admin", "supervisor", "mesero", "caja"])),
+):
+    """Permite al mesero tomar pedidos directamente en salón (cuenta abierta en mesa)."""
+    if not pedido_in.detalles:
+        raise HTTPException(status_code=400, detail="El pedido debe contener al menos un producto.")
+
+    try:
+        mesa_num_val = parse_table_number(pedido_in.numero_mesa)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail="El número de mesa no es válido.") from exc
+
+    mesa_obj = db.query(Mesa).filter(Mesa.numero_mesa == mesa_num_val).with_for_update().first()
+    if not mesa_obj:
+        raise HTTPException(status_code=404, detail=f"La Mesa #{mesa_num_val} no existe.")
+    if mesa_obj.estado in {"PENDIENTE_LIMPIEZA", "EN_LIMPIEZA"}:
+        raise HTTPException(status_code=409, detail="La mesa debe quedar limpia antes de recibir otro pedido.")
+    mesa_obj.estado = "OCUPADA"
+    mesa_obj.cliente_actual = mesa_obj.cliente_actual or f"Atendido por {user.nombre}"
+
+    pricing = get_pricing_config(db)
+    products, requested_quantities, stock_before, detalles_db, subtotal_final = prepare_order_items(
+        db, pedido_in.detalles
+    )
+    subtotal_final, descuento_promo = apply_promo_bundles_pricing(db, detalles_db, pedido_in.promociones)
+    subtotal_final, descuento_promo, _ = apply_coupon_discount(db, detalles_db, pedido_in.codigo_cupon, descuento_promo)
+    impuesto_monto = round(subtotal_final * (pricing["tax_rate"] / 100.0), 2)
+    propina_val = round(float(pedido_in.propina or 0.0), 2)
+    total_final = round(subtotal_final + impuesto_monto + propina_val, 2)
+
+    turno_activo = db.query(Turno).filter(Turno.activo == True).order_by(Turno.id.desc()).first()
+    tracking_token = secrets.token_urlsafe(32)
+    nuevo_pedido = Pedido(
+        numero_mesa=f"Mesa {mesa_num_val}",
+        tipo="mesa",
+        modo_pago="PAGAR_DESPUES",
+        estado="PENDIENTE",
+        estado_pago="PENDIENTE",
+        moneda_pago="USD",
+        subtotal=subtotal_final,
+        impuesto=impuesto_monto,
+        costo_empaque=0.0,
+        descuento=descuento_promo,
+        propina=propina_val,
+        total=total_final,
+        observaciones=pedido_in.observaciones or f"Tomado en salón por {user.nombre}",
+        token_seguimiento_hash=hashlib.sha256(tracking_token.encode("utf-8")).hexdigest(),
+        usuario_id=user.id,
+        turno_id=turno_activo.id if turno_activo else None,
+        detalles=detalles_db,
+    )
+    db.add(nuevo_pedido)
+    db.flush()
+    touched_insumos = deduct_order_stock(db, nuevo_pedido.id, products, requested_quantities, stock_before, user.id)
+    stock_alerts = collect_stock_alerts(products, touched_insumos)
+    db.commit()
+    db.refresh(nuevo_pedido)
+
+    await ws_manager.broadcast("NUEVO_PEDIDO", {
+        "id": nuevo_pedido.id,
+        "numero_mesa": nuevo_pedido.numero_mesa,
+        "estado": nuevo_pedido.estado,
+        "modo_pago": nuevo_pedido.modo_pago,
+        "total": float(nuevo_pedido.total or 0),
+        "tipo": "mesa",
+        "detalles_count": len(nuevo_pedido.detalles),
+        "fecha": str(nuevo_pedido.fecha_creacion),
+    })
+    if stock_alerts:
+        await ws_manager.broadcast("ALERTA_STOCK_CRITICO", {"pedido_id": nuevo_pedido.id, "alertas": stock_alerts})
+
+    return {
+        "id": nuevo_pedido.id,
+        "numero_mesa": nuevo_pedido.numero_mesa,
+        "total": float(nuevo_pedido.total or 0),
+        "estado": nuevo_pedido.estado,
+        "mensaje": f"Pedido #{nuevo_pedido.id} enviado a cocina para Mesa {mesa_num_val}",
+    }

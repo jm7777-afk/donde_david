@@ -1,4 +1,4 @@
-const CACHE_NAME = "donde-david-pwa-v35";
+const CACHE_NAME = "donde-david-pwa-v36";
 const ASSETS_TO_CACHE = [
   "/static/index.html",
   "/static/cliente/app.html",

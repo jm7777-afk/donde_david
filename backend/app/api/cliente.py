@@ -26,7 +26,21 @@ from backend.app.models.guia_item import GuiaItem
 from backend.app.models.resena import Resena
 from backend.app.models.publicacion import Publicacion
 from backend.app.models.movimiento_inventario import MovimientoInventario
-from backend.app.schemas.schemas import CategoriaOut, ProductoOut, PedidoCreate, PedidoCreadoOut, OTPVerifyRequest, ResenaCreate, ResenaOut, PublicacionOut, CambiarMesaRequest, SolicitudMesaCreate
+from backend.app.models.favorito_cliente import FavoritoCliente
+from backend.app.schemas.schemas import (
+    CategoriaOut,
+    ProductoOut,
+    PedidoCreate,
+    PedidoCreadoOut,
+    OTPVerifyRequest,
+    ResenaCreate,
+    ResenaPedidoCreate,
+    ResenaOut,
+    PublicacionOut,
+    CambiarMesaRequest,
+    SolicitudMesaCreate,
+    CuponValidarRequest,
+)
 from backend.app.models.solicitud_mesa import SolicitudMesa
 from backend.app.websockets.manager import ws_manager
 from backend.app.services.tables import parse_table_number, refresh_table_state
@@ -34,7 +48,11 @@ from backend.app.services.orders import (
     get_pricing_config,
     prepare_order_items,
     apply_promo_bundles_pricing,
+    apply_coupon_discount,
+    collect_stock_alerts,
     deduct_order_stock,
+    is_promotion_currently_valid,
+    validate_store_schedule,
 )
 
 router = APIRouter(prefix="/cliente", tags=["Cliente QR / App"])
@@ -95,6 +113,12 @@ def get_configuraciones_publicas(db: Session = Depends(get_db)):
         res["impuesto_porcentaje"] = "16.00"
     if "iva_activo" not in res:
         res["iva_activo"] = "true"
+    if "horario_apertura" not in res:
+        res["horario_apertura"] = "09:00"
+    if "horario_cierre" not in res:
+        res["horario_cierre"] = "23:00"
+    if "validar_horario_pedidos" not in res:
+        res["validar_horario_pedidos"] = "false"
         
     return res
 
@@ -109,11 +133,41 @@ def get_mesas_publicas(db: Session = Depends(get_db)):
         {
             "id": m.id,
             "numero_mesa": m.numero_mesa,
+            "zona": m.zona or "Salón",
             "capacidad": m.capacidad,
             "estado": m.estado,
         }
         for m in mesas
     ]
+
+
+@router.get("/turnos")
+def get_turnos_publicos(db: Session = Depends(get_db)):
+    """Tablero público para pantalla TV de mostrador (solo pedidos Para Llevar activos)."""
+    orders = (
+        db.query(Pedido)
+        .filter(
+            Pedido.tipo == "llevar",
+            Pedido.estado.in_(["PENDIENTE", "COBRADO", "EN_PREPARACION", "LISTO"]),
+        )
+        .order_by(Pedido.fecha_creacion.asc())
+        .all()
+    )
+    preparando = []
+    listos = []
+    for o in orders:
+        item = {
+            "id": o.id,
+            "codigo_visual": f"#{o.id:03d}",
+            "cliente": (o.nombre_cliente_delivery or o.nombre_factura or "Mostrador")[:24],
+            "estado": o.estado,
+            "estado_retiro": o.estado_retiro or "PENDIENTE",
+        }
+        if o.estado == "LISTO" or o.estado_retiro == "LISTO_PARA_RETIRAR":
+            listos.append(item)
+        else:
+            preparando.append(item)
+    return {"preparando": preparando, "listos": listos}
 
 
 @router.get("/promociones")
@@ -126,6 +180,8 @@ def get_promociones(db: Session = Depends(get_db)):
     )
     result = []
     for promo in promos:
+        if not is_promotion_currently_valid(promo):
+            continue
         linked = [
             {
                 "id": prod.id,
@@ -154,10 +210,80 @@ def get_promociones(db: Session = Depends(get_db)):
             "activo": bool(promo.activo),
             "fecha_inicio": promo.fecha_inicio.isoformat() if promo.fecha_inicio else None,
             "fecha_fin": promo.fecha_fin.isoformat() if promo.fecha_fin else None,
+            "dias_semana": promo.dias_semana,
+            "hora_inicio": promo.hora_inicio,
+            "hora_fin": promo.hora_fin,
             "producto_ids": [item["id"] for item in linked],
             "productos": linked,
         })
     return result
+
+
+@router.post("/cupones/validar")
+def validar_cupon_promocion(data: CuponValidarRequest, db: Session = Depends(get_db)):
+    cleaned = data.codigo_cupon.strip()
+    promo = db.query(Promocion).filter(
+        Promocion.activo == True,
+        func.upper(Promocion.codigo_cupon) == cleaned.upper(),
+    ).first()
+    if not promo or not is_promotion_currently_valid(promo):
+        raise HTTPException(status_code=404, detail="Cupón no encontrado o fuera de horario de vigencia.")
+    pct = float(promo.descuento_pct or 0.0)
+    if pct <= 0 or pct > 100:
+        raise HTTPException(status_code=422, detail="Este código pertenece a un combo; agrégalo desde Promociones.")
+    promo_pids = [p.id for p in (promo.productos or [])]
+    if promo_pids and data.producto_ids and not set(data.producto_ids).intersection(promo_pids):
+        raise HTTPException(status_code=422, detail="Ningún producto en tu carrito califica para este cupón.")
+    return {
+        "valido": True,
+        "promocion_id": promo.id,
+        "titulo": promo.titulo,
+        "codigo_cupon": promo.codigo_cupon,
+        "descuento_pct": pct,
+        "producto_ids": promo_pids,
+    }
+
+
+@router.get("/favoritos")
+def listar_favoritos_cliente(
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user),
+):
+    rows = db.query(FavoritoCliente).filter(FavoritoCliente.usuario_id == current_user.id).all()
+    return [row.producto_id for row in rows]
+
+
+@router.post("/favoritos/{producto_id}", status_code=status.HTTP_201_CREATED)
+def agregar_favorito_cliente(
+    producto_id: int,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user),
+):
+    prod = db.query(Producto).filter(Producto.id == producto_id, Producto.activo == True).first()
+    if not prod:
+        raise HTTPException(status_code=404, detail="Producto no encontrado.")
+    existing = db.query(FavoritoCliente).filter(
+        FavoritoCliente.usuario_id == current_user.id,
+        FavoritoCliente.producto_id == producto_id,
+    ).first()
+    if not existing:
+        db.add(FavoritoCliente(usuario_id=current_user.id, producto_id=producto_id))
+        db.commit()
+    return {"producto_id": producto_id, "favorito": True}
+
+
+@router.delete("/favoritos/{producto_id}")
+def quitar_favorito_cliente(
+    producto_id: int,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user),
+):
+    deleted = db.query(FavoritoCliente).filter(
+        FavoritoCliente.usuario_id == current_user.id,
+        FavoritoCliente.producto_id == producto_id,
+    ).delete()
+    db.commit()
+    return {"producto_id": producto_id, "favorito": False, "eliminado": bool(deleted)}
 
 @router.get("/resenas", response_model=List[ResenaOut])
 def get_resenas_publicas(db: Session = Depends(get_db)):
@@ -217,6 +343,7 @@ async def crear_pedido(
 ):
     if not pedido_in.detalles or len(pedido_in.detalles) == 0:
         raise HTTPException(status_code=400, detail="El pedido debe contener productos.")
+    validate_store_schedule(db)
     
     pricing = get_pricing_config(db)
     tax_rate = pricing["tax_rate"]
@@ -277,8 +404,12 @@ async def crear_pedido(
     subtotal_final, descuento_promo = apply_promo_bundles_pricing(
         db, detalles_db, pedido_in.promociones
     )
+    subtotal_final, descuento_promo, _applied_coupon = apply_coupon_discount(
+        db, detalles_db, pedido_in.codigo_cupon, descuento_promo
+    )
+    propina_val = round(float(pedido_in.propina or 0.0), 2)
     impuesto_monto = round(subtotal_final * (tax_rate / 100.0), 2)
-    total_final = round(subtotal_final + impuesto_monto + delivery_fee + costo_empaque_val, 2)
+    total_final = round(subtotal_final + impuesto_monto + delivery_fee + costo_empaque_val + propina_val, 2)
 
     # Generar código OTP de 6 dígitos
     otp_code = f"{secrets.randbelow(900000) + 100000:06d}"
@@ -300,6 +431,7 @@ async def crear_pedido(
         impuesto=impuesto_monto,
         costo_empaque=costo_empaque_val,
         descuento=descuento_promo,
+        propina=propina_val,
         total=total_final,
         metodo_pago=metodo_pago,
         estado_pago="PENDIENTE_VALIDACION" if is_mobile_payment else "PENDIENTE",
@@ -328,7 +460,7 @@ async def crear_pedido(
     db.flush()
     if pedido_in.tipo == "delivery":
         nuevo_pedido.numero_mesa = f"Delivery #{nuevo_pedido.id + 100}"
-    deduct_order_stock(
+    touched_insumos = deduct_order_stock(
         db,
         nuevo_pedido.id,
         products,
@@ -336,8 +468,15 @@ async def crear_pedido(
         stock_before,
         current_user.id if current_user else None,
     )
+    stock_alerts = collect_stock_alerts(products, touched_insumos)
     db.commit()
     db.refresh(nuevo_pedido)
+
+    if stock_alerts:
+        await ws_manager.broadcast("ALERTA_STOCK_CRITICO", {
+            "pedido_id": nuevo_pedido.id,
+            "alertas": stock_alerts,
+        })
 
     if deferred_payment:
         await ws_manager.broadcast("NUEVO_PEDIDO", {
@@ -441,6 +580,60 @@ def obtener_seguimiento_pedido(
             else None
         ),
     }
+
+
+@router.post("/pedidos/{pedido_id}/resena", response_model=ResenaOut, status_code=status.HTTP_201_CREATED)
+async def crear_resena_pedido(
+    pedido_id: int,
+    data: ResenaPedidoCreate,
+    db: Session = Depends(get_db),
+    tracking_token: Optional[str] = Header(default=None, alias="X-Order-Tracking-Token"),
+    current_user: Optional[Usuario] = Depends(get_current_user_optional),
+):
+    pedido = db.query(Pedido).filter(Pedido.id == pedido_id).first()
+    if not pedido:
+        raise HTTPException(status_code=404, detail="Pedido no encontrado.")
+
+    owns_order = (
+        current_user is not None
+        and current_user.rol == "cliente"
+        and pedido.usuario_id == current_user.id
+    )
+    has_valid_tracking_token = False
+    if tracking_token and pedido.token_seguimiento_hash:
+        token_digest = hashlib.sha256(tracking_token.encode("utf-8")).hexdigest()
+        has_valid_tracking_token = hmac.compare_digest(token_digest, pedido.token_seguimiento_hash)
+    if not owns_order and not has_valid_tracking_token:
+        raise HTTPException(status_code=403, detail="No autorizado para calificar este pedido.")
+
+    if pedido.estado not in {"LISTO", "COBRADO", "ENTREGADO"} and pedido.estado_pago != "PAGADO":
+        raise HTTPException(status_code=409, detail="Podrás calificar el pedido cuando esté listo o entregado.")
+
+    if db.query(Resena).filter(Resena.pedido_id == pedido_id).first():
+        raise HTTPException(status_code=409, detail="Este pedido ya fue calificado.")
+
+    reviewer_name = (
+        (data.nombre_cliente or "").strip()
+        or (f"{current_user.nombre} {current_user.apellido}".strip() if current_user else "")
+        or (pedido.nombre_cliente_delivery or "Cliente Donde David")
+    )
+    nueva = Resena(
+        pedido_id=pedido.id,
+        usuario_id=current_user.id if current_user else pedido.usuario_id,
+        nombre_cliente=reviewer_name[:100],
+        comentario=data.comentario.strip(),
+        estrellas=data.estrellas,
+        activo=True,
+    )
+    db.add(nueva)
+    db.commit()
+    db.refresh(nueva)
+    await ws_manager.broadcast("NUEVA_RESENA", {
+        "pedido_id": pedido.id,
+        "estrellas": nueva.estrellas,
+        "nombre_cliente": nueva.nombre_cliente,
+    })
+    return nueva
 
 @router.post("/pedidos/{pedido_id}/cambiar-mesa")
 @limiter.limit("10/minute")

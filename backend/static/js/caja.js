@@ -24,6 +24,10 @@ let allProductsPos = [];
 let frequentPosProducts = [];
 let posCategories = [];
 let posCart = [];
+let posPromos = [];
+let posTipPct = 0;
+let selectedSplitOrderId = null;
+let lastPrintedInvoiceMeta = null;
 let tasaCambioBs = null;
 let tasaFuente = "";
 let tasaActualizadaAt = null;
@@ -53,6 +57,20 @@ document.addEventListener("DOMContentLoaded", () => {
   loadPickupOrders();
   loadPosCategories();
   loadPosProducts();
+  loadPosPromos();
+
+  document.addEventListener("keydown", evt => {
+    if (evt.key === "F2") {
+      evt.preventDefault();
+      document.getElementById("mc-search-input")?.focus();
+    } else if (evt.key === "F9") {
+      const posContainer = document.getElementById("view-pos-container");
+      if (posContainer && posContainer.style.display !== "none" && !isSubmittingPosFast) {
+        evt.preventDefault();
+        submitPosOrderFast();
+      }
+    }
+  });
   if (window.location.hash === "#delivery") {
     setTimeout(() => switchPosMainView("deliverys"), 0);
   }
@@ -733,6 +751,10 @@ function renderPosCategorySidebar() {
       <span class="icon">🔥</span>
       <span>TODOS</span>
     </div>
+    <div class="mc-cat-btn ${selectedCategoryFilter === '__COMBOS__' ? 'active' : ''}" onclick="filterCategoryPos('__COMBOS__')">
+      <span class="icon">🎁</span>
+      <span>COMBOS</span>
+    </div>
   `;
 
   posCategories.forEach(c => {
@@ -755,7 +777,60 @@ function filterCategoryPos(catId) {
   
   const catObj = posCategories.find(c => c.id === catId);
   const label = document.getElementById("mc-cat-title-label");
-  if (label) label.innerText = catObj ? `Categoría: ${catObj.nombre}` : "Mostrando Menú Completo";
+  if (label) {
+    label.innerText = catId === "__COMBOS__"
+      ? "Combos y Promociones de Precio Global"
+      : (catObj ? `Categoría: ${catObj.nombre}` : "Mostrando Menú Completo");
+  }
+}
+
+async function loadPosPromos() {
+  try {
+    const res = await fetch("/api/v1/cliente/promociones");
+    if (res.ok) {
+      const all = await res.json();
+      posPromos = Array.isArray(all) ? all.filter(p => p && Number(p.precio_global) > 0 && Array.isArray(p.productos) && p.productos.length) : [];
+      if (selectedCategoryFilter === "__COMBOS__") renderPosTouchProducts();
+    }
+  } catch (err) {
+    console.warn("No se pudieron cargar promos POS:", err);
+  }
+}
+
+function addPosPromoBundle(promoId) {
+  const promo = posPromos.find(p => Number(p.id) === Number(promoId));
+  if (!promo) return;
+  const products = promo.productos.map(lp => allProductsPos.find(ap => Number(ap.id) === Number(lp.id)) || lp);
+  const missing = products.find(p => !p.disponible || Number(p.stock || 0) < 1);
+  if (missing) {
+    showToast(`"${missing.nombre}" no tiene stock suficiente para este combo.`, "warning");
+    return;
+  }
+  const seq = Date.now() + Math.floor(Math.random() * 1000);
+  const globalTarget = Number(promo.precio_global);
+  const baseSum = products.reduce((s, p) => s + Number(p.precio_promocion || p.precio || 0), 0);
+  let running = 0;
+  products.forEach((p, idx) => {
+    const reg = Number(p.precio_promocion || p.precio || 0);
+    const alloc = idx === products.length - 1
+      ? Math.round((globalTarget - running) * 100) / 100
+      : Math.round((baseSum > 0 ? globalTarget * (reg / baseSum) : globalTarget / products.length) * 100) / 100;
+    running += alloc;
+    posCart.push({
+      producto_id: Number(p.id),
+      nombre: `${p.nombre} (${promo.titulo})`,
+      precio_unitario: alloc,
+      cantidad: 1,
+      subtotal: alloc,
+      opciones: [],
+      extras: [],
+      observaciones: `Combo ${promo.titulo}`,
+      promo_id: Number(promo.id),
+      promo_bundle_seq: seq
+    });
+  });
+  renderPosTicket();
+  showToast(`🎁 Combo "${promo.titulo}" agregado ($${globalTarget.toFixed(2)}).`, "success");
 }
 
 async function loadPosProducts() {
@@ -780,6 +855,22 @@ function filterProductsPos() {
 function renderPosTouchProducts(query = "") {
   const container = document.getElementById("mc-products-touch-grid");
   if (!container) return;
+
+  if (selectedCategoryFilter === "__COMBOS__") {
+    const comboCards = (posPromos || []).filter(p => !query || String(p.titulo || "").toLowerCase().includes(query)).map(p => {
+      const img = p.banner_url || "/static/img/logo.png";
+      return `
+        <div class="mc-product-touch-card" onclick="addPosPromoBundle(${Number(p.id)})" style="cursor:pointer;">
+          <img src="${escapeCajaHtml(img)}" alt="${escapeCajaHtml(p.titulo)}">
+          <div class="mc-product-title">🎁 ${escapeCajaHtml(p.titulo)}</div>
+          <div class="mc-product-price">${formatPriceDual(Number(p.precio_global))}</div>
+          <small style="color:var(--cyan-accent);font-size:0.72rem;font-weight:700;">${p.productos.length} productos · Precio global</small>
+        </div>
+      `;
+    }).join("");
+    container.innerHTML = comboCards || `<p style="grid-column:1/-1;color:var(--text-muted)">No hay combos de precio global configurados.</p>`;
+    return;
+  }
 
   let filtered = allProductsPos;
   if (selectedCategoryFilter !== null) {
@@ -1108,22 +1199,53 @@ function renderPosTicket() {
 
   const tax = subtotal * (posTaxRate / 100);
   const extraFee = getPosExtraFee();
-  const total = subtotal + tax + extraFee;
+  const tipAmount = Math.round(subtotal * (posTipPct / 100) * 100) / 100;
+  const total = subtotal + tax + extraFee + tipAmount;
 
   if (container) container.innerHTML = html;
   if (document.getElementById("pos-subtotal")) document.getElementById("pos-subtotal").innerHTML = formatPriceDual(subtotal);
   if (document.getElementById("pos-tax")) document.getElementById("pos-tax").innerHTML = formatPriceDual(tax);
   if (document.getElementById("pos-extra")) document.getElementById("pos-extra").innerHTML = formatPriceDual(extraFee);
+  if (document.getElementById("pos-tip-display")) document.getElementById("pos-tip-display").innerHTML = formatPriceDual(tipAmount);
   if (document.getElementById("pos-total")) document.getElementById("pos-total").innerHTML = formatPriceDual(total);
 
   calcPosChange();
 }
 
-function calcPosChange() {
+function setPosTipPct(pct) {
+  posTipPct = Number(pct) || 0;
+  renderPosTicket();
+}
+
+function getPosCurrentTotalDue() {
   const subtotal = posCart.reduce((sum, item) => sum + item.subtotal, 0);
   const tax = subtotal * (posTaxRate / 100);
   const extraFee = getPosExtraFee();
-  const total = subtotal + tax + extraFee;
+  const tipAmount = Math.round(subtotal * (posTipPct / 100) * 100) / 100;
+  return subtotal + tax + extraFee + tipAmount;
+}
+
+function setPosExactCash() {
+  const total = getPosCurrentTotalDue();
+  const currency = document.getElementById("pos-currency-select")?.value || "USD";
+  const due = currency === "VES" && tasaCambioBs ? total * tasaCambioBs : total;
+  const input = document.getElementById("pos-received-input");
+  if (input) {
+    input.value = due.toFixed(2);
+    calcPosChange();
+  }
+}
+
+function setPosQuickCash(billAmount) {
+  const input = document.getElementById("pos-received-input");
+  if (input) {
+    input.value = Number(billAmount).toFixed(2);
+    calcPosChange();
+  }
+}
+
+function calcPosChange() {
+  const total = getPosCurrentTotalDue();
 
   const currency = document.getElementById("pos-currency-select")?.value || "USD";
   const received = Number.parseFloat(document.getElementById("pos-received-input")?.value || "0");
@@ -1158,7 +1280,8 @@ async function submitPosOrderFast() {
   const subtotal = posCart.reduce((sum, item) => sum + item.subtotal, 0);
   const tax = subtotal * (posTaxRate / 100);
   const extraFee = getPosExtraFee();
-  const total = subtotal + tax + extraFee;
+  const tipAmount = Math.round(subtotal * (posTipPct / 100) * 100) / 100;
+  const total = subtotal + tax + extraFee + tipAmount;
   const currency = document.getElementById("pos-currency-select")?.value || "USD";
   if (currentPaymentMethod === "Pago Móvil" && currency !== "VES") {
     showToast("Pago Móvil debe cobrarse en bolívares.", "warning");
@@ -1185,6 +1308,14 @@ async function submitPosOrderFast() {
     return;
   }
 
+  const posPromoMap = new Map();
+  const seenSeqs = new Set();
+  posCart.forEach(item => {
+    if (item.promo_id && item.promo_bundle_seq && !seenSeqs.has(item.promo_bundle_seq)) {
+      seenSeqs.add(item.promo_bundle_seq);
+      posPromoMap.set(Number(item.promo_id), (posPromoMap.get(Number(item.promo_id)) || 0) + 1);
+    }
+  });
   const payload = {
     numero_mesa: mesa,
     tipo: currentOrderType,
@@ -1192,6 +1323,7 @@ async function submitPosOrderFast() {
     moneda_pago: currency,
     cliente_id: selectedCustomerPos ? Number(selectedCustomerPos.id) : null,
     monto_recibido: received,
+    propina: tipAmount,
     nit_cliente: document.getElementById("pay-nit-input")?.value.trim() || "CF",
     nombre_factura: currentOrderType === "delivery"
       ? deliveryName
@@ -1212,7 +1344,8 @@ async function submitPosOrderFast() {
         extras: item.extras || [],
       },
       observaciones: item.observaciones || null,
-    }))
+    })),
+    promociones: Array.from(posPromoMap.entries()).map(([promocion_id, cantidad]) => ({ promocion_id, cantidad }))
   };
 
   isSubmittingPosFast = true;
@@ -1274,6 +1407,7 @@ function renderShiftBar(isOpen) {
     actionsContainer.innerHTML = `
       <button class="btn-gold" style="background: var(--mc-red); color: #fff; border-color: var(--mc-red); font-size: 0.75rem;" onclick="submitCerrarTurno()">🔴 CERRAR TURNO</button>
       <button class="btn-gold" style="font-size:0.75rem" onclick="openCashExpenseModal()">➖ REGISTRAR EGRESO</button>
+      <button class="btn btn-outline" style="font-size:0.75rem" onclick="printCorteX()">📊 CORTE X</button>
     `;
   } else {
     labelNumber.innerText = "Caja: CERRADA";
@@ -1411,7 +1545,10 @@ function renderPendingOrders() {
           </div>
           ${o.estado_pago === "PENDIENTE_VALIDACION"
             ? `<button class="btn btn-outline" style="padding: 0.6rem 1.1rem; font-size: 0.88rem; font-weight: 900;" onclick="switchPosMainView('app-payments')">📱 Validar Pago Móvil</button>`
-            : `<button class="btn btn-cta" style="padding: 0.6rem 1.1rem; font-size: 0.88rem; font-weight: 900;" onclick="openPayModal(${o.id})">💳 COBRAR #${o.id}</button>`}
+            : `<div style="display:flex;gap:0.4rem;flex-wrap:wrap;">
+                ${o.estado_pago === "PENDIENTE" ? `<button type="button" class="btn btn-outline" style="padding:0.55rem 0.7rem;font-size:0.78rem;font-weight:800;" onclick="openSplitBillModal(${o.id})">⚖️ Dividir</button>` : ""}
+                <button class="btn btn-cta" style="padding: 0.6rem 1.1rem; font-size: 0.88rem; font-weight: 900;" onclick="openPayModal(${o.id})">💳 COBRAR #${o.id}</button>
+              </div>`}
         </div>
       </div>
     `;
@@ -1591,8 +1728,32 @@ function openPayModal(orderId) {
   }
   const currencySelect = document.getElementById("pay-currency-select");
   if (currencySelect) currencySelect.value = "USD";
+  const mixedCheck = document.getElementById("pay-mixed-toggle");
+  if (mixedCheck) mixedCheck.checked = false;
+  toggleMixedPaymentUI();
   updatePaymentCurrencyAmount();
   openModal("payment-modal");
+}
+
+function toggleMixedPaymentUI() {
+  const checked = Boolean(document.getElementById("pay-mixed-toggle")?.checked);
+  const box = document.getElementById("pay-mixed-box");
+  if (box) box.hidden = !checked;
+  if (checked && selectedOrderForPayment) {
+    const half = Math.round((Number(selectedOrderForPayment.total || 0) / 2) * 100) / 100;
+    const a1 = document.getElementById("pay-mix-amount-1");
+    if (a1) a1.value = half.toFixed(2);
+    syncMixedPaymentSecond();
+  }
+}
+
+function syncMixedPaymentSecond() {
+  if (!selectedOrderForPayment) return;
+  const total = Number(selectedOrderForPayment.total || 0);
+  const a1 = Number.parseFloat(document.getElementById("pay-mix-amount-1")?.value || "0") || 0;
+  const rem = Math.max(0, Math.round((total - a1) * 100) / 100);
+  const a2 = document.getElementById("pay-mix-amount-2");
+  if (a2) a2.value = rem.toFixed(2);
 }
 
 function openPaymentModal(orderId) {
@@ -1656,8 +1817,25 @@ async function submitPayment() {
         return;
       }
     }
+    const isMixed = Boolean(document.getElementById("pay-mixed-toggle")?.checked);
+    let pagosMixtosPayload = null;
+    if (isMixed) {
+      const m1 = document.getElementById("pay-mix-method-1").value;
+      const a1 = Number.parseFloat(document.getElementById("pay-mix-amount-1").value) || 0;
+      const m2 = document.getElementById("pay-mix-method-2").value;
+      const a2 = Number.parseFloat(document.getElementById("pay-mix-amount-2").value) || 0;
+      if (a1 <= 0 || a2 <= 0) {
+        showToast("En pago mixto ambos montos deben ser mayores a 0.", "warning");
+        return;
+      }
+      pagosMixtosPayload = [
+        { metodo_pago: m1, monto_usd: Math.round(a1 * 100) / 100, moneda: "USD" },
+        { metodo_pago: m2, monto_usd: Math.round(a2 * 100) / 100, moneda: "USD" }
+      ];
+    }
+
     const totalDue = currency === "VES" ? selectedOrderForPayment.total * tasaCambioBs : selectedOrderForPayment.total;
-    if (received < totalDue) {
+    if (!isMixed && received < totalDue) {
       showToast(`El monto recibido debe ser al menos ${currency === "VES" ? "Bs. " : "$"}${totalDue.toFixed(2)}`, "warning");
       return;
     }
@@ -1666,11 +1844,12 @@ async function submitPayment() {
       method: "POST",
       headers: Auth.getHeaders(),
       body: JSON.stringify({
-        metodo_pago: method,
-        monto_recibido: received,
-        moneda_pago: currency,
+        metodo_pago: isMixed ? "Pago Mixto" : method,
+        monto_recibido: isMixed ? selectedOrderForPayment.total : received,
+        moneda_pago: isMixed ? "USD" : currency,
         nit_cliente: nit,
-        nombre_factura: nombre
+        nombre_factura: nombre,
+        pagos_mixtos: pagosMixtosPayload
       })
     });
 
@@ -1774,8 +1953,98 @@ async function viewReceipt(orderId) {
 
     closeModal("pos-customization-modal");
     closeModal("payment-modal");
+    lastPrintedInvoiceMeta = fac;
     document.getElementById("factura-ticket-content").innerHTML = ticketHtml;
     openModal("receipt-modal");
+  } catch (err) {
+    showToast(err.message, "danger");
+  }
+}
+
+function printCurrentFacturaThermal() {
+  const ticketEl = document.getElementById("factura-ticket-content");
+  if (!ticketEl || typeof window.printThermalDocument !== "function") {
+    window.print();
+    return;
+  }
+  window.printThermalDocument(ticketEl.innerHTML, lastPrintedInvoiceMeta?.factura_numero || "Ticket Caja");
+}
+
+async function printCorteX() {
+  try {
+    const res = await fetch("/api/v1/caja/corte-x", { headers: Auth.getHeaders() });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || "No se pudo generar Corte X.");
+    const rows = Object.entries(data.esperado_por_metodo || {}).map(([k, v]) => `
+      <div class="dd-thermal-row"><span>${escapeCajaHtml(k)}:</span><strong>$${Number(v).toFixed(2)}</strong></div>
+    `).join("");
+    const html = `
+      <div class="dd-thermal-row"><span>Turno:</span><strong>#${data.numero_turno}</strong></div>
+      <div class="dd-thermal-row"><span>Pedidos pagados:</span><strong>${data.total_pedidos}</strong></div>
+      <div class="dd-thermal-row"><span>Ventas totales:</span><strong>$${Number(data.total_ventas).toFixed(2)}</strong></div>
+      <div class="dd-thermal-row"><span>Propinas:</span><strong>$${Number(data.total_propinas).toFixed(2)}</strong></div>
+      <div class="dd-thermal-row"><span>Egresos:</span><strong>-$${Number(data.total_egresos).toFixed(2)}</strong></div>
+      <div class="dd-thermal-total">${rows}</div>
+    `;
+    if (typeof window.printThermalDocument === "function") {
+      window.printThermalDocument(html, `CORTE X PARCIAL · TURNO #${data.numero_turno}`);
+    }
+  } catch (err) {
+    showToast(err.message, "danger");
+  }
+}
+
+function openSplitBillModal(orderId) {
+  const order = pendingOrders.find(o => Number(o.id) === Number(orderId));
+  if (!order) return;
+  selectedSplitOrderId = Number(order.id);
+  document.getElementById("split-order-id-label").textContent = String(order.id);
+  document.getElementById("split-mode-select").value = "igual";
+  document.getElementById("split-parts-input").value = "2";
+  const itemsList = document.getElementById("split-items-list");
+  if (itemsList) {
+    itemsList.innerHTML = (order.detalles || []).map(d => `
+      <label class="pos-split-item-row">
+        <span><strong>${Number(d.cantidad) || 1}x</strong> ${escapeCajaHtml(d.producto?.nombre || d.nombre || "Producto")}</span>
+        <span>
+          <strong style="margin-right:0.5rem;">$${Number(d.subtotal || 0).toFixed(2)}</strong>
+          <input type="checkbox" class="split-detail-checkbox" value="${Number(d.id)}">
+        </span>
+      </label>
+    `).join("");
+  }
+  toggleSplitModeFields();
+  openModal("split-bill-modal");
+}
+
+function toggleSplitModeFields() {
+  const mode = document.getElementById("split-mode-select")?.value || "igual";
+  const equalEl = document.getElementById("split-equal-fields");
+  const itemsEl = document.getElementById("split-items-fields");
+  if (equalEl) equalEl.style.display = mode === "igual" ? "block" : "none";
+  if (itemsEl) itemsEl.style.display = mode === "items" ? "block" : "none";
+}
+
+async function submitSplitBill() {
+  if (!selectedSplitOrderId) return;
+  const mode = document.getElementById("split-mode-select")?.value || "igual";
+  const payload = mode === "igual"
+    ? { modo: "igual", partes: parseInt(document.getElementById("split-parts-input")?.value || "2", 10) }
+    : {
+        modo: "items",
+        detalle_ids: Array.from(document.querySelectorAll(".split-detail-checkbox:checked")).map(cb => Number(cb.value))
+      };
+  try {
+    const res = await fetch(`/api/v1/caja/pedidos/${selectedSplitOrderId}/dividir`, {
+      method: "POST",
+      headers: Auth.getHeaders(),
+      body: JSON.stringify(payload)
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || "No se pudo dividir la cuenta.");
+    showToast(data.mensaje || "Cuenta dividida exitosamente.", "success");
+    closeModal("split-bill-modal");
+    await loadPendingOrders();
   } catch (err) {
     showToast(err.message, "danger");
   }

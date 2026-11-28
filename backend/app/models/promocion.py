@@ -25,5 +25,8 @@ class Promocion(Base):
     activo = Column(Boolean, default=True)
     fecha_inicio = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     fecha_fin = Column(DateTime, nullable=True)
+    dias_semana = Column(String(40), nullable=True)
+    hora_inicio = Column(String(5), nullable=True)
+    hora_fin = Column(String(5), nullable=True)
 
     productos = relationship("Producto", secondary=promocion_productos, lazy="selectin")

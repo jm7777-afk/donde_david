@@ -14,11 +14,11 @@
   <link rel="manifest" href="/static/manifest.json">
   <meta name="theme-color" content="#071A3D">
 
-  <link rel="stylesheet" href="/static/css/global.css?v=5.4">
-  <link rel="stylesheet" href="/static/css/toon-theme.css?v=5.4">
+  <link rel="stylesheet" href="/static/css/global.css?v=5.6">
+  <link rel="stylesheet" href="/static/css/toon-theme.css?v=5.6">
 
-  <link rel="stylesheet" href="/static/css/pages/index.css?v=5.4">
-  <link rel="stylesheet" href="/static/css/utilities.css?v=5.4">
+  <link rel="stylesheet" href="/static/css/pages/index.css?v=5.6">
+  <link rel="stylesheet" href="/static/css/utilities.css?v=5.6">
 </head>
 <body class="toon-theme">
 
@@ -196,9 +196,9 @@
     </div>
   </footer>
 
-  <script src="/static/js/auth.js?v=5.4"></script>
-  <script src="/static/js/websocket.js?v=5.4"></script>
-  <script src="/static/js/appShell.js?v=5.4"></script>
+  <script src="/static/js/auth.js?v=5.6"></script>
+  <script src="/static/js/websocket.js?v=5.6"></script>
+  <script src="/static/js/appShell.js?v=5.6"></script>
 
   <script>
     let landingPromoIndex = 0;
@@ -346,6 +346,24 @@
       landingPromoIndex = idx;
       renderLandingSlide();
     }
+
+    (function bindLandingPromoSwipe() {
+      const container = document.getElementById("landing-promo-carousel");
+      if (!container) return;
+      let touchStartX = 0;
+      container.addEventListener("touchstart", e => {
+        touchStartX = e.changedTouches?.[0]?.clientX || 0;
+      }, { passive: true });
+      container.addEventListener("touchend", e => {
+        if (!landingPromos || landingPromos.length < 2) return;
+        const delta = (e.changedTouches?.[0]?.clientX || 0) - touchStartX;
+        if (Math.abs(delta) < 40) return;
+        landingPromoIndex = delta < 0
+          ? (landingPromoIndex + 1) % landingPromos.length
+          : (landingPromoIndex - 1 + landingPromos.length) % landingPromos.length;
+        renderLandingSlide();
+      }, { passive: true });
+    })();
 
     async function loadLandingFeaturedProducts() {
       const grid = document.getElementById("landing-featured-grid");

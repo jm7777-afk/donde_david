@@ -594,6 +594,287 @@ def test_new_client_ui_qr_iva_promos_no_chatbot_and_high_priority_alerts():
     assert "_computePromoBundleAllocations" in cliente_js
     assert "promociones: promocionesPayload" in cliente_js
 
+    # 10. Enhanced UI contracts across Turnos, POS, KDS, Mesero, Admin, and Gerencia
+    turnos_html = (root / "backend/static/turnos/pantalla.html").read_text(encoding="utf-8")
+    mesero_html = (root / "backend/static/mesero/panel.html").read_text(encoding="utf-8")
+    cocina_html = (root / "backend/static/cocina/monitor.html").read_text(encoding="utf-8")
+    gerencia_html = (root / "backend/static/gerencia/panel.html").read_text(encoding="utf-8")
+    assert 'id="turnos-prep-list"' in turnos_html and 'id="turnos-ready-list"' in turnos_html
+    assert 'id="checkout-coupon-code"' in app_html and 'id="cart-upsell-section"' in app_html
+    assert 'id="split-bill-modal"' in caja_html and 'id="pay-mixed-toggle"' in caja_html
+    assert 'id="kds-allday-summary"' in cocina_html and 'id="kds-layout-btn"' in cocina_html
+    assert 'id="waiter-order-modal"' in mesero_html and 'id="mesero-status-filter"' in mesero_html
+    assert 'id="recipe-modal"' in admin_html and 'id="compra-inventario-modal"' in admin_html
+    assert 'id="manager-avg-rating"' in gerencia_html and 'id="manager-tips-today"' in gerencia_html
+
+
+def test_recipes_purchases_stock_alerts_and_profitability_sla(client):
+    admin_headers = _login(client, "admin", "admin123")
+    cat_id = client.get("/api/v1/admin/categorias", headers=admin_headers).json()[0]["id"]
+
+    # Create insumo + product linked via recipe
+    ins_res = client.post("/api/v1/admin/insumos", headers=admin_headers, json={
+        "nombre": f"Carne Receta {uuid4().hex[:5]}",
+        "stock_actual": 4.0,
+        "stock_minimo": 2.0,
+        "unidad_medida": "un",
+        "costo_unitario": 1.50,
+    })
+    assert ins_res.status_code == 200, ins_res.text
+    insumo = ins_res.json()
+
+    prod_res = client.post("/api/v1/admin/productos", headers=admin_headers, json={
+        "nombre": f"Burger Receta {uuid4().hex[:5]}",
+        "precio": 12.00,
+        "costo_unitario": 3.00,
+        "categoria_id": cat_id,
+        "stock": 10,
+        "disponible": True,
+    })
+    assert prod_res.status_code == 200, prod_res.text
+    prod = prod_res.json()
+
+    rec_res = client.put(f"/api/v1/admin/productos/{prod['id']}/receta", headers=admin_headers, json={
+        "items": [{"insumo_id": insumo["id"], "cantidad_por_unidad": 2.0}]
+    })
+    assert rec_res.status_code == 200, rec_res.text
+    assert len(rec_res.json()) == 1
+
+    # Order 2 units -> consumes 4.0 insumo -> insumo drops to 0.0 CRITICO & product auto-disabled
+    order_res = client.post("/api/v1/cliente/pedidos", json={
+        "numero_mesa": "Mostrador",
+        "tipo": "llevar",
+        "modo_pago": "PAGAR_ANTES",
+        "metodo_pago": "Efectivo",
+        "moneda_pago": "USD",
+        "detalles": [{"producto_id": prod["id"], "cantidad": 2}],
+    })
+    assert order_res.status_code == 201, order_res.text
+
+    alerts_res = client.get("/api/v1/admin/stock-alertas", headers=admin_headers)
+    assert alerts_res.status_code == 200
+    assert any(item["id"] == insumo["id"] for item in alerts_res.json()["insumos"])
+
+    # Restock insumo via purchase endpoint -> re-enables product cleanly
+    compra_res = client.post("/api/v1/admin/inventario/compra", headers=admin_headers, json={
+        "insumo_id": insumo["id"],
+        "cantidad": 6.0,
+        "costo_unitario": 1.75,
+        "proveedor": "Carnes QA",
+    })
+    assert compra_res.status_code == 200, compra_res.text
+    assert compra_res.json()["stock_nuevo"] == pytest.approx(6.0)
+
+    prods_map = {p["id"]: p for p in client.get("/api/v1/admin/productos", headers=admin_headers).json()}
+    assert prods_map[prod["id"]]["disponible"] is True
+
+    # Pay order, check profitability, CSV export & SLA endpoints
+    cashier_headers = _login(client, "caja", "caja123")
+    _ensure_open_shift(client, cashier_headers)
+    order_data = order_res.json()
+    pay_res = client.post(f"/api/v1/caja/pedidos/{order_data['id']}/cobrar", headers=cashier_headers, json={
+        "metodo_pago": "Efectivo",
+        "monto_recibido": order_data["total"],
+        "moneda_pago": "USD",
+    })
+    assert pay_res.status_code == 200, pay_res.text
+
+    prof = client.get("/api/v1/admin/reportes/rentabilidad", headers=admin_headers)
+    assert prof.status_code == 200
+    assert prof.json()["total_ingresos_usd"] > 0
+
+    csv_res = client.get("/api/v1/admin/reportes/exportar?formato=excel", headers=admin_headers)
+    assert csv_res.status_code == 200
+    assert "Pedido_ID;Fecha;Factura" in csv_res.text
+
+    sla_res = client.get("/api/v1/admin/cocina/sla", headers=admin_headers)
+    assert sla_res.status_code == 200
+    assert "tiempo_promedio_min" in sla_res.json()
+    client.put(f"/api/v1/admin/productos/{prod['id']}", headers=admin_headers, json={"activo": False})
+
+
+def test_coupons_schedule_tips_mixed_payments_split_bill_favorites_reviews_turnos_and_waiter(client):
+    from datetime import datetime, timedelta
+    admin_headers = _login(client, "admin", "admin123")
+    cashier_headers = _login(client, "caja", "caja123")
+    w_user, w_pass, _ = _create_user_in_db("mesero")
+    waiter_headers = _login(client, w_user, w_pass)
+    k_user, k_pass, _ = _create_user_in_db("cocina")
+    kitchen_headers = _login(client, k_user, k_pass)
+    _ensure_open_shift(client, cashier_headers)
+
+    cat_id = client.get("/api/v1/admin/categorias", headers=admin_headers).json()[0]["id"]
+    p1 = client.post("/api/v1/admin/productos", headers=admin_headers, json={
+        "nombre": f"Plato Cupon A {uuid4().hex[:5]}",
+        "precio": 20.00,
+        "categoria_id": cat_id,
+        "stock": 20,
+    }).json()
+    p2 = client.post("/api/v1/admin/productos", headers=admin_headers, json={
+        "nombre": f"Plato Cupon B {uuid4().hex[:5]}",
+        "precio": 10.00,
+        "categoria_id": cat_id,
+        "stock": 20,
+    }).json()
+
+    # Active coupon vs out-of-window coupon
+    coupon_code = f"SAVE20_{uuid4().hex[:4].upper()}"
+    active_promo = client.post("/api/v1/admin/promociones", headers=admin_headers, json={
+        "titulo": "Promo Vigente Hoy",
+        "descuento_pct": 20,
+        "codigo_cupon": coupon_code,
+        "dias_semana": "0,1,2,3,4,5,6",
+        "hora_inicio": "00:00",
+        "hora_fin": "23:59",
+        "activo": True,
+        "producto_ids": [p1["id"]],
+    })
+    assert active_promo.status_code == 200, active_promo.text
+
+    now_local = datetime.now()
+    closed_start = (now_local + timedelta(hours=2)).strftime("%H:00")
+    closed_end = (now_local + timedelta(hours=3)).strftime("%H:00")
+    expired_code = f"OFF_{uuid4().hex[:4].upper()}"
+    client.post("/api/v1/admin/promociones", headers=admin_headers, json={
+        "titulo": "Promo Fuera de Horario",
+        "descuento_pct": 50,
+        "codigo_cupon": expired_code,
+        "hora_inicio": closed_start,
+        "hora_fin": closed_end,
+        "activo": True,
+        "producto_ids": [p1["id"]],
+    })
+
+    val_ok = client.post("/api/v1/cliente/cupones/validar", json={
+        "codigo_cupon": coupon_code,
+        "producto_ids": [p1["id"]],
+    })
+    assert val_ok.status_code == 200
+    assert val_ok.json()["descuento_pct"] == pytest.approx(20.0)
+
+    val_off = client.post("/api/v1/cliente/cupones/validar", json={
+        "codigo_cupon": expired_code,
+        "producto_ids": [p1["id"]],
+    })
+    assert val_off.status_code == 404
+
+    # Favorites CRUD
+    c_user, c_pass, _ = _create_user_in_db("cliente")
+    c_headers = _login(client, c_user, c_pass)
+    assert client.post(f"/api/v1/cliente/favoritos/{p1['id']}", headers=c_headers).status_code == 201
+    assert p1["id"] in client.get("/api/v1/cliente/favoritos", headers=c_headers).json()
+    assert client.delete(f"/api/v1/cliente/favoritos/{p1['id']}", headers=c_headers).status_code == 200
+
+    # Order with Coupon (-20% on $20 -> $16 subtotal) + Tip ($2.00)
+    cfg = client.get("/api/v1/cliente/configuraciones-publicas").json()
+    iva_active = str(cfg.get("iva_activo", "true")).lower() not in ("false", "0", "no", "off")
+    tax_rate = float(cfg.get("porcentaje_iva", 16)) if iva_active else 0.0
+    pkg_fee = float(cfg.get("costo_empaque", 3))
+
+    ord_res = client.post("/api/v1/cliente/pedidos", headers=c_headers, json={
+        "numero_mesa": "Mostrador",
+        "tipo": "llevar",
+        "modo_pago": "PAGAR_ANTES",
+        "metodo_pago": "Efectivo",
+        "moneda_pago": "USD",
+        "codigo_cupon": coupon_code,
+        "propina": 2.00,
+        "detalles": [{"producto_id": p1["id"], "cantidad": 1}],
+    })
+    assert ord_res.status_code == 201, ord_res.text
+    ord_data = ord_res.json()
+    assert ord_data["subtotal"] == pytest.approx(16.00)
+    assert ord_data["descuento"] == pytest.approx(4.00)
+    assert ord_data["propina"] == pytest.approx(2.00)
+    expected_tax = round(16.00 * tax_rate / 100.0, 2)
+    assert ord_data["total"] == pytest.approx(round(16.00 + expected_tax + pkg_fee + 2.00, 2))
+
+    # Public turnos board before and after LISTO + Post-delivery order review
+    turnos_before = client.get("/api/v1/cliente/turnos").json()
+    assert any(item["id"] == ord_data["id"] for item in turnos_before["preparando"])
+
+    assert client.post(f"/api/v1/caja/pedidos/{ord_data['id']}/cobrar", headers=cashier_headers, json={
+        "metodo_pago": "Efectivo",
+        "monto_recibido": ord_data["total"],
+        "moneda_pago": "USD",
+    }).status_code == 200
+    assert client.put(f"/api/v1/cocina/pedidos/{ord_data['id']}/estado?estado=LISTO", headers=kitchen_headers).status_code == 200
+    turnos_after = client.get("/api/v1/cliente/turnos").json()
+    assert any(item["id"] == ord_data["id"] for item in turnos_after["listos"])
+
+    rev_res = client.post(
+        f"/api/v1/cliente/pedidos/{ord_data['id']}/resena",
+        headers=c_headers,
+        json={"estrellas": 5, "comentario": "Excelente comida y tiempo de entrega"},
+    )
+    assert rev_res.status_code == 201, rev_res.text
+    assert client.post(
+        f"/api/v1/cliente/pedidos/{ord_data['id']}/resena",
+        headers=c_headers,
+        json={"estrellas": 4, "comentario": "Duplicado"},
+    ).status_code == 409
+
+    # Mesa zona + Waiter order + Split bill + Mixed payment + Corte X
+    mesa_num = 88
+    client.delete(f"/api/v1/admin/mesas/{mesa_num}", headers=admin_headers)
+    assert client.post("/api/v1/admin/mesas", headers=admin_headers, json={
+        "numero_mesa": mesa_num,
+        "capacidad": 4,
+        "zona": "Terraza",
+    }).status_code == 200
+    mesero_mesas = client.get("/api/v1/mesero/mesas", headers=waiter_headers).json()
+    assert any(m["numero_mesa"] == mesa_num and m["zona"] == "Terraza" for m in mesero_mesas)
+
+    waiter_ord = client.post("/api/v1/mesero/pedidos", headers=waiter_headers, json={
+        "numero_mesa": f"Mesa {mesa_num}",
+        "tipo": "mesa",
+        "modo_pago": "PAGAR_DESPUES",
+        "detalles": [
+            {"producto_id": p1["id"], "cantidad": 1},
+            {"producto_id": p2["id"], "cantidad": 1},
+        ],
+    })
+    assert waiter_ord.status_code == 201, waiter_ord.text
+    waiter_ord_id = waiter_ord.json()["id"]
+
+    # Split bill into 2 equal checks, then pay one with mixed payments (Efectivo + Punto de Venta)
+    split_res = client.post(f"/api/v1/caja/pedidos/{waiter_ord_id}/dividir", headers=cashier_headers, json={
+        "modo": "igual",
+        "partes": 2,
+    })
+    assert split_res.status_code == 200, split_res.text
+    child_id = split_res.json()["nuevos_pedidos"][0]
+
+    pending_map = {o["id"]: o for o in client.get("/api/v1/caja/pedidos-pendientes", headers=cashier_headers).json()}
+    part_total = float(pending_map[child_id]["total"])
+    half1 = round(part_total / 2.0, 2)
+    half2 = round(part_total - half1, 2)
+
+    shift_before = client.get("/api/v1/caja/turno-activo", headers=cashier_headers).json()["esperado_por_metodo"]
+    mix_res = client.post(f"/api/v1/caja/pedidos/{child_id}/cobrar", headers=cashier_headers, json={
+        "metodo_pago": "Pago Mixto",
+        "monto_recibido": part_total,
+        "moneda_pago": "USD",
+        "pagos_mixtos": [
+            {"metodo_pago": "Efectivo", "monto_usd": half1, "moneda": "USD"},
+            {"metodo_pago": "Punto de Venta", "monto_usd": half2, "moneda": "USD"},
+        ],
+    })
+    assert mix_res.status_code == 200, mix_res.text
+
+    shift_after = client.get("/api/v1/caja/turno-activo", headers=cashier_headers).json()["esperado_por_metodo"]
+    assert shift_after["Efectivo"] == pytest.approx(round(shift_before["Efectivo"] + half1, 2))
+    assert shift_after["Punto de Venta"] == pytest.approx(round(shift_before["Punto de Venta"] + half2, 2))
+
+    corte_x = client.get("/api/v1/caja/corte-x", headers=cashier_headers)
+    assert corte_x.status_code == 200
+    assert corte_x.json()["total_propinas"] >= 2.0
+
+    # Cleanup test promo and synthetic test products
+    client.delete(f"/api/v1/admin/promociones/{active_promo.json()['id']}", headers=admin_headers)
+    client.put(f"/api/v1/admin/productos/{p1['id']}", headers=admin_headers, json={"activo": False})
+    client.put(f"/api/v1/admin/productos/{p2['id']}", headers=admin_headers, json={"activo": False})
+
 
 def test_promotion_global_price_bundle_pricing_and_validation(client):
     admin_headers = _login(client, "admin", "admin123")

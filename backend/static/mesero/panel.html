@@ -4,11 +4,11 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>DONDE DAVID - Panel de Meseros & Atención al Salón</title>
-  <link rel="stylesheet" href="/static/css/global.css?v=5.5">
-  <link rel="stylesheet" href="/static/css/toon-theme.css?v=5.5">
-  <link rel="stylesheet" href="/static/css/index.css?v=5.5">
-  <link rel="stylesheet" href="/static/css/pages/mesero-panel.css?v=5.5">
-  <link rel="stylesheet" href="/static/css/utilities.css?v=5.5">
+  <link rel="stylesheet" href="/static/css/global.css?v=5.6">
+  <link rel="stylesheet" href="/static/css/toon-theme.css?v=5.6">
+  <link rel="stylesheet" href="/static/css/index.css?v=5.6">
+  <link rel="stylesheet" href="/static/css/pages/mesero-panel.css?v=5.6">
+  <link rel="stylesheet" href="/static/css/utilities.css?v=5.6">
 </head>
 <body class="toon-theme"><nav id="app-sidebar"></nav>
 
@@ -21,6 +21,19 @@
     <div class="mesero-section-heading">
       <h2 class="u-font-size-1-4rem u-font-weight-900 u-font-family-token-font-display u-color-hex-ffffff u-margin-0">🍽️ ESTADO Y REASIGNACIÓN DE MESAS</h2>
       <button class="btn btn-primary" onclick="loadMeseroData()">🔄 ACTUALIZAR MESAS</button>
+    </div>
+
+    <div class="mesero-filters-bar" aria-label="Filtros de mesas">
+      <button type="button" class="mesero-filter-chip is-active" data-mesero-zone="todas" onclick="setMeseroZoneFilter('todas')">🌐 Todas las zonas</button>
+      <button type="button" class="mesero-filter-chip" data-mesero-zone="Salón" onclick="setMeseroZoneFilter('Salón')">🪑 Salón</button>
+      <button type="button" class="mesero-filter-chip" data-mesero-zone="Terraza" onclick="setMeseroZoneFilter('Terraza')">🌿 Terraza</button>
+      <button type="button" class="mesero-filter-chip" data-mesero-zone="Barra" onclick="setMeseroZoneFilter('Barra')">🍹 Barra</button>
+      <select id="mesero-status-filter" class="form-control u-width-auto" onchange="renderMesas()" aria-label="Filtrar estado de mesa">
+        <option value="todos">Todos los estados</option>
+        <option value="OCUPADA">Ocupadas</option>
+        <option value="PENDIENTE_LIMPIEZA">Por limpiar</option>
+        <option value="LIBRE">Libres</option>
+      </select>
     </div>
 
     <div class="mesas-grid-mesero" id="mesero-mesas-grid"></div>
@@ -70,9 +83,24 @@
     </div>
   </div>
 
-  <script src="/static/js/auth.js?v=5.5"></script>
-  <script src="/static/js/appShell.js?v=5.5"></script>
-  <script src="/static/js/websocket.js?v=5.5"></script>
-  <script src="/static/js/mesero.js?v=5.5"></script>
+  <!-- Modal Tomar Pedido Directo en Mesa -->
+  <div class="product-modal-backdrop" id="waiter-order-modal">
+    <div class="product-modal-card u-max-width-480px u-padding-1-5rem">
+      <button class="modal-close-btn" onclick="closeModal('waiter-order-modal')">&times;</button>
+      <h3 class="u-font-size-1-3rem u-font-weight-900 u-color-token-color-yellow u-margin-top-0">📝 TOMAR PEDIDO · MESA #<span id="waiter-order-mesa-num">0</span></h3>
+      <input type="search" id="waiter-product-search" class="form-control" placeholder="Buscar producto del menú..." oninput="renderWaiterProductsPicker()">
+      <div id="waiter-products-picker" class="waiter-products-list"></div>
+      <div class="form-group">
+        <label for="waiter-order-notes">Observación / Nota para cocina</label>
+        <input type="text" id="waiter-order-notes" class="form-control" placeholder="Ej. Sin cebolla, servir rápido">
+      </div>
+      <button type="button" class="btn btn-cta u-width-100" onclick="submitWaiterTableOrder()">🔥 ENVIAR COMANDA A COCINA</button>
+    </div>
+  </div>
+
+  <script src="/static/js/auth.js?v=5.6"></script>
+  <script src="/static/js/appShell.js?v=5.6"></script>
+  <script src="/static/js/websocket.js?v=5.6"></script>
+  <script src="/static/js/mesero.js?v=5.6"></script>
 </body>
 </html>

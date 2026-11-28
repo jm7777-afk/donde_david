@@ -4,11 +4,11 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Donde David - Monitor KDS de Cocina</title>
-  <link rel="stylesheet" href="/static/css/global.css?v=5.5">
-  <link rel="stylesheet" href="/static/css/toon-theme.css?v=5.5">
-  <link rel="stylesheet" href="/static/css/index.css?v=5.5">
-  <link rel="stylesheet" href="/static/css/app-modules.css?v=5.5">
-  <link rel="stylesheet" href="/static/css/utilities.css?v=5.5">
+  <link rel="stylesheet" href="/static/css/global.css?v=5.6">
+  <link rel="stylesheet" href="/static/css/toon-theme.css?v=5.6">
+  <link rel="stylesheet" href="/static/css/index.css?v=5.6">
+  <link rel="stylesheet" href="/static/css/app-modules.css?v=5.6">
+  <link rel="stylesheet" href="/static/css/utilities.css?v=5.6">
 </head>
 <body class="toon-theme"><nav id="app-sidebar"></nav>
 
@@ -34,10 +34,14 @@
           <button class="btn btn-outline u-padding-0-25rem-0-55rem u-font-size-0-75rem" onclick="setKDSGridScale('scale-sm')">🔍 80%</button>
           <button class="btn btn-outline u-padding-0-25rem-0-55rem u-font-size-0-75rem u-border-color-token-gold-accent u-color-token-gold-accent" onclick="setKDSGridScale('scale-md')">📐 100%</button>
           <button class="btn btn-outline u-padding-0-25rem-0-55rem u-font-size-0-75rem" onclick="setKDSGridScale('scale-lg')">🐘 120%</button>
+          <button type="button" id="kds-layout-btn" class="btn btn-outline u-padding-0-25rem-0-55rem u-font-size-0-75rem" onclick="toggleKDSLayout()">🧱 Kanban</button>
+          <button type="button" id="kds-sound-btn" class="btn btn-outline u-padding-0-25rem-0-55rem u-font-size-0-75rem" onclick="toggleKDSSound()">🔊 Alarma ON</button>
+          <button type="button" id="kds-wakelock-btn" class="btn btn-outline u-padding-0-25rem-0-55rem u-font-size-0-75rem" onclick="toggleKDSFullscreenWake()">🖥️ Pantalla</button>
         </div>
         <span class="badge badge-PENDIENTE u-font-size-0-88rem u-padding-0-4rem-0-9rem" id="kds-order-count">Comandas activas: 0</span>
       </div>
     </div>
+    <section id="kds-allday-summary" class="kds-allday-bar" hidden aria-live="polite"></section>
     <div class="kds-grid scale-md" id="kds-grid">
       <!-- Dynamic Order Cards populated via JS -->
     </div>
@@ -60,9 +64,9 @@
     </div>
   </div>
 
-  <script src="/static/js/auth.js?v=5.5"></script>
-  <script src="/static/js/appShell.js?v=5.5"></script>
-  <script src="/static/js/websocket.js?v=5.5"></script>
-  <script src="/static/js/cocina.js?v=5.5"></script>
+  <script src="/static/js/auth.js?v=5.6"></script>
+  <script src="/static/js/appShell.js?v=5.6"></script>
+  <script src="/static/js/websocket.js?v=5.6"></script>
+  <script src="/static/js/cocina.js?v=5.6"></script>
 </body>
 </html>

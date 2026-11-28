@@ -6,6 +6,7 @@ let adminCategories = [];
 let adminGuiaItems = [];
 let adminPromos = [];
 let editingPromoId = null;
+let editingRecipeProductId = null;
 let adminResenas = [];
 let adminPublicaciones = [];
 let selectedInsumoForIngreso = null;
@@ -84,6 +85,24 @@ document.addEventListener("DOMContentLoaded", () => {
       loadPortalConfigsAdmin();
     } else if (event === "PROMOCIONES_ACTUALIZADAS") {
       loadPromosAdmin();
+    } else if (event === "ALERTA_STOCK_CRITICO") {
+      loadInsumos();
+      loadProducts();
+      const firstAlert = Array.isArray(data?.alertas) && data.alertas[0] ? data.alertas[0] : null;
+      const msg = firstAlert
+        ? `${firstAlert.nombre}: quedan ${firstAlert.stock} (mínimo ${firstAlert.stock_minimo}).`
+        : "Uno o más productos/insumos alcanzaron nivel crítico.";
+      if (typeof notifyHighPriority === "function") {
+        notifyHighPriority({
+          area: "INVENTARIO",
+          title: "Stock crítico detectado",
+          message: msg,
+          level: "critical",
+          tag: `stock-crit-${firstAlert?.id || Date.now()}`,
+        });
+      } else {
+        showToast(`⚠️ ${msg}`, "danger");
+      }
     }
   });
 });
@@ -412,7 +431,7 @@ async function submitCreatePublicacion() {
 }
 
 async function deletePublicacion(id) {
-  if (!confirm("¿Eliminar esta publicación de la web pública?")) return;
+  if (!(await window.showConfirmModal({ title: "Eliminar publicación", message: "¿Eliminar esta publicación de la web pública?", confirmLabel: "Eliminar", danger: true }))) return;
   try {
     const res = await fetch(`/api/v1/admin/publicaciones/${id}`, { method: "DELETE", headers: Auth.getHeaders() });
     if (!res.ok) throw new Error("Error al eliminar");
@@ -486,8 +505,9 @@ function renderProducts() {
         <td style="padding: 0.75rem;">🎁 ${Number(p.puntos_fidelidad) || 0}</td>
         <td style="padding: 0.75rem;">${p.disponible ? "Disponible" : "No disponible"}</td>
         <td style="padding: 0.75rem;">${p.stock}</td>
-        <td style="padding: 0.75rem; display: flex; gap: 0.4rem;">
+        <td style="padding: 0.75rem; display: flex; gap: 0.4rem; flex-wrap: wrap;">
           <button class="btn-gold" style="padding: 0.3rem 0.6rem; font-size: 0.75rem;" onclick="openEditProductModal(${p.id})">✏️ Editar</button>
+          <button type="button" class="btn btn-outline" style="padding: 0.3rem 0.6rem; font-size: 0.75rem;" onclick="openRecipeModal(${p.id})">🧪 Receta</button>
           <button class="btn-gold" style="padding: 0.3rem 0.6rem; font-size: 0.75rem; background: ${p.activo ? "var(--neon-red)" : "var(--neon-green)"}; color: #fff;" onclick="${p.activo ? "deleteProducto" : "restoreProducto"}(${p.id})">${p.activo ? "📦 Archivar" : "↩️ Reactivar"}</button>
         </td>
       </tr>
@@ -503,6 +523,7 @@ function openEditProductModal(prodId) {
   document.getElementById("edit-prod-name").value = p.nombre;
   document.getElementById("edit-prod-desc").value = p.descripcion || '';
   document.getElementById("edit-prod-price").value = p.precio;
+  if (document.getElementById("edit-prod-costo")) document.getElementById("edit-prod-costo").value = Number(p.costo_unitario || 0).toFixed(2);
   document.getElementById("edit-prod-price-promo").value = p.precio_promocion || '';
   document.getElementById("edit-prod-points").value = Number(p.puntos_fidelidad) || 0;
   document.getElementById("edit-prod-tiempo-preparacion").value = p.tiempo_preparacion || 15;
@@ -549,6 +570,7 @@ async function submitUpdateProduct() {
     nombre: document.getElementById("edit-prod-name").value,
     descripcion: document.getElementById("edit-prod-desc").value,
     precio: parseFloat(document.getElementById("edit-prod-price").value),
+    costo_unitario: parseFloat(document.getElementById("edit-prod-costo")?.value || "0") || 0,
     precio_promocion: parseFloat(document.getElementById("edit-prod-price-promo").value) || null,
     puntos_fidelidad: parseInt(document.getElementById("edit-prod-points").value, 10) || 0,
     tiempo_preparacion: parseInt(document.getElementById("edit-prod-tiempo-preparacion").value, 10),
@@ -694,6 +716,9 @@ function openNewPromoModal() {
   if (document.getElementById("promo-precio-global")) document.getElementById("promo-precio-global").value = "";
   document.getElementById("promo-pct").value = "0";
   document.getElementById("promo-codigo").value = "";
+  if (document.getElementById("promo-dias-semana")) document.getElementById("promo-dias-semana").value = "";
+  if (document.getElementById("promo-hora-inicio")) document.getElementById("promo-hora-inicio").value = "";
+  if (document.getElementById("promo-hora-fin")) document.getElementById("promo-hora-fin").value = "";
   document.getElementById("promo-img").value = "";
   document.getElementById("promo-activo").checked = true;
   if (document.getElementById("promo-products-search")) document.getElementById("promo-products-search").value = "";
@@ -720,6 +745,9 @@ function openEditPromo(id) {
   }
   document.getElementById("promo-pct").value = String(Number(promo.descuento_pct) || 0);
   document.getElementById("promo-codigo").value = promo.codigo_cupon || "";
+  if (document.getElementById("promo-dias-semana")) document.getElementById("promo-dias-semana").value = promo.dias_semana || "";
+  if (document.getElementById("promo-hora-inicio")) document.getElementById("promo-hora-inicio").value = promo.hora_inicio || "";
+  if (document.getElementById("promo-hora-fin")) document.getElementById("promo-hora-fin").value = promo.hora_fin || "";
   document.getElementById("promo-img").value = promo.banner_url || "";
   document.getElementById("promo-activo").checked = Boolean(promo.activo);
   if (document.getElementById("promo-products-search")) document.getElementById("promo-products-search").value = "";
@@ -753,6 +781,9 @@ async function submitCreatePromo() {
     descuento_pct: discount,
     precio_global: globalPrice !== null ? Math.round(globalPrice * 100) / 100 : null,
     codigo_cupon: document.getElementById("promo-codigo").value.trim(),
+    dias_semana: document.getElementById("promo-dias-semana")?.value.trim() || null,
+    hora_inicio: document.getElementById("promo-hora-inicio")?.value.trim() || null,
+    hora_fin: document.getElementById("promo-hora-fin")?.value.trim() || null,
     banner_url: document.getElementById("promo-img").value.trim(),
     activo: document.getElementById("promo-activo").checked,
     producto_ids: Array.from(promoSelectedProductIds)
@@ -782,7 +813,7 @@ async function submitCreatePromo() {
 }
 
 async function deletePromo(id) {
-  if (!confirm("¿Eliminar esta promoción?")) return;
+  if (!(await window.showConfirmModal({ title: "Eliminar promoción", message: "¿Eliminar esta promoción?", confirmLabel: "Eliminar", danger: true }))) return;
   try {
     const res = await fetch(`/api/v1/admin/promociones/${id}`, { method: "DELETE", headers: Auth.getHeaders() });
     if (!res.ok) throw new Error("Error al eliminar");
@@ -866,6 +897,9 @@ async function loadPortalConfigsAdmin() {
       if (document.getElementById("cfg-costo-empaque")) document.getElementById("cfg-costo-empaque").value = cfg.costo_empaque || '3.00';
       if (document.getElementById("cfg-iva-activo")) document.getElementById("cfg-iva-activo").value = (cfg.iva_activo === "false" || cfg.iva_activo === false) ? "false" : "true";
       if (document.getElementById("cfg-impuesto-porcentaje")) document.getElementById("cfg-impuesto-porcentaje").value = Number.isFinite(Number(cfg.impuesto_porcentaje)) ? cfg.impuesto_porcentaje : "16.0";
+      if (document.getElementById("cfg-validar-horario")) document.getElementById("cfg-validar-horario").value = cfg.validar_horario_pedidos === "true" ? "true" : "false";
+      if (document.getElementById("cfg-horario-apertura")) document.getElementById("cfg-horario-apertura").value = cfg.horario_apertura || "09:00";
+      if (document.getElementById("cfg-horario-cierre")) document.getElementById("cfg-horario-cierre").value = cfg.horario_cierre || "23:00";
       syncAdminIvaUI(cfg.iva_activo, cfg.impuesto_porcentaje);
       if (document.getElementById("cfg-pm-banco")) document.getElementById("cfg-pm-banco").value = cfg.pago_movil_banco || '';
       if (document.getElementById("cfg-pm-telefono")) document.getElementById("cfg-pm-telefono").value = cfg.pago_movil_telefono || '';
@@ -912,6 +946,9 @@ async function submitSavePortalConfigs() {
     { clave: "costo_empaque", valor: document.getElementById("cfg-costo-empaque").value },
     { clave: "iva_activo", valor: document.getElementById("cfg-iva-activo") ? document.getElementById("cfg-iva-activo").value : "true" },
     { clave: "impuesto_porcentaje", valor: document.getElementById("cfg-impuesto-porcentaje") ? document.getElementById("cfg-impuesto-porcentaje").value.trim() : "16.0" },
+    { clave: "validar_horario_pedidos", valor: document.getElementById("cfg-validar-horario")?.value || "false" },
+    { clave: "horario_apertura", valor: document.getElementById("cfg-horario-apertura")?.value || "09:00" },
+    { clave: "horario_cierre", valor: document.getElementById("cfg-horario-cierre")?.value || "23:00" },
     { clave: "pago_movil_banco", valor: document.getElementById("cfg-pm-banco").value.trim() },
     { clave: "pago_movil_telefono", valor: document.getElementById("cfg-pm-telefono").value.trim() },
     { clave: "pago_movil_rif", valor: document.getElementById("cfg-pm-rif").value.trim() },
@@ -1021,7 +1058,7 @@ async function submitCreateResena() {
 }
 
 async function deleteResena(id) {
-  if (!confirm("¿Eliminar esta reseña?")) return;
+  if (!(await window.showConfirmModal({ title: "Eliminar reseña", message: "¿Eliminar esta reseña?", confirmLabel: "Eliminar", danger: true }))) return;
   try {
     const res = await fetch(`/api/v1/admin/resenas/${id}`, { method: "DELETE", headers: Auth.getHeaders() });
     if (!res.ok) throw new Error("Error al eliminar");
@@ -1105,7 +1142,7 @@ async function submitCreateGuia() {
 }
 
 async function deleteGuiaItem(id) {
-  if (!confirm("¿Deseas eliminar esta diapositiva del carrusel guía?")) return;
+  if (!(await window.showConfirmModal({ title: "Eliminar diapositiva", message: "¿Deseas eliminar esta diapositiva del carrusel guía?", confirmLabel: "Eliminar", danger: true }))) return;
   try {
     const res = await fetch(`/api/v1/admin/guia/${id}`, { method: "DELETE", headers: Auth.getHeaders() });
     if (!res.ok) throw new Error("Error al eliminar");
@@ -1135,6 +1172,7 @@ function renderMesas() {
     html += `
       <div class="mesa-card ${escapeAdminHtml(m.estado)}">
         <div style="font-size: 1.2rem; font-weight: 900; color: #fff;">Mesa #${Number(m.numero_mesa)}</div>
+        <div style="font-size: 0.72rem; color: var(--cyan-accent); font-weight: 800;">📍 ${escapeAdminHtml(m.zona || "Salón")}</div>
         <div style="font-size: 0.75rem; color: var(--text-muted); margin: 0.3rem 0;">Estado: ${escapeAdminHtml(m.estado)}</div>
         <div style="display: flex; gap: 0.4rem; justify-content: center; margin-top: 0.75rem;">
           <button class="btn-gold" style="padding: 0.3rem 0.6rem; font-size: 0.7rem;" onclick="viewQrMesa(${Number(m.numero_mesa)})">📱 QR</button>
@@ -1163,6 +1201,7 @@ async function viewQrMesa(numMesa) {
 async function submitCreateMesa() {
   const num = parseInt(document.getElementById("new-mesa-num").value);
   const cap = parseInt(document.getElementById("new-mesa-cap").value) || 4;
+  const zona = document.getElementById("new-mesa-zona")?.value || "Salón";
 
   if (!num) {
     showToast("Ingresa un número de mesa válido", "warning");
@@ -1173,7 +1212,7 @@ async function submitCreateMesa() {
     const res = await fetch("/api/v1/admin/mesas", {
       method: "POST",
       headers: Auth.getHeaders(),
-      body: JSON.stringify({ numero_mesa: num, capacidad: cap })
+      body: JSON.stringify({ numero_mesa: num, capacidad: cap, zona })
     });
     if (!res.ok) throw new Error("Error al crear mesa");
     showToast(`Mesa #${num} creada exitosamente`, "success");
@@ -1185,7 +1224,7 @@ async function submitCreateMesa() {
 }
 
 async function deleteMesa(numMesa) {
-  if (!confirm(`¿Eliminar la Mesa #${numMesa}?`)) return;
+  if (!(await window.showConfirmModal({ title: "Eliminar mesa", message: `¿Eliminar la Mesa #${numMesa}?`, confirmLabel: "Eliminar", danger: true }))) return;
   try {
     const res = await fetch(`/api/v1/admin/mesas/${numMesa}`, { method: "DELETE", headers: Auth.getHeaders() });
     if (!res.ok) throw new Error("Error al eliminar la mesa");
@@ -1313,6 +1352,7 @@ async function submitCreateProduct() {
     categoria_id: parseInt(document.getElementById("prod-cat-select").value),
     descripcion: document.getElementById("prod-desc").value,
     precio: parseFloat(document.getElementById("prod-price").value),
+    costo_unitario: parseFloat(document.getElementById("prod-costo")?.value || "0") || 0,
     puntos_fidelidad: parseInt(document.getElementById("prod-points").value, 10) || 0,
     tiempo_preparacion: parseInt(document.getElementById("prod-tiempo-preparacion").value, 10),
     imagen_url: document.getElementById("prod-img").value || "https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=500",
@@ -1342,7 +1382,7 @@ async function submitCreateProduct() {
 }
 
 async function deleteProducto(id) {
-  if (!confirm("¿Archivar este producto? Se ocultará del menú, pero se conservará en pedidos anteriores.")) return;
+  if (!(await window.showConfirmModal({ title: "Archivar producto", message: "¿Archivar este producto? Se ocultará del menú, pero se conservará en pedidos anteriores.", confirmLabel: "Archivar", danger: true }))) return;
   try {
     const res = await fetch(`/api/v1/admin/productos/${id}`, { method: "DELETE", headers: Auth.getHeaders() });
     const result = await res.json();
@@ -1423,7 +1463,7 @@ async function submitCreateCategory() {
 }
 
 async function deleteCategoria(id) {
-  if (!confirm("¿Eliminar esta categoría? Solo se puede eliminar si no tiene productos asociados.")) return;
+  if (!(await window.showConfirmModal({ title: "Eliminar categoría", message: "¿Eliminar esta categoría? Solo se puede eliminar si no tiene productos asociados.", confirmLabel: "Eliminar", danger: true }))) return;
   try {
     const res = await fetch(`/api/v1/admin/categorias/${id}`, { method: "DELETE", headers: Auth.getHeaders() });
     const result = await res.json();
@@ -1940,7 +1980,7 @@ async function downloadLogs(tipo) {
  * Solicita confirmación y limpia los archivos de registro activos.
  */
 async function clearLogsPrompt() {
-  if (!confirm("⚠️ ¿Estás seguro de que deseas limpiar y reiniciar los archivos de log del servidor? Esta acción no se puede deshacer.")) {
+  if (!(await window.showConfirmModal({ title: "Reiniciar logs", message: "⚠️ ¿Estás seguro de que deseas limpiar y reiniciar los archivos de log del servidor? Esta acción no se puede deshacer.", confirmLabel: "Reiniciar logs", danger: true }))) {
     return;
   }
   try {
@@ -2079,9 +2119,12 @@ async function downloadBackup(filename) {
  * Confirma y ejecuta la restauración segura de la base de datos desde un archivo.
  */
 async function promptRestoreBackup(filename) {
-  const confirmed = confirm(
-    `🚨 ATENCIÓN - ACCIÓN CRÍTICA:\n\n¿Estás completamente seguro de restaurar la base de datos desde '${filename}'?\n\nEl sistema creará un punto de control de seguridad automático antes de aplicar la restauración.\n\n¿Deseas continuar?`
-  );
+  const confirmed = await window.showConfirmModal({
+    title: "Restaurar base de datos",
+    message: `🚨 ATENCIÓN: ¿Estás seguro de restaurar la base de datos desde '${filename}'? Se creará un punto de control automático antes de aplicar.`,
+    confirmLabel: "Restaurar",
+    danger: true
+  });
   if (!confirmed) return;
 
   try {
@@ -2109,7 +2152,7 @@ async function promptRestoreBackup(filename) {
  * Confirma y elimina una copia de seguridad específica.
  */
 async function deleteBackup(filename) {
-  if (!confirm(`¿Eliminar permanentemente la copia de seguridad '${filename}'?`)) {
+  if (!(await window.showConfirmModal({ title: "Eliminar respaldo", message: `¿Eliminar permanentemente la copia de seguridad '${filename}'?`, confirmLabel: "Eliminar", danger: true }))) {
     return;
   }
   try {
@@ -2138,4 +2181,189 @@ function escapeHtml(str) {
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&#039;");
+}
+
+/* ==================== RECETAS, COMPRAS, REPORTES & SLA ==================== */
+async function openRecipeModal(prodId) {
+  const product = adminProducts.find(p => Number(p.id) === Number(prodId));
+  if (!product) return;
+  editingRecipeProductId = Number(product.id);
+  const titleEl = document.getElementById("recipe-product-name");
+  if (titleEl) titleEl.textContent = product.nombre || "Producto";
+  if (!adminInsumos.length) await loadInsumos();
+  let rows = [];
+  try {
+    const res = await fetch(`/api/v1/admin/productos/${editingRecipeProductId}/receta`, { headers: Auth.getHeaders() });
+    if (res.ok) rows = await res.json();
+  } catch (e) {}
+  const listEl = document.getElementById("recipe-rows-list");
+  if (listEl) listEl.innerHTML = "";
+  if (rows.length) {
+    rows.forEach(r => addRecipeRowUI(r.insumo_id, r.cantidad_por_unidad));
+  } else {
+    addRecipeRowUI();
+  }
+  openModal("recipe-modal");
+}
+
+function addRecipeRowUI(selectedInsumoId = null, qtyValue = 0.2) {
+  const listEl = document.getElementById("recipe-rows-list");
+  if (!listEl) return;
+  if (!adminInsumos.length) {
+    listEl.innerHTML = `<p style="color:var(--text-muted);font-size:0.85rem;">Primero registra al menos un insumo en la pestaña Insumos.</p>`;
+    return;
+  }
+  const row = document.createElement("div");
+  row.className = "recipe-editor-row";
+  row.style.cssText = "display:flex;gap:0.45rem;align-items:center;margin-bottom:0.5rem;";
+  const options = adminInsumos.map(i => `<option value="${Number(i.id)}" ${Number(i.id) === Number(selectedInsumoId) ? "selected" : ""}>${escapeAdminHtml(i.nombre)} (${escapeAdminHtml(i.unidad_medida)})</option>`).join("");
+  row.innerHTML = `
+    <select class="form-control recipe-insumo-select" style="flex:2;">${options}</select>
+    <input type="number" step="0.01" min="0.01" class="form-control recipe-qty-input" style="flex:1;" value="${Number(qtyValue) || 0.1}">
+    <button type="button" class="btn btn-outline" onclick="this.parentElement.remove()">×</button>
+  `;
+  listEl.appendChild(row);
+}
+
+async function submitProductRecipe() {
+  if (!editingRecipeProductId) return;
+  const rows = Array.from(document.querySelectorAll("#recipe-rows-list .recipe-editor-row"));
+  const items = rows.map(row => ({
+    insumo_id: Number(row.querySelector(".recipe-insumo-select")?.value),
+    cantidad_por_unidad: Number(row.querySelector(".recipe-qty-input")?.value || 0)
+  })).filter(it => it.insumo_id > 0 && it.cantidad_por_unidad > 0);
+  try {
+    const res = await fetch(`/api/v1/admin/productos/${editingRecipeProductId}/receta`, {
+      method: "PUT",
+      headers: Auth.getHeaders(),
+      body: JSON.stringify({ items })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || "No se pudo guardar la receta.");
+    showToast("Receta de insumos guardada correctamente.", "success");
+    closeModal("recipe-modal");
+  } catch (err) {
+    showToast(err.message, "danger");
+  }
+}
+
+function openCompraInventarioModal() {
+  populateCompraTargetOptions();
+  openModal("compra-inventario-modal");
+}
+
+function populateCompraTargetOptions() {
+  const type = document.getElementById("compra-target-type")?.value || "insumo";
+  const sel = document.getElementById("compra-target-id");
+  if (!sel) return;
+  if (type === "insumo") {
+    sel.innerHTML = adminInsumos.map(i => `<option value="${Number(i.id)}">${escapeAdminHtml(i.nombre)} (Actual: ${i.stock_actual} ${escapeAdminHtml(i.unidad_medida)})</option>`).join("");
+  } else {
+    sel.innerHTML = adminProducts.map(p => `<option value="${Number(p.id)}">${escapeAdminHtml(p.nombre)} (Stock: ${Number(p.stock || 0)})</option>`).join("");
+  }
+}
+
+async function submitCompraInventario() {
+  const type = document.getElementById("compra-target-type")?.value || "insumo";
+  const targetId = Number(document.getElementById("compra-target-id")?.value);
+  const cantidad = Number(document.getElementById("compra-cantidad")?.value || 0);
+  const costo = Number(document.getElementById("compra-costo")?.value || 0);
+  const proveedor = document.getElementById("compra-proveedor")?.value.trim() || null;
+  if (!targetId || cantidad <= 0) {
+    showToast("Selecciona un ítem y una cantidad válida.", "warning");
+    return;
+  }
+  const payload = {
+    insumo_id: type === "insumo" ? targetId : null,
+    producto_id: type === "producto" ? targetId : null,
+    cantidad,
+    costo_unitario: costo >= 0 ? costo : 0,
+    proveedor
+  };
+  try {
+    const res = await fetch("/api/v1/admin/inventario/compra", {
+      method: "POST",
+      headers: Auth.getHeaders(),
+      body: JSON.stringify(payload)
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || "No se pudo registrar la compra.");
+    showToast(data.mensaje || "Compra registrada.", "success");
+    closeModal("compra-inventario-modal");
+    await Promise.all([loadInsumos(), loadProducts()]);
+  } catch (err) {
+    showToast(err.message, "danger");
+  }
+}
+
+async function exportSalesReportCsv(formato = "excel") {
+  try {
+    const res = await fetch(`/api/v1/admin/reportes/exportar?formato=${encodeURIComponent(formato)}`, {
+      headers: Auth.getHeaders()
+    });
+    if (!res.ok) throw new Error("No se pudo exportar el reporte.");
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "reporte_ventas_donde_david.csv";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+    showToast("Reporte descargado correctamente.", "success");
+  } catch (err) {
+    showToast(err.message, "danger");
+  }
+}
+
+async function loadProfitabilityAndSlaReport() {
+  const panel = document.getElementById("admin-profit-sla-panel");
+  const slaPill = document.getElementById("admin-sla-summary-pill");
+  const listEl = document.getElementById("admin-profitability-list");
+  if (!panel || !listEl) return;
+  panel.classList.remove("u-display-none");
+  try {
+    const [profRes, slaRes] = await Promise.all([
+      fetch("/api/v1/admin/reportes/rentabilidad", { headers: Auth.getHeaders() }),
+      fetch("/api/v1/admin/cocina/sla", { headers: Auth.getHeaders() })
+    ]);
+    const prof = profRes.ok ? await profRes.json() : null;
+    const sla = slaRes.ok ? await slaRes.json() : null;
+    if (slaPill && sla) {
+      slaPill.textContent = `⏱️ Prom. Cocina: ${sla.tiempo_promedio_min} min · Atrasados >15m: ${sla.atrasados_mas_15_min}`;
+    }
+    if (prof) {
+      const rowsHtml = (prof.productos || []).slice(0, 12).map(p => `
+        <div style="display:flex;justify-content:space-between;padding:0.45rem 0;border-bottom:1px dashed var(--toon-border);font-size:0.86rem;">
+          <span><strong>${escapeAdminHtml(p.nombre)}</strong> (${p.unidades_vendidas} u.)</span>
+          <span>Ingresos: <strong>$${Number(p.ingresos_usd).toFixed(2)}</strong> · Margen: <strong style="color:var(--neon-green);">$${Number(p.margen_usd).toFixed(2)} (${p.margen_pct}%)</strong></span>
+        </div>
+      `).join("");
+      listEl.innerHTML = `
+        <div style="margin-bottom:0.75rem;font-size:0.92rem;">
+          Ingresos: <strong>$${Number(prof.total_ingresos_usd).toFixed(2)}</strong> · Costos: <strong>$${Number(prof.total_costos_usd).toFixed(2)}</strong> · Utilidad bruta: <strong style="color:var(--gold-accent);">$${Number(prof.utilidad_bruta_usd).toFixed(2)}</strong>
+        </div>
+        ${rowsHtml || `<p style="color:var(--text-muted);font-size:0.85rem;">Sin ventas pagadas aún para calcular rentabilidad.</p>`}
+      `;
+    }
+  } catch (err) {
+    showToast("No se pudo cargar el reporte de rentabilidad.", "danger");
+  }
+}
+
+function printAdminDashboardSummary() {
+  if (!adminStats || typeof window.printThermalDocument !== "function") {
+    window.print();
+    return;
+  }
+  const html = `
+    <div class="dd-thermal-row"><span>Ventas hoy:</span><strong>$${Number(adminStats.ventas_hoy || 0).toFixed(2)}</strong></div>
+    <div class="dd-thermal-row"><span>Ventas semana:</span><strong>$${Number(adminStats.ventas_semana || 0).toFixed(2)}</strong></div>
+    <div class="dd-thermal-row"><span>Ventas mes:</span><strong>$${Number(adminStats.ventas_mes || 0).toFixed(2)}</strong></div>
+    <div class="dd-thermal-row"><span>Mesas ocupadas:</span><strong>${adminStats.mesas_ocupadas || 0}/${adminStats.total_mesas || 0}</strong></div>
+    <div class="dd-thermal-row"><span>Stock crítico:</span><strong>${adminStats.stock_critico || 0} insumos</strong></div>
+    <div class="dd-thermal-total"><span>Caja esperada:</span><span>$${Number(adminStats.monto_caja || 0).toFixed(2)}</span></div>
+  `;
+  window.printThermalDocument(html, "RESUMEN GERENCIAL / ADMIN");
 }

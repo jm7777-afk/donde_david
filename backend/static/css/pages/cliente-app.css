@@ -429,3 +429,150 @@
   font-size: 0.72rem;
   font-weight: 800;
 }
+.client-menu-filter-pills {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin-bottom: 1rem;
+}
+.menu-filter-pill {
+  padding: 0.42rem 0.9rem;
+  border-radius: 999px;
+  border: 1px solid var(--toon-border);
+  background: var(--bg-card-secondary, rgba(255, 255, 255, 0.04));
+  color: var(--text-primary, #fff);
+  font-size: 0.8rem;
+  font-weight: 800;
+  cursor: pointer;
+}
+.menu-filter-pill.is-active {
+  background: var(--gold-accent);
+  color: #000000;
+  border-color: var(--gold-accent);
+}
+.product-fav-btn {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  z-index: 3;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  background: rgba(8, 12, 20, 0.72);
+  color: #ffffff;
+  font-size: 1rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+.product-fav-btn.is-fav {
+  border-color: var(--neon-red);
+  background: rgba(255, 71, 87, 0.25);
+}
+.cart-upsell-section {
+  margin: 1rem 0;
+  padding: 0.9rem;
+  border-radius: 14px;
+  background: rgba(0, 245, 212, 0.06);
+  border: 1px solid rgba(0, 245, 212, 0.28);
+}
+.cart-upsell-title {
+  margin: 0 0 0.65rem;
+  font-size: 0.92rem;
+  font-weight: 900;
+  color: var(--cyan-accent);
+}
+.cart-upsell-grid {
+  display: flex;
+  gap: 0.65rem;
+  overflow-x: auto;
+  padding-bottom: 0.25rem;
+}
+.cart-upsell-card {
+  flex: 0 0 165px;
+  background: var(--bg-card);
+  border: 1px solid var(--toon-border);
+  border-radius: 12px;
+  padding: 0.6rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+.cart-upsell-card img {
+  width: 100%;
+  height: 76px;
+  object-fit: cover;
+  border-radius: 8px;
+}
+.checkout-coupon-box,
+.checkout-tip-box {
+  margin: 0.85rem 0;
+  padding-top: 0.75rem;
+  border-top: 1px dashed var(--toon-border);
+}
+.checkout-coupon-row {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+.checkout-coupon-status {
+  display: block;
+  margin-top: 0.35rem;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--cyan-accent);
+}
+.checkout-tip-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  margin-top: 0.45rem;
+}
+.tip-pill-btn {
+  padding: 0.35rem 0.75rem;
+  border-radius: 999px;
+  border: 1px solid var(--toon-border);
+  background: transparent;
+  color: var(--text-primary);
+  font-size: 0.78rem;
+  font-weight: 800;
+  cursor: pointer;
+}
+.tip-pill-btn.is-active {
+  background: var(--cyan-accent);
+  color: #000000;
+  border-color: var(--cyan-accent);
+}
+.tracking-visual-stepper {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0.45rem;
+  margin: 1rem 0;
+}
+.tracking-step-chip {
+  padding: 0.55rem 0.35rem;
+  border-radius: 10px;
+  border: 1px solid var(--toon-border);
+  background: rgba(255, 255, 255, 0.03);
+  font-size: 0.72rem;
+  font-weight: 800;
+  color: var(--text-muted);
+}
+.tracking-step-chip.is-done {
+  border-color: var(--neon-green);
+  background: rgba(34, 197, 94, 0.14);
+  color: var(--neon-green);
+}
+.tracking-step-chip.is-current {
+  border-color: var(--gold-accent);
+  background: rgba(255, 188, 13, 0.16);
+  color: var(--gold-accent);
+}
+.historial-actions-row {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin-top: 0.65rem;
+}

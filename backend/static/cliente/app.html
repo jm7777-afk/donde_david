@@ -6,9 +6,9 @@
   <title>DONDE DAVID - Fresh & Tasty!</title>
   <link rel="manifest" href="/static/manifest.json">
   <meta name="theme-color" content="#FFBC0D">
-  <link rel="stylesheet" href="/static/css/global.css?v=5.4">
-  <link rel="stylesheet" href="/static/css/toon-theme.css?v=5.4">
-  <link rel="stylesheet" href="/static/css/index.css?v=5.4">
+  <link rel="stylesheet" href="/static/css/global.css?v=5.6">
+  <link rel="stylesheet" href="/static/css/toon-theme.css?v=5.6">
+  <link rel="stylesheet" href="/static/css/index.css?v=5.6">
   
   <!-- Leaflet Maps CSS & JS para Ubicación Exacta de Delivery -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
@@ -18,8 +18,8 @@
   <!-- HTML5 QR Code Scanner para Cámara Real -->
   <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 
-  <link rel="stylesheet" href="/static/css/pages/cliente-app.css?v=5.4">
-  <link rel="stylesheet" href="/static/css/utilities.css?v=5.4">
+  <link rel="stylesheet" href="/static/css/pages/cliente-app.css?v=5.6">
+  <link rel="stylesheet" href="/static/css/utilities.css?v=5.6">
 </head>
 <body class="toon-theme"><nav id="app-sidebar"></nav>
 
@@ -124,7 +124,8 @@
       <!-- Productos con Fotos apetitosas -->
       <h3 class="u-font-size-1-1rem u-font-weight-800 u-margin-1-75rem-0-1rem-0 u-color-hex-fff">🍔 LO MÁS PEDIDO Y DELICIOSO</h3>
       <div class="product-toon-grid" id="home-featured-grid">
-        <!-- Creados dinámicamente -->
+        <div class="dd-skeleton-card"><div class="dd-skeleton-box"></div><div class="dd-skeleton-line"></div></div>
+        <div class="dd-skeleton-card"><div class="dd-skeleton-box"></div><div class="dd-skeleton-line"></div></div>
       </div>
     </div>
 
@@ -136,10 +137,18 @@
 
     <!-- 4. MENÚ & BÚSQUEDA -->
     <div id="screen-menu" class="screen u-padding-1-25rem">
-      <div class="form-group u-margin-bottom-1-25rem">
+      <div class="form-group u-margin-bottom-0-75rem">
         <input type="text" id="menu-search-input" class="form-control" placeholder="🔍 Buscar por nombre o ingrediente..." oninput="filterMenuProducts()">
       </div>
-      <div class="product-toon-grid" id="menu-products-grid"></div>
+      <div id="menu-filter-pills" class="client-menu-filter-pills">
+        <button type="button" class="menu-filter-pill is-active" data-menu-filter="todos" onclick="setMenuModeFilter('todos')">🍽️ Todos</button>
+        <button type="button" class="menu-filter-pill" data-menu-filter="promo" onclick="setMenuModeFilter('promo')">🔥 En Promoción</button>
+        <button type="button" class="menu-filter-pill" data-menu-filter="favoritos" onclick="setMenuModeFilter('favoritos')">❤️ Favoritos</button>
+      </div>
+      <div class="product-toon-grid" id="menu-products-grid">
+        <div class="dd-skeleton-card"><div class="dd-skeleton-box"></div><div class="dd-skeleton-line"></div></div>
+        <div class="dd-skeleton-card"><div class="dd-skeleton-box"></div><div class="dd-skeleton-line"></div></div>
+      </div>
     </div>
 
     <!-- 5. CARRITO -->
@@ -159,11 +168,37 @@
       </header>
       <div id="toon-cart-items" class="client-cart-list" aria-live="polite"></div>
 
+      <section id="cart-upsell-section" class="cart-upsell-section" hidden>
+        <h3 class="cart-upsell-title">🍟 ¿Acompañas tu pedido con algo más?</h3>
+        <div id="cart-upsell-grid" class="cart-upsell-grid"></div>
+      </section>
+
       <div class="u-background-token-toon-card u-padding-1-25rem u-border-radius-token-radius-md u-margin-1-25rem-0 u-border-1px-solid-token-toon-border">
+        <div class="checkout-coupon-box">
+          <label for="checkout-coupon-code" class="u-font-size-0-8rem u-font-weight-800">🎟️ ¿Tienes un código de cupón?</label>
+          <div class="checkout-coupon-row">
+            <input type="text" id="checkout-coupon-code" class="form-control" maxlength="50" placeholder="Ej. COMBO20">
+            <button type="button" class="btn btn-outline" onclick="applyCheckoutCoupon()">Aplicar</button>
+          </div>
+          <small id="checkout-coupon-status" class="checkout-coupon-status"></small>
+        </div>
+
+        <div class="checkout-tip-box">
+          <label class="u-font-size-0-8rem u-font-weight-800">💛 Propina opcional para el equipo</label>
+          <div id="cart-tip-pills" class="checkout-tip-pills">
+            <button type="button" class="tip-pill-btn is-active" data-tip-mode="none" onclick="setCheckoutTipMode('none')">Sin propina</button>
+            <button type="button" class="tip-pill-btn" data-tip-mode="5pct" onclick="setCheckoutTipMode('5pct')">5%</button>
+            <button type="button" class="tip-pill-btn" data-tip-mode="10pct" onclick="setCheckoutTipMode('10pct')">10%</button>
+            <button type="button" class="tip-pill-btn" data-tip-mode="2usd" onclick="setCheckoutTipMode('2usd')">+$2.00</button>
+          </div>
+        </div>
+
         <div class="u-display-flex u-justify-content-space-between u-color-token-text-muted u-margin-bottom-0-5rem"><span>Subtotal</span><span id="cart-subtotal">$0.00</span></div>
+        <div id="cart-discount-row" class="u-display-none u-justify-content-space-between u-color-token-cyan-accent u-margin-bottom-0-5rem"><span>Descuento Cupón</span><span id="cart-discount">-$0.00</span></div>
         <div class="u-display-flex u-justify-content-space-between u-color-token-text-muted u-margin-bottom-0-5rem"><span id="cart-tax-label">IVA (16%)</span><span id="cart-tax">$0.00</span></div>
         <div id="cart-delivery-row" class="u-display-flex u-justify-content-space-between u-color-token-text-muted u-margin-bottom-0-5rem"><span>Envío Delivery</span><span id="cart-delivery-cost">$5.00</span></div>
         <div id="cart-empaque-row" class="u-display-flex u-justify-content-space-between u-color-token-text-muted u-margin-bottom-0-5rem"><span>Empaque para Llevar</span><span id="cart-empaque-cost">$3.00</span></div>
+        <div id="cart-tip-row" class="u-display-none u-justify-content-space-between u-color-token-text-muted u-margin-bottom-0-5rem"><span>Propina</span><span id="cart-tip">$0.00</span></div>
         <div class="u-display-flex u-justify-content-space-between u-font-size-1-3rem u-font-weight-900 u-border-top-1px-dashed-token-toon-border u-padding-top-0-75rem u-color-token-gold-accent"><span>TOTAL GENERAL</span><span id="cart-total">$0.00</span></div>
       </div>
 
@@ -267,9 +302,11 @@
         <h4>Resumen de pago</h4>
         <div class="u-display-grid u-gap-0p45rem">
           <div class="u-display-flex u-justify-content-space-between u-gap-0p75rem"><span>Productos</span><strong id="checkout-summary-subtotal">$0.00</strong></div>
+          <div id="checkout-summary-discount-row" class="u-display-none u-justify-content-space-between u-gap-0p75rem u-color-token-cyan-accent"><span>Cupón aplicado</span><strong id="checkout-summary-discount">-$0.00</strong></div>
           <div class="u-display-flex u-justify-content-space-between u-gap-0p75rem"><span>Impuesto</span><strong id="checkout-summary-tax">$0.00</strong></div>
           <div id="checkout-summary-delivery-row" class="u-display-none u-justify-content-space-between u-gap-0p75rem"><span>Delivery</span><strong id="checkout-summary-delivery">$0.00</strong></div>
           <div id="checkout-summary-package-row" class="u-display-none u-justify-content-space-between u-gap-0p75rem"><span>Empaque</span><strong id="checkout-summary-package">$0.00</strong></div>
+          <div id="checkout-summary-tip-row" class="u-display-none u-justify-content-space-between u-gap-0p75rem"><span>Propina</span><strong id="checkout-summary-tip">$0.00</strong></div>
           <div class="u-display-flex u-justify-content-space-between u-gap-0p75rem u-border-top-1px-solid-token-toon-border u-padding-top-0p6rem u-font-size-1-05rem"><span>Total</span><strong id="checkout-summary-total" class="u-color-token-gold-accent">$0.00</strong></div>
           <small id="checkout-summary-points" class="u-color-token-cyan-accent">Puntos estimados al pagar: 0</small>
         </div>
@@ -358,6 +395,7 @@
         <div id="track-order-status" class="u-font-size-1-2rem u-font-weight-800 u-margin-bottom-0-5rem">CONSULTANDO PEDIDO…</div>
         <p id="track-order-info" class="u-color-token-text-muted u-font-size-0-85rem">Estamos consultando el estado más reciente.</p>
         <div id="track-async-payment-status" class="checkout-async-status" role="status" aria-live="polite" hidden></div>
+        <div id="track-visual-stepper" class="tracking-visual-stepper" aria-hidden="true"></div>
         <div id="track-order-progress" role="status" aria-live="polite" class="u-text-align-left u-background-rgba-255-255-255-0p03 u-border-1px-solid-token-toon-border u-border-radius-12px u-padding-1rem u-margin-top-1rem"></div>
         <div id="track-delivery-code" hidden class="u-margin-top-1rem u-padding-1rem u-border-1px-solid-token-gold-accent u-border-radius-12px u-background-rgba-255-183-3-0p1">
           <strong>🔐 Código de entrega</strong>
@@ -782,13 +820,13 @@
   <!-- Driver.js Library script para Tour Interactivo de Clientes -->
   <script src="https://cdn.jsdelivr.net/npm/driver.js@1.3.1/dist/driver.js.iife.js"></script>
 
-  <script src="/static/js/auth.js?v=5.4"></script>
-  <script src="/static/js/websocket.js?v=5.4"></script>
-  <script src="/static/js/cliente-toon.js?v=5.4"></script>
-  <script src="/static/js/appShell.js?v=5.4"></script>
+  <script src="/static/js/auth.js?v=5.6"></script>
+  <script src="/static/js/websocket.js?v=5.6"></script>
+  <script src="/static/js/cliente-toon.js?v=5.6"></script>
+  <script src="/static/js/appShell.js?v=5.6"></script>
   <script>
     if ("serviceWorker" in navigator && (location.protocol === "https:" || location.hostname === "localhost" || location.hostname === "127.0.0.1")) {
-      navigator.serviceWorker.register("/static/sw.js?v=5.4", { scope: "/static/" })
+      navigator.serviceWorker.register("/static/sw.js?v=5.6", { scope: "/static/" })
         .then(reg => {
           reg.update();
         })

@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DONDE DAVID - Pantalla de Turnos Mostrador</title>
+  <link rel="stylesheet" href="/static/css/global.css?v=5.6">
+  <link rel="stylesheet" href="/static/css/utilities.css?v=5.6">
+  <link rel="stylesheet" href="/static/css/toon-theme.css?v=5.6">
+  <link rel="stylesheet" href="/static/css/pages/turnos.css?v=5.6">
+</head>
+<body class="turnos-tv-body">
+  <header class="turnos-tv-header">
+    <div class="turnos-tv-brand">
+      <img src="/static/img/logo.png" alt="Donde David" class="turnos-tv-logo">
+      <div>
+        <h1 class="turnos-tv-title">DONDE DAVID · TURNOS DE RETIRO</h1>
+        <p class="turnos-tv-subtitle">Sigue tu número de pedido en tiempo real</p>
+      </div>
+    </div>
+    <div class="turnos-tv-status">
+      <span id="turnos-clock" class="turnos-tv-clock">--:--</span>
+      <button type="button" class="btn btn-outline theme-toggle-btn" onclick="toggleThemeMode()">☀️ BLANCO</button>
+    </div>
+  </header>
+
+  <main class="turnos-tv-grid">
+    <section class="turnos-column turnos-col-prep" aria-labelledby="turnos-prep-heading">
+      <div class="turnos-col-header">
+        <h2 id="turnos-prep-heading">👨‍🍳 EN PREPARACIÓN</h2>
+        <span id="turnos-prep-count" class="badge badge-EN_PREPARACION">0</span>
+      </div>
+      <div id="turnos-prep-list" class="turnos-cards-list"></div>
+    </section>
+
+    <section class="turnos-column turnos-col-ready" aria-labelledby="turnos-ready-heading">
+      <div class="turnos-col-header">
+        <h2 id="turnos-ready-heading">✅ ¡LISTOS PARA RETIRAR!</h2>
+        <span id="turnos-ready-count" class="badge badge-LISTO">0</span>
+      </div>
+      <div id="turnos-ready-list" class="turnos-cards-list"></div>
+    </section>
+  </main>
+
+  <script src="/static/js/theme-toggle.js?v=5.6"></script>
+  <script src="/static/js/turnos.js?v=5.6"></script>
+</body>
+</html>

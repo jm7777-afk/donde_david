@@ -2,6 +2,9 @@ let kdsOrders = [];
 let timerInterval = null;
 let kdsModeFilter = "todos";
 let kdsSearchTerm = "";
+let kdsLayoutMode = "kanban";
+let kdsSoundEnabled = true;
+let kdsWakeLockSentinel = null;
 const updatingKdsOrderIds = new Set();
 const updatingKdsItemIds = new Set();
 
@@ -79,6 +82,29 @@ function renderKDSOrders() {
     countEl.innerText = `Comandas visibles: ${visibleOrders.length} / ${kdsOrders.length}`;
   }
 
+  const alldayEl = document.getElementById("kds-allday-summary");
+  if (alldayEl) {
+    const countsByItem = new Map();
+    visibleOrders.filter(o => o.estado !== "LISTO").forEach(o => {
+      (o.detalles || []).forEach(d => {
+        if (d.estado === "LISTO") return;
+        const name = d.producto?.nombre || "Producto";
+        countsByItem.set(name, (countsByItem.get(name) || 0) + (Number(d.cantidad) || 0));
+      });
+    });
+    if (countsByItem.size) {
+      alldayEl.hidden = false;
+      alldayEl.innerHTML = `<strong style="color:var(--gold-accent);font-size:0.8rem;">🔥 RESUMEN EN COLA:</strong>`
+        + Array.from(countsByItem.entries())
+          .sort((a, b) => b[1] - a[1])
+          .map(([name, qty]) => `<span class="kds-allday-chip">${qty}× ${escapeKdsHtml(name)}</span>`)
+          .join("");
+    } else {
+      alldayEl.hidden = true;
+      alldayEl.innerHTML = "";
+    }
+  }
+
   if (visibleOrders.length === 0) {
     container.innerHTML = `
       <div style="grid-column: 1/-1; text-align: center; padding: 4rem; color: var(--color-text-secondary);">
@@ -153,9 +179,12 @@ function renderKDSOrders() {
 
         orderCardsHtml += `
           <div class="kds-card status-${escapeKdsHtml(order.estado)} ${urgentBorder}" style="margin-bottom: 1rem;">
-            <div style="display: flex; justify-content: space-between; align-items: center;">
+            <div style="display: flex; justify-content: space-between; align-items: center; gap: 0.4rem;">
               <h3 style="font-size: 1.15rem; font-weight: 800; color: #FFFFFF;">#${Number(order.id)} - ${escapeKdsHtml(order.numero_mesa)}</h3>
-              <span class="${timerClass}" aria-label="${isUrgent ? "Comanda urgente" : "Tiempo transcurrido"}">⏱️ ${isUrgent ? "URGENTE · " : ""}${elapsedMinutes} min</span>
+              <div style="display:flex;align-items:center;gap:0.35rem;">
+                <button type="button" class="btn btn-outline" style="padding:0.2rem 0.45rem;font-size:0.74rem;" onclick="printKdsComanda(${Number(order.id)})" title="Imprimir comanda">🖨️</button>
+                <span class="${timerClass}" aria-label="${isUrgent ? "Comanda urgente" : "Tiempo transcurrido"}">⏱️ ${isUrgent ? "URGENTE · " : ""}${elapsedMinutes} min</span>
+              </div>
             </div>
 
             <div style="background: rgba(0,0,0,0.3); padding: 0.75rem; border-radius: var(--radius-sm); margin: 0.5rem 0;">
@@ -201,6 +230,16 @@ function renderKDSOrders() {
     `;
   }
 
+  if (kdsLayoutMode === "compact") {
+    const allCardsHtml = [
+      buildColumnHtml("RECIBIDOS", "📥", pendientes, "var(--color-yellow)", "EN_PREPARACION", "🔥 INICIAR PREPARACIÓN", "btn-cta"),
+      buildColumnHtml("PREPARANDO", "👨‍🍳", preparando, "var(--color-primary)", "LISTO", "✅ MARCAR PEDIDO LISTO", "btn-success"),
+      buildColumnHtml("LISTOS", "🏁", listos, "var(--color-success)", null, null, null)
+    ].join("");
+    container.innerHTML = `<div class="kds-compact-grid">${allCardsHtml}</div>`;
+    return;
+  }
+
   const htmlHtml = `
     <div class="kds-columns-layout" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.25rem;">
       ${buildColumnHtml("RECIBIDOS", "📥", pendientes, "var(--color-yellow)", "EN_PREPARACION", "🔥 INICIAR PREPARACIÓN", "btn-cta")}
@@ -210,6 +249,50 @@ function renderKDSOrders() {
   `;
 
   container.innerHTML = htmlHtml;
+}
+
+function toggleKDSLayout() {
+  kdsLayoutMode = kdsLayoutMode === "kanban" ? "compact" : "kanban";
+  const btn = document.getElementById("kds-layout-btn");
+  if (btn) btn.textContent = kdsLayoutMode === "kanban" ? "🧱 Kanban" : "📋 Compacta";
+  renderKDSOrders();
+}
+
+function toggleKDSSound() {
+  kdsSoundEnabled = !kdsSoundEnabled;
+  const btn = document.getElementById("kds-sound-btn");
+  if (btn) btn.textContent = kdsSoundEnabled ? "🔊 Alarma ON" : "🔇 Silencio";
+  if (kdsSoundEnabled) playChimeSound();
+}
+
+async function toggleKDSFullscreenWake() {
+  const btn = document.getElementById("kds-wakelock-btn");
+  try {
+    if (!document.fullscreenElement) {
+      await document.documentElement.requestFullscreen();
+    } else {
+      await document.exitFullscreen();
+    }
+  } catch (err) {}
+  try {
+    if ("wakeLock" in navigator && !kdsWakeLockSentinel) {
+      kdsWakeLockSentinel = await navigator.wakeLock.request("screen");
+    }
+  } catch (err) {}
+  if (btn) btn.textContent = document.fullscreenElement ? "🗗 Salir Pantalla" : "🖥️ Pantalla";
+}
+
+function printKdsComanda(orderId) {
+  const order = kdsOrders.find(o => Number(o.id) === Number(orderId));
+  if (!order || typeof window.printThermalDocument !== "function") return;
+  const rows = (order.detalles || []).map(d => `
+    <div class="dd-thermal-row"><span><strong>${Number(d.cantidad) || 1}x</strong> ${escapeKdsHtml(d.producto?.nombre || "Producto")}</span></div>
+    ${d.observaciones ? `<div style="font-size:10px;">Nota: ${escapeKdsHtml(d.observaciones)}</div>` : ""}
+  `).join("");
+  window.printThermalDocument(
+    `<div class="dd-thermal-row"><span>Comanda #${order.id}</span><span>${escapeKdsHtml(order.numero_mesa)}</span></div><hr>${rows}`,
+    `COMANDA COCINA #${order.id}`
+  );
 }
 
 function getElapsedMinutes(dateStr) {
@@ -263,6 +346,7 @@ async function updateItemStatus(itemId, newStatus) {
 
 // Synthesize audio chime alert for new incoming orders
 function playChimeSound() {
+  if (!kdsSoundEnabled) return;
   try {
     const ctx = new (window.AudioContext || window.webkitAudioContext)();
     const osc = ctx.createOscillator();

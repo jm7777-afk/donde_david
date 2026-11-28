@@ -7,6 +7,7 @@ class Mesa(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     numero_mesa = Column(Integer, unique=True, nullable=False) # 1 to N
+    zona = Column(String(40), nullable=False, default="Salón", server_default="Salón")
     estado = Column(String(30), default="LIBRE") # LIBRE, OCUPADA, RESERVADA, PENDIENTE_LIMPIEZA, EN_LIMPIEZA
     codigo_qr = Column(String(200), nullable=True)
     capacidad = Column(Integer, default=4)

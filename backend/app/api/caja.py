@@ -22,11 +22,32 @@ from backend.app.models.usuario import Usuario
 from backend.app.models.movimiento_inventario import MovimientoInventario
 from backend.app.models.movimiento_caja import MovimientoCaja
 from backend.app.models.arqueo_turno import ArqueoTurno
-from backend.app.schemas.schemas import PedidoOut, TurnoApertura, TurnoCierre, TurnoOut, CobrarPedidoRequest, DetallePedidoItem, MovimientoCajaCreate, MovimientoCajaOut, ConfirmarRetiroRequest, PromocionPedidoItem
-from backend.app.schemas.schemas import ConfirmarPagoRequest
+from backend.app.schemas.schemas import (
+    PedidoOut,
+    TurnoApertura,
+    TurnoCierre,
+    TurnoOut,
+    CobrarPedidoRequest,
+    DetallePedidoItem,
+    MovimientoCajaCreate,
+    MovimientoCajaOut,
+    ConfirmarRetiroRequest,
+    PromocionPedidoItem,
+    PagoMixtoItem,
+    DividirCuentaRequest,
+    ConfirmarPagoRequest,
+)
 from backend.app.services.audit_service import record_audit
 from backend.app.services.exchange_rate import get_bcv_rate
-from backend.app.services.orders import get_pricing_config, prepare_order_items, deduct_order_stock, restore_order_stock, apply_promo_bundles_pricing
+from backend.app.services.orders import (
+    get_pricing_config,
+    prepare_order_items,
+    deduct_order_stock,
+    restore_order_stock,
+    apply_promo_bundles_pricing,
+    apply_coupon_discount,
+    collect_stock_alerts,
+)
 from backend.app.services.tables import parse_table_number, refresh_table_state
 from backend.app.services.loyalty import award_order_loyalty_points
 from backend.app.websockets.manager import ws_manager
@@ -49,6 +70,9 @@ class PedidoRapidoPOSCreate(BaseModel):
     nombre_cliente_delivery: Optional[str] = Field(default=None, max_length=150)
     telefono_delivery: Optional[str] = Field(default=None, max_length=50)
     direccion_delivery: Optional[str] = Field(default=None, max_length=500)
+    propina: float = Field(default=0.0, ge=0, le=500, allow_inf_nan=False)
+    codigo_cupon: Optional[str] = Field(default=None, max_length=50)
+    pagos_mixtos: Optional[List[PagoMixtoItem]] = Field(default=None, max_length=4)
     detalles: List[DetallePedidoItem] = Field(min_length=1, max_length=50)
     promociones: List[PromocionPedidoItem] = Field(default_factory=list, max_length=20)
 
@@ -70,11 +94,22 @@ def _normalize_payment_method(method: Optional[str]) -> Optional[str]:
 def _expected_shift_totals(db: Session, turno: Turno) -> dict[str, float]:
     totals = {method: Decimal("0.00") for method in PAYMENT_METHODS}
     totals["Efectivo"] += Decimal(str(turno.monto_apertura or 0))
-    orders = db.query(Pedido.metodo_pago, Pedido.total).filter(
+    orders = db.query(Pedido.metodo_pago, Pedido.total, Pedido.pagos_mixtos_json).filter(
         Pedido.turno_id == turno.id,
         Pedido.estado_pago == "PAGADO",
     ).all()
-    for payment_method, amount in orders:
+    for payment_method, amount, mixed_json in orders:
+        if mixed_json:
+            try:
+                legs = json.loads(mixed_json)
+            except json.JSONDecodeError:
+                legs = None
+            if isinstance(legs, list) and legs:
+                for leg in legs:
+                    norm_leg = _normalize_payment_method(leg.get("metodo_pago") if isinstance(leg, dict) else None)
+                    if norm_leg:
+                        totals[norm_leg] += Decimal(str(leg.get("monto_usd") or 0))
+                continue
         normalized = _normalize_payment_method(payment_method)
         if normalized:
             totals[normalized] += Decimal(str(amount or 0))
@@ -511,23 +546,45 @@ async def crear_y_cobrar_rapido(
     subtotal_final, descuento_promo = apply_promo_bundles_pricing(
         db, detalles_db, data.promociones
     )
+    subtotal_final, descuento_promo, _ = apply_coupon_discount(
+        db, detalles_db, data.codigo_cupon, descuento_promo
+    )
+    propina_val = round(float(data.propina or 0.0), 2)
     impuesto_monto = round(subtotal_final * (tax_rate / 100.0), 2)
     costo_extra = delivery_fee if data.tipo == "delivery" else package_fee if data.tipo == "llevar" else 0.0
-    total_final = round(subtotal_final + impuesto_monto + costo_extra, 2)
+    total_final = round(subtotal_final + impuesto_monto + costo_extra + propina_val, 2)
 
-    rate_status = get_bcv_rate(db) if data.moneda_pago == "VES" else None
+    pagos_mixtos_str = None
+    metodo_pago_final = data.metodo_pago
+    needs_bcv = data.moneda_pago == "VES" or any(
+        leg.moneda == "VES" for leg in (data.pagos_mixtos or [])
+    )
+    rate_status = get_bcv_rate(db) if needs_bcv else None
     exchange_rate = rate_status["tasa_cambio_bs"] if rate_status else None
-    if data.moneda_pago == "VES" and exchange_rate is None:
+    if needs_bcv and exchange_rate is None:
         raise HTTPException(status_code=503, detail="No hay una tasa BCV válida para cobrar en bolívares.")
-    total_exigible = round(total_final * exchange_rate, 2) if exchange_rate else total_final
-    if data.monto_recibido < total_exigible:
-        currency_mark = "Bs. " if data.moneda_pago == "VES" else "$"
-        raise HTTPException(
-            status_code=400,
-            detail=f"Monto recibido ({currency_mark}{data.monto_recibido:.2f}) insuficiente. Total: {currency_mark}{total_exigible:.2f}",
-        )
 
-    cambio_calculado = round(data.monto_recibido - total_exigible, 2)
+    total_exigible = round(total_final * exchange_rate, 2) if (data.moneda_pago == "VES" and exchange_rate) else total_final
+    if data.pagos_mixtos:
+        mix_sum = round(sum(float(leg.monto_usd) for leg in data.pagos_mixtos), 2)
+        if abs(mix_sum - total_final) > 0.02:
+            raise HTTPException(
+                status_code=422,
+                detail=f"La suma de pagos mixtos (${mix_sum:.2f}) debe coincidir con el total (${total_final:.2f}).",
+            )
+        pagos_mixtos_str = json.dumps([leg.model_dump() for leg in data.pagos_mixtos])
+        metodo_pago_final = data.pagos_mixtos[0].metodo_pago if len(data.pagos_mixtos) == 1 else "Pago Mixto"
+        cambio_calculado = 0.0
+        monto_recibido_val = round(data.monto_recibido if data.monto_recibido >= total_exigible else total_exigible, 2)
+    else:
+        if data.monto_recibido < total_exigible:
+            currency_mark = "Bs. " if data.moneda_pago == "VES" else "$"
+            raise HTTPException(
+                status_code=400,
+                detail=f"Monto recibido ({currency_mark}{data.monto_recibido:.2f}) insuficiente. Total: {currency_mark}{total_exigible:.2f}",
+            )
+        cambio_calculado = round(data.monto_recibido - total_exigible, 2)
+        monto_recibido_val = data.monto_recibido
 
     nuevo_pedido = Pedido(
         numero_mesa=numero_mesa if data.tipo == "mesa" else "Mostrador" if data.tipo == "llevar" else "Delivery",
@@ -538,9 +595,11 @@ async def crear_y_cobrar_rapido(
         impuesto=impuesto_monto,
         costo_empaque=package_fee if data.tipo == "llevar" else 0.0,
         descuento=descuento_promo,
+        propina=propina_val,
         total=total_final,
-        metodo_pago=data.metodo_pago,
-        monto_recibido=data.monto_recibido,
+        metodo_pago=metodo_pago_final,
+        pagos_mixtos_json=pagos_mixtos_str,
+        monto_recibido=monto_recibido_val,
         cambio=cambio_calculado,
         estado_pago="PAGADO",
         moneda_pago=data.moneda_pago,
@@ -567,7 +626,8 @@ async def crear_y_cobrar_rapido(
     if data.tipo == "delivery":
         nuevo_pedido.numero_mesa = f"Delivery #{nuevo_pedido.id + 100}"
     award_order_loyalty_points(db, nuevo_pedido)
-    deduct_order_stock(db, nuevo_pedido.id, products, requested_quantities, stock_before, current_user.id)
+    touched_insumos = deduct_order_stock(db, nuevo_pedido.id, products, requested_quantities, stock_before, current_user.id)
+    stock_alerts = collect_stock_alerts(products, touched_insumos)
     factura_num = f"FAC-DD-{nuevo_pedido.id:06d}"
     nuevo_pedido.factura_numero = factura_num
 
@@ -581,7 +641,7 @@ async def crear_y_cobrar_rapido(
         usuario_id=current_user.id,
         recurso="pedidos",
         recurso_id=nuevo_pedido.id,
-        detalle=f"POS rápido {factura_num}: {data.metodo_pago} {data.moneda_pago} ${total_final:.2f}",
+        detalle=f"POS rápido {factura_num}: {metodo_pago_final} {data.moneda_pago} ${total_final:.2f}",
         auto_commit=False,
     )
     db.commit()
@@ -593,18 +653,22 @@ async def crear_y_cobrar_rapido(
         "estado": nuevo_pedido.estado,
         "total": nuevo_pedido.total
     })
+    if stock_alerts:
+        await ws_manager.broadcast("ALERTA_STOCK_CRITICO", {"pedido_id": nuevo_pedido.id, "alertas": stock_alerts})
 
     return {
         "mensaje": "Pedido y cobro rápido registrado exitosamente",
         "pedido_id": nuevo_pedido.id,
         "factura_numero": factura_num,
         "total": total_final,
-        "monto_recibido": data.monto_recibido,
+        "propina": propina_val,
+        "monto_recibido": monto_recibido_val,
         "cambio": cambio_calculado,
-        "metodo_pago": data.metodo_pago,
+        "metodo_pago": metodo_pago_final,
         "moneda_pago": data.moneda_pago,
         "monto_pago": total_exigible,
         "tasa_cambio_pago": exchange_rate,
+        "pagos_mixtos": data.pagos_mixtos or [],
         "codigo_retiro": nuevo_pedido.codigo_retiro,
         "codigo_otp": nuevo_pedido.codigo_otp,
     }
@@ -647,28 +711,52 @@ async def cobrar_pedido(
     if pedido.factura_numero or pedido.estado == "CANCELADO":
         raise HTTPException(status_code=409, detail="El pedido no puede cobrarse en su estado actual.")
 
-    rate_status = get_bcv_rate(db) if data.moneda_pago == "VES" else None
+    needs_bcv = data.moneda_pago == "VES" or any(
+        leg.moneda == "VES" for leg in (data.pagos_mixtos or [])
+    )
+    rate_status = get_bcv_rate(db) if needs_bcv else None
     turno_activo = db.query(Turno).filter(Turno.activo == True).with_for_update().first()
     if not turno_activo:
         raise HTTPException(status_code=409, detail="Debe abrir un turno de caja antes de cobrar.")
 
+    if data.propina is not None and data.propina >= 0:
+        prev_tip = float(pedido.propina or 0.0)
+        new_tip = round(float(data.propina), 2)
+        pedido.propina = new_tip
+        pedido.total = round(float(pedido.total or 0.0) - prev_tip + new_tip, 2)
+
     ped_total = float(pedido.total or 0.0)
     recibido = float(data.monto_recibido or 0.0)
     exchange_rate = rate_status["tasa_cambio_bs"] if rate_status else None
-    if data.moneda_pago == "VES" and exchange_rate is None:
+    if needs_bcv and exchange_rate is None:
         raise HTTPException(status_code=503, detail="No hay una tasa BCV válida disponible para cobrar en bolívares.")
-    total_exigible = round(ped_total * exchange_rate, 2) if exchange_rate else ped_total
+    total_exigible = round(ped_total * exchange_rate, 2) if (data.moneda_pago == "VES" and exchange_rate) else ped_total
 
-    if recibido < total_exigible:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Monto recibido insuficiente. Total a pagar: {total_exigible:.2f} {data.moneda_pago}."
-        )
-    cambio_calculado = round(recibido - total_exigible, 2)
+    pagos_mixtos_str = None
+    metodo_final = data.metodo_pago
+    if data.pagos_mixtos:
+        mix_sum = round(sum(float(leg.monto_usd) for leg in data.pagos_mixtos), 2)
+        if abs(mix_sum - ped_total) > 0.02:
+            raise HTTPException(
+                status_code=422,
+                detail=f"La suma de pagos mixtos (${mix_sum:.2f}) debe coincidir con el total (${ped_total:.2f}).",
+            )
+        pagos_mixtos_str = json.dumps([leg.model_dump() for leg in data.pagos_mixtos])
+        metodo_final = data.pagos_mixtos[0].metodo_pago if len(data.pagos_mixtos) == 1 else "Pago Mixto"
+        recibido = round(max(recibido, total_exigible), 2)
+        cambio_calculado = 0.0
+    else:
+        if recibido < total_exigible:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Monto recibido insuficiente. Total a pagar: {total_exigible:.2f} {data.moneda_pago}."
+            )
+        cambio_calculado = round(recibido - total_exigible, 2)
 
     factura_num = f"FAC-DD-{pedido.id:06d}"
 
-    pedido.metodo_pago = data.metodo_pago
+    pedido.metodo_pago = metodo_final
+    pedido.pagos_mixtos_json = pagos_mixtos_str
     pedido.estado_pago = "PAGADO"
     pedido.fecha_pago = datetime.now(timezone.utc)
     pedido.moneda_pago = data.moneda_pago
@@ -699,7 +787,7 @@ async def cobrar_pedido(
         usuario_id=current_user.id,
         recurso="pedidos",
         recurso_id=pedido.id,
-        detalle=f"Pedido #{pedido.id}: {data.metodo_pago} {data.moneda_pago} {recibido:.2f}",
+        detalle=f"Pedido #{pedido.id}: {metodo_final} {data.moneda_pago} {recibido:.2f}",
         auto_commit=False,
     )
 
@@ -710,7 +798,7 @@ async def cobrar_pedido(
         "numero_mesa": pedido.numero_mesa,
         "total": ped_total,
         "factura_numero": factura_num,
-        "metodo_pago": data.metodo_pago,
+        "metodo_pago": metodo_final,
         "cambio": cambio_calculado
     })
 
@@ -719,12 +807,14 @@ async def cobrar_pedido(
         "pedido_id": pedido.id,
         "factura_numero": factura_num,
         "total": ped_total,
+        "propina": float(pedido.propina or 0.0),
         "monto_recibido": recibido,
         "cambio": cambio_calculado,
-        "metodo_pago": data.metodo_pago,
+        "metodo_pago": metodo_final,
         "moneda_pago": pedido.moneda_pago,
         "monto_pago": float(pedido.monto_pago or 0.0),
         "tasa_cambio_pago": float(pedido.tasa_cambio_pago) if pedido.tasa_cambio_pago else None,
+        "pagos_mixtos": data.pagos_mixtos or [],
         "repetido": False,
     }
 
@@ -756,9 +846,12 @@ def get_factura_pedido(pedido_id: int, db: Session = Depends(get_db)):
         "telefono_delivery": pedido.telefono_delivery,
         "detalles": detalles_list,
         "subtotal": float(pedido.subtotal or 0.0),
+        "descuento": float(pedido.descuento or 0.0),
+        "propina": float(pedido.propina or 0.0),
         "impuesto_iva": float(pedido.impuesto or 0.0),
         "total": float(pedido.total or 0.0),
         "metodo_pago": pedido.metodo_pago or "Efectivo",
+        "pagos_mixtos": json.loads(pedido.pagos_mixtos_json) if pedido.pagos_mixtos_json else [],
         "moneda_pago": pedido.moneda_pago or "USD",
         "monto_pago": float(pedido.monto_pago or pedido.total or 0.0),
         "tasa_cambio_pago": float(pedido.tasa_cambio_pago) if pedido.tasa_cambio_pago else None,
@@ -809,3 +902,169 @@ def buscar_cliente_por_id_o_nombre(q: str, db: Session = Depends(get_db)):
         }
         for u in results
     ]
+
+
+@router.get("/corte-x")
+def get_corte_x_parcial(db: Session = Depends(get_db)):
+    """Corte parcial X del turno activo para impresión o revisión sin cerrar caja."""
+    turno = db.query(Turno).filter(Turno.activo == True).order_by(Turno.id.desc()).first()
+    if not turno:
+        raise HTTPException(status_code=404, detail="No hay turno activo para generar Corte X.")
+    expected = _expected_shift_totals(db, turno)
+    egresos = db.query(func.coalesce(func.sum(MovimientoCaja.monto_usd), 0)).filter(
+        MovimientoCaja.turno_id == turno.id,
+        MovimientoCaja.tipo == "EGRESO",
+    ).scalar()
+    propinas = db.query(func.coalesce(func.sum(Pedido.propina), 0)).filter(
+        Pedido.turno_id == turno.id,
+        Pedido.estado_pago == "PAGADO",
+    ).scalar()
+    return {
+        "numero_turno": turno.numero_turno,
+        "fecha_apertura": turno.fecha_apertura.isoformat() if turno.fecha_apertura else None,
+        "hora_corte": datetime.now(timezone.utc).isoformat(),
+        "monto_apertura": round(float(turno.monto_apertura or 0), 2),
+        "total_ventas": round(float(turno.total_ventas or 0), 2),
+        "total_pedidos": int(turno.total_pedidos or 0),
+        "total_egresos": round(float(egresos or 0), 2),
+        "total_propinas": round(float(propinas or 0), 2),
+        "esperado_por_metodo": expected,
+    }
+
+
+@router.post("/pedidos/{pedido_id}/dividir")
+async def dividir_cuenta_pedido(
+    pedido_id: int,
+    data: DividirCuentaRequest,
+    db: Session = Depends(get_db),
+    current_user=Depends(require_roles(["admin", "supervisor", "caja"])),
+):
+    """Divide una cuenta abierta no pagada en partes iguales o por ítems seleccionados."""
+    pedido = db.query(Pedido).filter(Pedido.id == pedido_id).with_for_update().first()
+    if not pedido:
+        raise HTTPException(status_code=404, detail="Pedido no encontrado.")
+    if pedido.estado_pago != "PENDIENTE" or pedido.factura_numero or pedido.estado == "CANCELADO":
+        raise HTTPException(status_code=409, detail="Solo pueden dividirse pedidos pendientes de cobro.")
+
+    created_ids: list[int] = []
+    if data.modo == "igual":
+        partes = int(data.partes or 2)
+        if partes < 2:
+            raise HTTPException(status_code=422, detail="Debe dividirse en al menos 2 partes.")
+
+        fields = ("subtotal", "impuesto", "costo_empaque", "descuento", "propina")
+        shares: list[dict[str, float]] = [{} for _ in range(partes)]
+        for field in fields:
+            orig_val = round(float(getattr(pedido, field) or 0.0), 2)
+            running = 0.0
+            for idx in range(partes):
+                if idx == partes - 1:
+                    val = round(orig_val - running, 2)
+                else:
+                    val = round(orig_val / partes, 2)
+                    running = round(running + val, 2)
+                shares[idx][field] = val
+        for idx in range(partes):
+            shares[idx]["total"] = round(
+                shares[idx]["subtotal"]
+                + shares[idx]["impuesto"]
+                + shares[idx]["costo_empaque"]
+                + shares[idx]["propina"],
+                2,
+            )
+
+        pedido.subtotal = shares[0]["subtotal"]
+        pedido.impuesto = shares[0]["impuesto"]
+        pedido.costo_empaque = shares[0]["costo_empaque"]
+        pedido.descuento = shares[0]["descuento"]
+        pedido.propina = shares[0]["propina"]
+        pedido.total = shares[0]["total"]
+        pedido.observaciones = f"{(pedido.observaciones or '').strip()} [Cuenta 1/{partes}]".strip()
+
+        for idx in range(1, partes):
+            child = Pedido(
+                numero_mesa=pedido.numero_mesa,
+                tipo=pedido.tipo,
+                modo_pago=pedido.modo_pago,
+                estado=pedido.estado,
+                estado_pago="PENDIENTE",
+                moneda_pago=pedido.moneda_pago,
+                subtotal=shares[idx]["subtotal"],
+                impuesto=shares[idx]["impuesto"],
+                costo_empaque=shares[idx]["costo_empaque"],
+                descuento=shares[idx]["descuento"],
+                propina=shares[idx]["propina"],
+                total=shares[idx]["total"],
+                observaciones=f"Cuenta dividida {idx + 1}/{partes} (Pedido #{pedido.id})",
+                nombre_cliente_delivery=pedido.nombre_cliente_delivery,
+                telefono_delivery=pedido.telefono_delivery,
+                direccion_delivery=pedido.direccion_delivery,
+                nombre_factura=pedido.nombre_factura,
+                usuario_id=pedido.usuario_id,
+                turno_id=pedido.turno_id,
+            )
+            db.add(child)
+            db.flush()
+            created_ids.append(child.id)
+    else:
+        selected_ids = set(data.detalle_ids or [])
+        all_details = list(pedido.detalles or [])
+        if not selected_ids or len(all_details) < 2:
+            raise HTTPException(status_code=422, detail="Selecciona al menos un ítem dejando otros en la cuenta original.")
+        moving = [d for d in all_details if d.id in selected_ids]
+        keeping = [d for d in all_details if d.id not in selected_ids]
+        if not moving or not keeping:
+            raise HTTPException(status_code=422, detail="Debes dejar al menos un ítem en la cuenta original.")
+
+        orig_sub = round(sum(float(d.subtotal or 0) for d in all_details), 2)
+        tax_ratio = (float(pedido.impuesto or 0) / orig_sub) if orig_sub > 0 else 0.0
+
+        keep_sub = round(sum(float(d.subtotal or 0) for d in keeping), 2)
+        keep_tax = round(keep_sub * tax_ratio, 2)
+        move_sub = round(sum(float(d.subtotal or 0) for d in moving), 2)
+        move_tax = round(float(pedido.impuesto or 0) - keep_tax, 2)
+
+        pedido.subtotal = keep_sub
+        pedido.impuesto = keep_tax
+        pedido.total = round(keep_sub + keep_tax + float(pedido.costo_empaque or 0) + float(pedido.propina or 0), 2)
+
+        child = Pedido(
+            numero_mesa=pedido.numero_mesa,
+            tipo=pedido.tipo,
+            modo_pago=pedido.modo_pago,
+            estado=pedido.estado,
+            estado_pago="PENDIENTE",
+            moneda_pago=pedido.moneda_pago,
+            subtotal=move_sub,
+            impuesto=move_tax,
+            costo_empaque=0.0,
+            descuento=0.0,
+            propina=0.0,
+            total=round(move_sub + move_tax, 2),
+            observaciones=f"Cuenta separada por ítems (Pedido #{pedido.id})",
+            nombre_cliente_delivery=pedido.nombre_cliente_delivery,
+            telefono_delivery=pedido.telefono_delivery,
+            direccion_delivery=pedido.direccion_delivery,
+            nombre_factura=pedido.nombre_factura,
+            usuario_id=pedido.usuario_id,
+            turno_id=pedido.turno_id,
+        )
+        db.add(child)
+        db.flush()
+        for det in moving:
+            det.pedido_id = child.id
+        created_ids.append(child.id)
+
+    record_audit(
+        db=db,
+        accion="SPLIT_BILL",
+        usuario=current_user.nombre_usuario,
+        usuario_id=current_user.id,
+        recurso="pedidos",
+        recurso_id=pedido.id,
+        detalle=f"Pedido #{pedido.id} dividido ({data.modo}) -> nuevas cuentas: {created_ids}",
+        auto_commit=False,
+    )
+    db.commit()
+    await ws_manager.broadcast("CUENTA_DIVIDIDA", {"pedido_id": pedido.id, "nuevos_pedidos": created_ids})
+    return {"mensaje": "Cuenta dividida exitosamente.", "pedido_original_id": pedido.id, "nuevos_pedidos": created_ids}

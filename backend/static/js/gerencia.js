@@ -27,6 +27,11 @@ async function loadManagerDashboard() {
       "manager-shift": dashboard.turno_activo
         ? `#${dashboard.turno_activo.numero} · $${Number(dashboard.turno_activo.ventas).toFixed(2)}`
         : "Sin turno",
+      "manager-tips-today": `$${Number(dashboard.propinas_hoy || 0).toFixed(2)}`,
+      "manager-avg-prep": `${Number(dashboard.tiempo_promedio_cocina_min || 0).toFixed(1)} min`,
+      "manager-avg-rating": dashboard.total_resenas
+        ? `${Number(dashboard.calificacion_promedio || 0).toFixed(1)} ★ (${dashboard.total_resenas})`
+        : "Sin reseñas",
     };
     Object.entries(values).forEach(([id, value]) => {
       document.getElementById(id).textContent = String(value);

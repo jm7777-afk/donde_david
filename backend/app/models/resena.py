@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Text, Boolean, DateTime
+from sqlalchemy import Column, Integer, String, Text, Boolean, DateTime, ForeignKey
 from datetime import datetime, timezone
 from backend.app.core.database import Base
 
@@ -6,6 +6,8 @@ class Resena(Base):
     __tablename__ = "resenas"
 
     id = Column(Integer, primary_key=True, index=True)
+    pedido_id = Column(Integer, ForeignKey("pedidos.id"), nullable=True, index=True)
+    usuario_id = Column(Integer, ForeignKey("usuarios.id"), nullable=True)
     nombre_cliente = Column(String(100), nullable=False)
     comentario = Column(Text, nullable=False)
     estrellas = Column(Integer, default=5)

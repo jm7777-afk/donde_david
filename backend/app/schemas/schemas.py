@@ -136,6 +136,7 @@ class ProductoBase(BaseModel):
     descripcion: Optional[str] = None
     precio: float = Field(ge=0, allow_inf_nan=False)
     precio_promocion: Optional[float] = Field(default=None, ge=0, allow_inf_nan=False)
+    costo_unitario: float = Field(default=0.0, ge=0, allow_inf_nan=False)
     stock: Optional[int] = Field(default=50, ge=0)
     stock_minimo: Optional[int] = Field(default=5, ge=0)
     puntos_fidelidad: int = Field(default=0, ge=0, le=100000)
@@ -160,6 +161,7 @@ class ProductoUpdate(BaseModel):
     descripcion: Optional[str] = None
     precio: Optional[float] = Field(default=None, ge=0, allow_inf_nan=False)
     precio_promocion: Optional[float] = Field(default=None, ge=0, allow_inf_nan=False)
+    costo_unitario: Optional[float] = Field(default=None, ge=0, allow_inf_nan=False)
     stock: Optional[int] = Field(default=None, ge=0)
     puntos_fidelidad: Optional[int] = Field(default=None, ge=0, le=100000)
     imagen_url: Optional[str] = None
@@ -184,9 +186,13 @@ class PromocionCreate(BaseModel):
     titulo: str
     descripcion: Optional[str] = None
     descuento_pct: Optional[float] = 0.0
+    precio_global: Optional[float] = None
     codigo_cupon: Optional[str] = None
     banner_url: Optional[str] = None
     activo: Optional[bool] = True
+    dias_semana: Optional[str] = None
+    hora_inicio: Optional[str] = None
+    hora_fin: Optional[str] = None
 
 
 class PromocionOut(PromocionCreate):
@@ -203,8 +209,15 @@ class ResenaCreate(BaseModel):
     foto_url: Optional[str] = None
 
 
+class ResenaPedidoCreate(BaseModel):
+    estrellas: int = Field(ge=1, le=5)
+    comentario: str = Field(min_length=2, max_length=2000)
+    nombre_cliente: Optional[str] = Field(default=None, max_length=150)
+
+
 class ResenaOut(ResenaCreate):
     id: int
+    pedido_id: Optional[int] = None
     fecha_creacion: Optional[datetime] = None
 
     model_config = ConfigDict(from_attributes=True)
@@ -280,6 +293,8 @@ class PedidoCreate(BaseModel):
     metodo_pago: Optional[str] = Field(default=None, max_length=50)
     moneda_pago: Optional[str] = Field(default="USD", pattern="^(USD|VES)$")
     referencia_pago: Optional[str] = Field(default=None, max_length=100)
+    codigo_cupon: Optional[str] = Field(default=None, max_length=50)
+    propina: float = Field(default=0.0, ge=0, le=500, allow_inf_nan=False)
     detalles: List[DetallePedidoItem] = Field(min_length=1, max_length=50)
     promociones: List[PromocionPedidoItem] = Field(default_factory=list, max_length=20)
 
@@ -353,6 +368,7 @@ class PedidoBaseOut(BaseModel):
     impuesto: float
     costo_empaque: Optional[float] = 0.0
     descuento: float
+    propina: float = 0.0
     total: float
     observaciones: Optional[str] = None
     nombre_cliente_delivery: Optional[str] = None
@@ -370,6 +386,7 @@ class PedidoBaseOut(BaseModel):
     monto_pago: Optional[float] = None
     tasa_cambio_pago: Optional[float] = None
     referencia_pago: Optional[str] = None
+    pagos_mixtos_json: Optional[str] = None
     repartidor_id: Optional[int] = None
     estado_delivery: Optional[str] = None
     fecha_retiro: Optional[datetime] = None
@@ -397,6 +414,13 @@ class ConfirmarRetiroRequest(BaseModel):
     codigo_retiro: str = Field(min_length=6, max_length=6, pattern="^[0-9]{6}$")
 
 
+class PagoMixtoItem(BaseModel):
+    metodo_pago: Literal["Efectivo", "Pago Móvil", "Punto de Venta"]
+    monto_usd: float = Field(gt=0, allow_inf_nan=False)
+    moneda: Literal["USD", "VES"] = "USD"
+    referencia: Optional[str] = Field(default=None, max_length=100)
+
+
 # Payment Request Schema
 class CobrarPedidoRequest(BaseModel):
     metodo_pago: str = Field(min_length=1, max_length=50)
@@ -404,6 +428,28 @@ class CobrarPedidoRequest(BaseModel):
     moneda_pago: str = Field(default="USD", pattern="^(USD|VES)$")
     nit_cliente: Optional[str] = "CF"
     nombre_factura: Optional[str] = "Consumidor Final"
+    propina: Optional[float] = Field(default=None, ge=0, le=500, allow_inf_nan=False)
+    pagos_mixtos: Optional[List[PagoMixtoItem]] = Field(default=None, max_length=4)
+
+
+class DividirCuentaRequest(BaseModel):
+    modo: Literal["igual", "items"]
+    partes: Optional[int] = Field(default=None, ge=2, le=10)
+    detalle_ids: Optional[List[int]] = Field(default=None)
+
+
+class CuponValidarRequest(BaseModel):
+    codigo_cupon: str = Field(min_length=1, max_length=50)
+    producto_ids: List[int] = Field(default_factory=list)
+
+
+class RecetaInsumoItem(BaseModel):
+    insumo_id: int = Field(gt=0)
+    cantidad_por_unidad: float = Field(gt=0, le=1000, allow_inf_nan=False)
+
+
+class RecetaUpdateRequest(BaseModel):
+    items: List[RecetaInsumoItem] = Field(default_factory=list, max_length=40)
 
 
 class ConfirmarPagoRequest(BaseModel):

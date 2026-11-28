@@ -13,6 +13,8 @@ class MovimientoInventario(Base):
     cantidad_cambio = Column(Numeric(12, 2), nullable=False)
     cantidad_anterior = Column(Numeric(12, 2), nullable=False)
     cantidad_nueva = Column(Numeric(12, 2), nullable=False)
+    costo_unitario = Column(Numeric(12, 2), nullable=True)
+    proveedor = Column(String(150), nullable=True)
     motivo = Column(String(255), nullable=True)
     usuario_id = Column(Integer, ForeignKey("usuarios.id"), nullable=True)
     fecha = Column(DateTime, default=lambda: datetime.now(timezone.utc))

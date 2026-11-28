@@ -1,7 +1,11 @@
 let meseroMesas = [];
 let meseroPedidos = [];
 let meseroSolicitudes = [];
+let meseroProducts = [];
 let selectedPedidoForSwap = null;
+let selectedMesaForWaiterOrder = null;
+let waiterProductQuantities = {};
+let meseroZoneFilter = "todas";
 let tasaCambioBs = null;
 const meseroInFlightActions = new Set();
 
@@ -93,13 +97,28 @@ async function loadMesas() {
   }
 }
 
+function setMeseroZoneFilter(zone) {
+  meseroZoneFilter = zone || "todas";
+  document.querySelectorAll(".mesero-filter-chip[data-mesero-zone]").forEach(btn => {
+    btn.classList.toggle("is-active", btn.getAttribute("data-mesero-zone") === meseroZoneFilter);
+  });
+  renderMesas();
+}
+
 function renderMesas() {
   const container = document.getElementById("mesero-mesas-grid");
+  const statusFilter = document.getElementById("mesero-status-filter")?.value || "todos";
+  const filtered = meseroMesas.filter(m => {
+    const zoneMatch = meseroZoneFilter === "todas" || (m.zona || "Salón") === meseroZoneFilter;
+    const statusMatch = statusFilter === "todos" || m.estado === statusFilter;
+    return zoneMatch && statusMatch;
+  });
   let html = "";
-  meseroMesas.forEach(m => {
+  filtered.forEach(m => {
     html += `
       <div class="mesa-card-mesero ${escapeMeseroHtml(m.estado)}">
         <strong style="font-size: 1.2rem; color: #fff;">Mesa #${Number(m.numero_mesa)}</strong>
+        <div style="font-size:0.72rem;color:var(--cyan-accent);font-weight:800;">📍 ${escapeMeseroHtml(m.zona || "Salón")}</div>
         <div style="font-size: 0.8rem; color: var(--text-muted); margin: 0.3rem 0;">${escapeMeseroHtml(m.cliente_actual || 'Disponible')}</div>
         <span class="badge" style="background: ${m.estado === 'OCUPADA' ? 'var(--neon-red)' : m.estado === 'LIBRE' ? 'var(--neon-green)' : 'var(--gold-accent)'}; color: ${m.estado === 'PENDIENTE_LIMPIEZA' || m.estado === 'EN_LIMPIEZA' ? '#000' : '#fff'}; font-size: 0.7rem; padding: 0.2rem 0.5rem; border-radius: 6px;">
           ${escapeMeseroHtml(m.estado)}
@@ -110,12 +129,92 @@ function renderMesas() {
           </div>
         ` : ''}
         ${m.solicitudes_pendientes ? `<div style="margin-top:.55rem;color:var(--color-yellow);font-weight:800">${m.solicitudes_pendientes} solicitud(es) pendiente(s)</div>` : ''}
+        ${m.estado === "LIBRE" || m.estado === "OCUPADA" ? `<button type="button" class="btn btn-outline" style="width:100%;margin-top:.65rem;font-size:0.78rem;" onclick="openWaiterOrderModal(${Number(m.numero_mesa)})">📝 Tomar pedido</button>` : ""}
         ${m.estado === "PENDIENTE_LIMPIEZA" ? `<button class="btn btn-cta" style="width:100%;margin-top:.75rem" onclick="actualizarLimpiezaMesa(${m.id}, 'INICIAR')">🧹 Iniciar limpieza</button>` : ""}
         ${m.estado === "EN_LIMPIEZA" ? `<button class="btn btn-success" style="width:100%;margin-top:.75rem" onclick="actualizarLimpiezaMesa(${m.id}, 'FINALIZAR')">✅ Marcar limpia y liberar</button>` : ""}
       </div>
     `;
   });
-  container.innerHTML = html;
+  container.innerHTML = html || `<div style="grid-column:1/-1;text-align:center;color:var(--text-muted);padding:1.5rem;">No hay mesas en esta zona/estado.</div>`;
+}
+
+async function openWaiterOrderModal(numMesa) {
+  selectedMesaForWaiterOrder = Number(numMesa);
+  waiterProductQuantities = {};
+  document.getElementById("waiter-order-mesa-num").textContent = String(numMesa);
+  if (document.getElementById("waiter-product-search")) document.getElementById("waiter-product-search").value = "";
+  if (document.getElementById("waiter-order-notes")) document.getElementById("waiter-order-notes").value = "";
+  if (!meseroProducts.length) {
+    try {
+      const res = await fetch("/api/v1/cliente/productos");
+      if (res.ok) meseroProducts = await res.json();
+    } catch (e) {}
+  }
+  renderWaiterProductsPicker();
+  openModal("waiter-order-modal");
+}
+
+function renderWaiterProductsPicker() {
+  const container = document.getElementById("waiter-products-picker");
+  if (!container) return;
+  const q = (document.getElementById("waiter-product-search")?.value || "").trim().toLowerCase();
+  const list = meseroProducts.filter(p => !q || String(p.nombre || "").toLowerCase().includes(q));
+  container.innerHTML = list.map(p => {
+    const pid = Number(p.id);
+    const qty = waiterProductQuantities[pid] || 0;
+    const price = Number(p.precio_promocion || p.precio || 0).toFixed(2);
+    return `
+      <div class="waiter-product-row">
+        <div>
+          <strong>${escapeMeseroHtml(p.nombre)}</strong>
+          <small style="display:block;color:var(--gold-accent);">$${price} (Stock: ${Number(p.stock || 0)})</small>
+        </div>
+        <div style="display:flex;align-items:center;gap:0.4rem;">
+          <button type="button" class="btn btn-outline" style="padding:0.2rem 0.5rem;" onclick="adjustWaiterProductQty(${pid}, -1)">-</button>
+          <strong id="waiter-prod-qty-${pid}">${qty}</strong>
+          <button type="button" class="btn btn-outline" style="padding:0.2rem 0.5rem;" onclick="adjustWaiterProductQty(${pid}, 1)">+</button>
+        </div>
+      </div>
+    `;
+  }).join("") || `<div style="text-align:center;color:var(--text-muted);padding:1rem;">Sin productos disponibles.</div>`;
+}
+
+function adjustWaiterProductQty(prodId, delta) {
+  const pid = Number(prodId);
+  const next = Math.max(0, Math.min(20, (waiterProductQuantities[pid] || 0) + delta));
+  waiterProductQuantities[pid] = next;
+  const el = document.getElementById(`waiter-prod-qty-${pid}`);
+  if (el) el.textContent = String(next);
+}
+
+async function submitWaiterTableOrder() {
+  const detalles = Object.entries(waiterProductQuantities)
+    .filter(([, qty]) => qty > 0)
+    .map(([pid, qty]) => ({ producto_id: Number(pid), cantidad: Number(qty) }));
+  if (!detalles.length) {
+    showToast("Selecciona al menos 1 producto para enviar la comanda.", "warning");
+    return;
+  }
+  try {
+    const res = await fetch("/api/v1/mesero/pedidos", {
+      method: "POST",
+      headers: Auth.getHeaders(),
+      body: JSON.stringify({
+        numero_mesa: `Mesa ${selectedMesaForWaiterOrder}`,
+        tipo: "mesa",
+        modo_pago: "PAGAR_DESPUES",
+        observaciones: document.getElementById("waiter-order-notes")?.value.trim() || null,
+        detalles
+      })
+    });
+    const body = await res.json();
+    if (!res.ok) throw new Error(body.detail || "No se pudo registrar el pedido.");
+    showToast(body.mensaje || "Comanda enviada a cocina.", "success");
+    closeModal("waiter-order-modal");
+    await loadMeseroData();
+  } catch (err) {
+    showToast(err.message, "danger");
+  }
 }
 
 async function actualizarLimpiezaMesa(mesaId, accion) {

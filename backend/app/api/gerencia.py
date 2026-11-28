@@ -10,6 +10,7 @@ from backend.app.models.insumo import Insumo
 from backend.app.models.mesa import Mesa
 from backend.app.models.pedido import Pedido
 from backend.app.models.producto import Producto
+from backend.app.models.resena import Resena
 from backend.app.models.turno import Turno
 
 router = APIRouter(prefix="/gerencia", tags=["Gerencia"])
@@ -52,11 +53,40 @@ def get_manager_dashboard(
         Pedido.estado.notin_(["CANCELADO", "ENTREGADO"]),
     ).count()
     active_shift = db.query(Turno).filter(Turno.activo == True).order_by(Turno.id.desc()).first()
+    tips_today = db.query(func.coalesce(func.sum(Pedido.propina), 0)).filter(
+        Pedido.estado_pago == "PAGADO",
+        paid_at >= today_start,
+        paid_at < now,
+    ).scalar()
+    review_stats = db.query(
+        func.count(Resena.id),
+        func.coalesce(func.avg(Resena.estrellas), 0),
+    ).filter(Resena.activo == True).first()
+    delivered_today = db.query(Pedido).filter(
+        Pedido.fecha_entrega.isnot(None),
+        Pedido.fecha_creacion.isnot(None),
+        Pedido.fecha_creacion >= today_start,
+        Pedido.estado != "CANCELADO",
+    ).all()
+    prep_mins = [
+        max(
+            0.0,
+            (
+                (o.fecha_entrega if o.fecha_entrega.tzinfo else o.fecha_entrega.replace(tzinfo=timezone.utc))
+                - (o.fecha_creacion if o.fecha_creacion.tzinfo else o.fecha_creacion.replace(tzinfo=timezone.utc))
+            ).total_seconds() / 60.0,
+        )
+        for o in delivered_today
+    ]
 
     return {
         "fecha_consulta": now.isoformat(),
         "ventas_hoy": round(float(paid_today or 0), 2),
         "ventas_ayer": round(float(paid_yesterday or 0), 2),
+        "propinas_hoy": round(float(tips_today or 0), 2),
+        "calificacion_promedio": round(float(review_stats[1] or 0), 2) if review_stats else 0.0,
+        "total_resenas": int(review_stats[0] or 0) if review_stats else 0,
+        "tiempo_promedio_cocina_min": round(sum(prep_mins) / len(prep_mins), 1) if prep_mins else 0.0,
         "pedidos_cocina": len(active_orders),
         "pedidos_atrasados": len(overdue_orders),
         "pedidos_atrasados_detalle": [

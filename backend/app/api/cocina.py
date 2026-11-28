@@ -1,5 +1,5 @@
 from typing import List, Optional
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import and_, or_
 from sqlalchemy.orm import Session
@@ -155,3 +155,27 @@ async def actualizar_estado_detalle(
         })
 
     return {"mensaje": "Estado del ítem actualizado", "detalle_id": detalle_id, "estado": estado}
+
+
+@router.get("/sla")
+def get_cocina_sla_resumen(
+    db: Session = Depends(get_db),
+    user=Depends(require_roles(["admin", "supervisor", "cocina", "caja", "mesero"])),
+):
+    now = datetime.now(timezone.utc)
+    today_start = datetime.combine(now.date(), datetime.min.time(), tzinfo=timezone.utc)
+    completed = db.query(Pedido).filter(
+        Pedido.fecha_entrega.isnot(None),
+        Pedido.fecha_creacion.isnot(None),
+        Pedido.fecha_creacion >= today_start - timedelta(days=7),
+        Pedido.estado != "CANCELADO",
+    ).all()
+    mins_list = []
+    for o in completed:
+        c = o.fecha_creacion if o.fecha_creacion.tzinfo else o.fecha_creacion.replace(tzinfo=timezone.utc)
+        d = o.fecha_entrega if o.fecha_entrega.tzinfo else o.fecha_entrega.replace(tzinfo=timezone.utc)
+        mins_list.append(max(0.0, (d - c).total_seconds() / 60.0))
+    return {
+        "tiempo_promedio_min": round(sum(mins_list) / len(mins_list), 1) if mins_list else 0.0,
+        "pedidos_completados": len(mins_list),
+    }

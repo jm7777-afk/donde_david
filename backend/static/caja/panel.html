@@ -4,11 +4,11 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>DONDE DAVID - Touch POS Registradora</title>
-  <link rel="stylesheet" href="/static/css/global.css?v=5.5">
-  <link rel="stylesheet" href="/static/css/toon-theme.css?v=5.5">
-  <link rel="stylesheet" href="/static/css/index.css?v=5.5">
-  <link rel="stylesheet" href="/static/css/pages/caja-panel.css?v=5.5">
-  <link rel="stylesheet" href="/static/css/utilities.css?v=5.5">
+  <link rel="stylesheet" href="/static/css/global.css?v=5.6">
+  <link rel="stylesheet" href="/static/css/toon-theme.css?v=5.6">
+  <link rel="stylesheet" href="/static/css/index.css?v=5.6">
+  <link rel="stylesheet" href="/static/css/pages/caja-panel.css?v=5.6">
+  <link rel="stylesheet" href="/static/css/utilities.css?v=5.6">
 </head>
 <body class="pos-body">
 <nav id="app-sidebar"></nav>
@@ -112,10 +112,17 @@
 
       <!-- Resumen de Costos y Pago -->
       <div>
-        <div class="u-font-size-0-8rem u-color-token-color-text-secondary">
+      <div class="u-font-size-0-8rem u-color-token-color-text-secondary">
           <div class="u-display-flex u-justify-content-space-between u-margin-bottom-0-2rem"><span>Subtotal:</span><span id="pos-subtotal">$0.00</span></div>
           <div class="u-display-flex u-justify-content-space-between u-margin-bottom-0-2rem"><span id="pos-tax-label">IVA (16%):</span><span id="pos-tax">$0.00</span></div>
           <div id="pos-extra-row" class="u-display-flex u-justify-content-space-between u-margin-bottom-0-2rem"><span>Recargo Empaque/Envío:</span><span id="pos-extra">$0.00</span></div>
+          <div class="u-display-flex u-justify-content-space-between u-margin-bottom-0-2rem"><span>Propina:</span><span id="pos-tip-display">$0.00</span></div>
+        </div>
+
+        <div class="pos-tip-row" aria-label="Propina rápida POS">
+          <button type="button" class="pos-quick-bill-btn" onclick="setPosTipPct(0)">Sin propina</button>
+          <button type="button" class="pos-quick-bill-btn" onclick="setPosTipPct(5)">+5% Prop.</button>
+          <button type="button" class="pos-quick-bill-btn" onclick="setPosTipPct(10)">+10% Prop.</button>
         </div>
 
         <div class="u-background-rgba-255-196-0-0-15 u-border-1px-solid-token-color-yellow u-border-radius-10px u-padding-0-75rem u-text-align-center u-margin-0-6rem-0">
@@ -145,6 +152,13 @@
             <span id="pos-change-lbl" class="u-color-token-color-success u-font-weight-800">Cambio: $0.00</span>
           </div>
           <input type="number" step="0.01" id="pos-received-input" class="form-control u-font-size-1rem u-font-weight-800" placeholder="0.00" oninput="calcPosChange()">
+          <div class="pos-quick-bills-row">
+            <button type="button" class="pos-quick-bill-btn" onclick="setPosExactCash()">Exacto</button>
+            <button type="button" class="pos-quick-bill-btn" onclick="setPosQuickCash(5)">$5</button>
+            <button type="button" class="pos-quick-bill-btn" onclick="setPosQuickCash(10)">$10</button>
+            <button type="button" class="pos-quick-bill-btn" onclick="setPosQuickCash(20)">$20</button>
+            <button type="button" class="pos-quick-bill-btn" onclick="setPosQuickCash(50)">$50</button>
+          </div>
         </div>
 
         <div class="u-display-flex u-gap-0-5rem">
@@ -341,6 +355,38 @@
       </div>
 
       <div class="form-group u-margin-bottom-0-75rem">
+        <label class="u-font-size-0-82rem u-color-hex-fff"><input type="checkbox" id="pay-mixed-toggle" onchange="toggleMixedPaymentUI()"> 💳 Pago mixto (combinar 2 métodos en USD)</label>
+      </div>
+      <div id="pay-mixed-box" class="pos-mixed-box" hidden>
+        <div class="u-display-grid u-grid-template-columns-1fr-1fr u-gap-0-75rem">
+          <div class="form-group u-margin-0">
+            <label class="u-font-size-0-78rem">Método 1</label>
+            <select id="pay-mix-method-1" class="form-control">
+              <option value="Efectivo">Efectivo</option>
+              <option value="Pago Móvil">Pago Móvil</option>
+              <option value="Punto de Venta">Punto de Venta</option>
+            </select>
+          </div>
+          <div class="form-group u-margin-0">
+            <label class="u-font-size-0-78rem">Monto 1 (USD)</label>
+            <input type="number" step="0.01" min="0.01" id="pay-mix-amount-1" class="form-control" oninput="syncMixedPaymentSecond()">
+          </div>
+          <div class="form-group u-margin-0">
+            <label class="u-font-size-0-78rem">Método 2</label>
+            <select id="pay-mix-method-2" class="form-control">
+              <option value="Punto de Venta">Punto de Venta</option>
+              <option value="Pago Móvil">Pago Móvil</option>
+              <option value="Efectivo">Efectivo</option>
+            </select>
+          </div>
+          <div class="form-group u-margin-0">
+            <label class="u-font-size-0-78rem">Monto 2 (USD)</label>
+            <input type="number" step="0.01" min="0.01" id="pay-mix-amount-2" class="form-control" readonly>
+          </div>
+        </div>
+      </div>
+
+      <div class="form-group u-margin-bottom-0-75rem">
         <label id="pay-received-label" class="u-font-size-0-82rem u-color-hex-fff">Monto Recibido (USD)</label>
         <input type="number" step="0.01" id="pay-received-input" class="form-control u-font-size-1-1rem u-font-weight-900 u-color-token-gold-accent" placeholder="0.00" oninput="calculateChange()">
       </div>
@@ -356,13 +402,37 @@
     </div>
   </div>
 
+  <!-- Modal Dividir Cuenta (Split Bill) -->
+  <div class="product-modal-backdrop" id="split-bill-modal">
+    <div class="product-modal-card u-max-width-460px u-padding-1-5rem">
+      <button class="modal-close-btn" onclick="closeModal('split-bill-modal')">&times;</button>
+      <h3 class="u-margin-top-0 u-color-token-color-yellow">⚖️ DIVIDIR CUENTA #<span id="split-order-id-label">0</span></h3>
+      <div class="form-group">
+        <label for="split-mode-select">Modo de división</label>
+        <select id="split-mode-select" class="form-control" onchange="toggleSplitModeFields()">
+          <option value="igual">Por partes iguales (2 a 10 personas)</option>
+          <option value="items">Seleccionar ítems a separar</option>
+        </select>
+      </div>
+      <div id="split-equal-fields" class="form-group">
+        <label for="split-parts-input">Número de cuentas</label>
+        <input type="number" id="split-parts-input" class="form-control" min="2" max="10" value="2">
+      </div>
+      <div id="split-items-fields" class="u-display-none">
+        <label>Marca los ítems para mover a una nueva cuenta:</label>
+        <div id="split-items-list" class="pos-split-items-list"></div>
+      </div>
+      <button type="button" class="btn btn-cta u-width-100 u-margin-top-0-75rem" onclick="submitSplitBill()">⚖️ CONFIRMAR DIVISIÓN</button>
+    </div>
+  </div>
+
   <!-- Modal Ver Ticket Factura Imprimible -->
   <div class="product-modal-backdrop" id="receipt-modal">
     <div class="product-modal-card u-max-width-420px u-background-hex-1a2336">
       <button class="modal-close-btn" onclick="closeModal('receipt-modal')">&times;</button>
       <div class="u-padding-1-5rem">
         <div class="factura-ticket" id="factura-ticket-content"></div>
-        <button class="btn btn-cta u-width-100 u-margin-top-1rem" onclick="window.print()">🖨️ IMPRIMIR FACTURA / TICKET</button>
+        <button class="btn btn-cta u-width-100 u-margin-top-1rem" onclick="printCurrentFacturaThermal()">🖨️ IMPRIMIR TICKET TÉRMICO (80mm)</button>
       </div>
     </div>
   </div>
@@ -404,9 +474,9 @@
     </div>
   </div>
 
-  <script src="/static/js/auth.js?v=5.5"></script>
-  <script src="/static/js/appShell.js?v=5.5"></script>
-  <script src="/static/js/websocket.js?v=5.5"></script>
-  <script src="/static/js/caja.js?v=5.5"></script>
+  <script src="/static/js/auth.js?v=5.6"></script>
+  <script src="/static/js/appShell.js?v=5.6"></script>
+  <script src="/static/js/websocket.js?v=5.6"></script>
+  <script src="/static/js/caja.js?v=5.6"></script>
 </body>
 </html>

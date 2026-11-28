@@ -103,7 +103,17 @@ function renderUniversalHeader() {
     ` + rightActions;
   }
 
-  // Botón de Cerrar Sesión para Personal
+  // Botón de Tema Claro/Oscuro Universal + Cerrar Sesión
+  const savedTheme = typeof localStorage !== "undefined" ? (localStorage.getItem("app_theme") || "dark") : "dark";
+  if (typeof document !== "undefined" && document.body) {
+    document.body.classList.toggle("light-theme", savedTheme === "light");
+  }
+  const themeBtnHtml = `
+    <button class="btn btn-outline theme-toggle-btn" type="button" style="padding: 0.35rem 0.6rem; font-size: 0.76rem;" onclick="window.toggleAppTheme()">
+      <span aria-hidden="true">${savedTheme === "light" ? "🌙" : "☀️"}</span><span>${savedTheme === "light" ? "OSCURO" : "BLANCO"}</span>
+    </button>
+  `;
+
   let logoutBtn = "";
   if (isAdminUser || (role !== "landing" && role !== "cliente" && role !== "caja")) {
     logoutBtn = `
@@ -141,8 +151,9 @@ function renderUniversalHeader() {
           </div>
         </div>
 
-        <!-- Derecha: Acciones y salir -->
-        <div class="universal-header-action-section" style="display: flex; align-items: center; gap: 0.6rem;">
+        <!-- Derecha: Acciones, tema y salir -->
+        <div class="universal-header-action-section" style="display: flex; align-items: center; gap: 0.5rem;">
+          ${themeBtnHtml}
           ${rightActions}
           ${logoutBtn}
         </div>
@@ -167,7 +178,7 @@ if (typeof document !== "undefined") {
 if (typeof window !== "undefined" && "caches" in window) {
   caches.keys().then(names => {
     names.forEach(name => {
-      if (name.startsWith("donde-david-pwa-") && name !== "donde-david-pwa-v35") {
+      if (name.startsWith("donde-david-pwa-") && name !== "donde-david-pwa-v36") {
         caches.delete(name);
       }
     });
@@ -447,6 +458,9 @@ function openAdminScreensModal() {
           <a href="/static/index.html" class="admin-screens-link">
             <span>🌐</span> <span>Portada Web Oficial</span>
           </a>
+          <a href="/static/turnos/pantalla.html" class="admin-screens-link">
+            <span>📺</span> <span>Pantalla Turnos TV</span>
+          </a>
         </div>
       </div>
     `;
@@ -459,6 +473,69 @@ function closeAdminScreensModal() {
   const modal = document.getElementById("admin-screens-modal");
   if (modal) modal.classList.remove("open");
 }
+
+window.toggleAppTheme = function toggleAppTheme() {
+  if (typeof toggleThemeMode === "function") {
+    toggleThemeMode();
+    return;
+  }
+  const isLight = document.body.classList.toggle("light-theme");
+  try { localStorage.setItem("app_theme", isLight ? "light" : "dark"); } catch {}
+  document.querySelectorAll(".theme-toggle-btn").forEach(btn => {
+    btn.innerHTML = `<span aria-hidden="true">${isLight ? "🌙" : "☀️"}</span><span>${isLight ? "OSCURO" : "BLANCO"}</span>`;
+  });
+};
+
+window.showConfirmModal = function showConfirmModal({
+  title = "Confirmar acción",
+  message = "¿Estás seguro de continuar?",
+  confirmLabel = "Confirmar",
+  cancelLabel = "Cancelar",
+  danger = false
+} = {}) {
+  return new Promise(resolve => {
+    const backdrop = document.createElement("div");
+    backdrop.className = "dd-confirm-backdrop";
+    backdrop.setAttribute("role", "dialog");
+    backdrop.setAttribute("aria-modal", "true");
+    const safeTitle = String(title).replace(/[&<>"']/g, m => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&#39;" }[m]));
+    const safeMsg = String(message).replace(/[&<>"']/g, m => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&#39;" }[m]));
+    backdrop.innerHTML = `
+      <div class="dd-confirm-card">
+        <h4 class="dd-confirm-title">${safeTitle}</h4>
+        <p class="dd-confirm-msg">${safeMsg}</p>
+        <div class="dd-confirm-actions">
+          <button type="button" class="btn btn-outline" id="dd-confirm-cancel">${cancelLabel}</button>
+          <button type="button" class="${danger ? "btn-gold" : "btn btn-cta"}" id="dd-confirm-ok">${confirmLabel}</button>
+        </div>
+      </div>
+    `;
+    const cleanup = answer => {
+      document.removeEventListener("keydown", onKey);
+      backdrop.remove();
+      resolve(answer);
+    };
+    const onKey = evt => {
+      if (evt.key === "Escape") cleanup(false);
+    };
+    document.addEventListener("keydown", onKey);
+    document.body.appendChild(backdrop);
+    backdrop.querySelector("#dd-confirm-cancel")?.addEventListener("click", () => cleanup(false));
+    backdrop.querySelector("#dd-confirm-ok")?.addEventListener("click", () => cleanup(true));
+  });
+};
+
+window.printThermalDocument = function printThermalDocument(innerHtml, title = "Donde David") {
+  let root = document.getElementById("dd-print-root");
+  if (!root) {
+    root = document.createElement("div");
+    root.id = "dd-print-root";
+    root.className = "dd-print-only";
+    document.body.appendChild(root);
+  }
+  root.innerHTML = `<div class="dd-thermal-head"><strong>DONDE DAVID</strong><br><small>${String(title).replace(/</g, "&lt;")}</small></div>${innerHtml}`;
+  window.print();
+};
 
 // Fetch Interceptor optimizado: Carga ultra-rápida sin parpadeos ni bloqueos en consultas GET
 if (typeof window !== "undefined" && window.fetch) {

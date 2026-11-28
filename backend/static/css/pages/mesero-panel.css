@@ -56,3 +56,42 @@
     grid-template-columns: minmax(0, 1fr) !important;
   }
 }
+.mesero-filters-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+  margin-bottom: 1rem;
+}
+.mesero-filter-chip {
+  padding: 0.35rem 0.8rem;
+  border-radius: 999px;
+  border: 1px solid var(--color-border);
+  background: transparent;
+  color: var(--text-primary, #ffffff);
+  font-size: 0.78rem;
+  font-weight: 800;
+  cursor: pointer;
+}
+.mesero-filter-chip.is-active {
+  background: var(--gold-accent, #ffc400);
+  color: #000000;
+  border-color: var(--gold-accent, #ffc400);
+}
+.waiter-products-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  max-height: 300px;
+  overflow-y: auto;
+  margin: 0.75rem 0;
+}
+.waiter-product-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.55rem 0.75rem;
+  border-radius: 10px;
+  border: 1px solid var(--color-border);
+  background: rgba(255, 255, 255, 0.04);
+}

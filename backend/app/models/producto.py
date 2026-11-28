@@ -11,6 +11,7 @@ class Producto(Base):
     descripcion = Column(String(500), nullable=True)
     precio = Column(Numeric(12, 2), nullable=False, default=0.00)
     precio_promocion = Column(Numeric(12, 2), nullable=True)
+    costo_unitario = Column(Numeric(12, 2), nullable=False, default=0.00, server_default="0")
     stock = Column(Integer, default=50)
     stock_minimo = Column(Integer, default=5)
     puntos_fidelidad = Column(Integer, nullable=False, default=0)
