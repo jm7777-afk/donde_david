@@ -644,3 +644,115 @@ body {
   grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
   gap: 1rem;
 }
+
+/* Global Focus & Unified Empty States */
+:focus-visible {
+  outline: 2px solid var(--accent-cyan, #00f5d4);
+  outline-offset: 2px;
+}
+
+.dd-empty-state {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  gap: 0.5rem;
+  padding: 2.5rem 1.25rem;
+  border-radius: 16px;
+  border: 1px dashed var(--border-color, rgba(255, 255, 255, 0.14));
+  background: rgba(255, 255, 255, 0.02);
+  color: var(--text-secondary, #94a3b8);
+}
+.dd-empty-icon {
+  font-size: 2.5rem;
+  line-height: 1;
+}
+.dd-empty-title {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 800;
+  color: var(--text-primary, #ffffff);
+}
+.dd-empty-sub {
+  margin: 0;
+  font-size: 0.85rem;
+  max-width: 40ch;
+}
+
+/* KDS Toolbar & SLA/Modality Accents */
+.kds-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.85rem;
+  margin-bottom: 1rem;
+  padding: 0.85rem 1.1rem;
+  background: rgba(18, 24, 41, 0.82);
+  border: 1px solid var(--color-border, rgba(255, 255, 255, 0.12));
+  border-radius: var(--radius-md, 14px);
+}
+.kds-toolbar-title {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 900;
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.kds-toolbar-filters,
+.kds-toolbar-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.55rem;
+}
+.kds-toolbar-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.2rem;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--color-border, rgba(255, 255, 255, 0.12));
+}
+.kds-card[data-kds-mode="mesa"] {
+  border-top: 4px solid var(--accent-gold, #ffc400);
+}
+.kds-card[data-kds-mode="llevar"] {
+  border-top: 4px solid var(--accent-cyan, #00f5d4);
+}
+.kds-card[data-kds-mode="delivery"] {
+  border-top: 4px solid var(--accent-blue, #0879e8);
+}
+.kds-mode-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.15rem 0.5rem;
+  border-radius: 999px;
+  font-size: 0.7rem;
+  font-weight: 800;
+  background: rgba(255, 255, 255, 0.08);
+  color: #e2e8f0;
+}
+.timer-badge.sla-ok {
+  background: rgba(34, 197, 94, 0.16);
+  color: #4ade80;
+  border: 1px solid rgba(34, 197, 94, 0.35);
+}
+.timer-badge.sla-warn {
+  background: rgba(255, 188, 13, 0.18);
+  color: #fbbf24;
+  border: 1px solid rgba(255, 188, 13, 0.45);
+}
+.timer-badge.timer-urgent {
+  animation: ddKdsPulse 1.4s ease-in-out infinite;
+}
+@keyframes ddKdsPulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(242, 29, 29, 0.35); }
+  50% { box-shadow: 0 0 0 6px rgba(242, 29, 29, 0); }
+}

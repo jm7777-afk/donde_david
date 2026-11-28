@@ -14,11 +14,11 @@
   <link rel="manifest" href="/static/manifest.json">
   <meta name="theme-color" content="#071A3D">
 
-  <link rel="stylesheet" href="/static/css/global.css?v=5.6">
-  <link rel="stylesheet" href="/static/css/toon-theme.css?v=5.6">
+  <link rel="stylesheet" href="/static/css/global.css?v=5.7">
+  <link rel="stylesheet" href="/static/css/toon-theme.css?v=5.7">
 
-  <link rel="stylesheet" href="/static/css/pages/index.css?v=5.6">
-  <link rel="stylesheet" href="/static/css/utilities.css?v=5.6">
+  <link rel="stylesheet" href="/static/css/pages/index.css?v=5.7">
+  <link rel="stylesheet" href="/static/css/utilities.css?v=5.7">
 </head>
 <body class="toon-theme">
 
@@ -55,16 +55,18 @@
               Hamburguesas artesanales de carne 100% res, perros calientes con toppings crocantes y malteadas heladas. Pide por QR en mesa o solicita delivery.
             </p>
 
-            <div class="u-display-flex u-gap-0-85rem u-flex-wrap-wrap u-margin-bottom-1-5rem">
-              <a href="/static/cliente/app.html?mesa=5" class="btn-gold u-font-size-1-05rem u-padding-0-85rem-1-8rem">
+            <div class="landing-cta-group">
+              <a href="/static/cliente/app.html?mesa=5" class="btn-gold landing-cta-primary">
                 🚀 ORDENAR AHORA (APP QR)
               </a>
-              <a href="/static/cliente/app.html?login=1" class="btn btn-outline u-font-size-1-05rem u-padding-0-85rem-1-8rem">
-                👤 INICIAR SESIÓN CLIENTE
-              </a>
-              <a href="#menu" class="btn btn-outline u-font-size-1-05rem u-padding-0-85rem-1-8rem u-border-color-token-gold-accent u-color-token-gold-accent">
-                📋 EXPLORAR MENÚ
-              </a>
+              <div class="landing-secondary-links">
+                <a href="#menu" class="btn btn-outline landing-cta-secondary">
+                  📋 VER MENÚ
+                </a>
+                <a href="/static/cliente/app.html?login=1" class="btn btn-outline landing-cta-secondary">
+                  👤 MI CUENTA
+                </a>
+              </div>
             </div>
 
             <!-- Badges de Garantía -->
@@ -196,9 +198,9 @@
     </div>
   </footer>
 
-  <script src="/static/js/auth.js?v=5.6"></script>
-  <script src="/static/js/websocket.js?v=5.6"></script>
-  <script src="/static/js/appShell.js?v=5.6"></script>
+  <script src="/static/js/auth.js?v=5.7"></script>
+  <script src="/static/js/websocket.js?v=5.7"></script>
+  <script src="/static/js/appShell.js?v=5.7"></script>
 
   <script>
     let landingPromoIndex = 0;

@@ -1,3 +1,33 @@
+let turnosKnownReadyIds = new Set();
+let turnosSoundEnabled = false;
+let turnosFirstLoad = true;
+
+function toggleTurnosSound() {
+  turnosSoundEnabled = !turnosSoundEnabled;
+  const btn = document.getElementById("turnos-sound-btn");
+  if (btn) btn.textContent = turnosSoundEnabled ? "🔔 Sonido ON" : "🔇 Sonido OFF";
+  if (turnosSoundEnabled) playTurnosChime();
+}
+
+function playTurnosChime() {
+  try {
+    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+    if (!AudioCtx) return;
+    const ctx = new AudioCtx();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = "triangle";
+    osc.frequency.setValueAtTime(660, ctx.currentTime);
+    osc.frequency.setValueAtTime(880, ctx.currentTime + 0.14);
+    gain.gain.setValueAtTime(0.08, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.35);
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start();
+    osc.stop(ctx.currentTime + 0.36);
+  } catch (err) {}
+}
+
 function escapeTurnosHtml(value) {
   return String(value ?? "")
     .replace(/&/g, "&amp;")
@@ -40,10 +70,22 @@ async function loadTurnosBoard() {
     }
 
     const readyContainer = document.getElementById("turnos-ready-list");
+    const newlyReadyIds = new Set();
+    let hasNewReady = false;
+    readyList.forEach(item => {
+      if (!turnosFirstLoad && !turnosKnownReadyIds.has(item.id)) {
+        newlyReadyIds.add(item.id);
+        hasNewReady = true;
+      }
+    });
+    turnosKnownReadyIds = new Set(readyList.map(item => item.id));
+    turnosFirstLoad = false;
+    if (hasNewReady && turnosSoundEnabled) playTurnosChime();
+
     if (readyContainer) {
       readyContainer.innerHTML = readyList.length
         ? readyList.map(item => `
-            <article class="turnos-ticket-card ready">
+            <article class="turnos-ticket-card ready ${newlyReadyIds.has(item.id) ? "is-just-ready" : ""}">
               <span class="turnos-ticket-code">${escapeTurnosHtml(item.codigo_visual)}</span>
               <span class="turnos-ticket-client">${escapeTurnosHtml(item.cliente)}</span>
             </article>

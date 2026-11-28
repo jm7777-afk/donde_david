@@ -97,27 +97,23 @@ function renderUniversalHeader() {
   const isAdminUser = typeof Auth !== "undefined" && typeof Auth.isAdmin === "function" && Auth.isAdmin();
   if (isAdminUser && role !== "admin" && role !== "gerente") {
     rightActions = `
-      <button class="btn btn-outline" style="padding: 0.35rem 0.65rem; font-size: 0.78rem; border-color: var(--cyan-accent); color: var(--cyan-accent);" onclick="openAdminScreensModal()" title="Acceso directo del Administrador a todas las pantallas">
+      <button class="btn btn-outline universal-admin-screens-btn" onclick="openAdminScreensModal()" title="Acceso directo del Administrador a todas las pantallas">
         🖥️ Pantallas
       </button>
     ` + rightActions;
   }
 
-  // Botón de Tema Claro/Oscuro Universal + Cerrar Sesión
-  const savedTheme = typeof localStorage !== "undefined" ? (localStorage.getItem("app_theme") || "dark") : "dark";
   if (typeof document !== "undefined" && document.body) {
-    document.body.classList.toggle("light-theme", savedTheme === "light");
+    document.body.classList.remove("light-theme");
   }
-  const themeBtnHtml = `
-    <button class="btn btn-outline theme-toggle-btn" type="button" style="padding: 0.35rem 0.6rem; font-size: 0.76rem;" onclick="window.toggleAppTheme()">
-      <span aria-hidden="true">${savedTheme === "light" ? "🌙" : "☀️"}</span><span>${savedTheme === "light" ? "OSCURO" : "BLANCO"}</span>
-    </button>
-  `;
+  try {
+    if (typeof localStorage !== "undefined") localStorage.removeItem("app_theme");
+  } catch {}
 
   let logoutBtn = "";
   if (isAdminUser || (role !== "landing" && role !== "cliente" && role !== "caja")) {
     logoutBtn = `
-      <button class="btn btn-cta universal-header-logout" type="button" aria-label="Cerrar sesión" title="Cerrar sesión" style="padding: 0.35rem 0.75rem; font-size: 0.78rem; background: rgba(255,71,87,0.2); border: 1px solid var(--neon-red); color: var(--neon-red);" onclick="typeof Auth !== 'undefined' ? Auth.logout() : (window.location.href='/login')">
+      <button class="btn btn-cta universal-header-logout" type="button" aria-label="Cerrar sesión" title="Cerrar sesión" onclick="typeof Auth !== 'undefined' ? Auth.logout() : (window.location.href='/login')">
         🚪 <span>Salir</span>
       </button>
     `;
@@ -127,7 +123,7 @@ function renderUniversalHeader() {
     <header class="universal-header">
       <div class="universal-header-inner">
         <!-- Izquierda: Marca Destacada Donde David con Logo Oficial 3D Extra Grande -->
-        <div class="universal-header-brand-section" style="display: flex; align-items: center;">
+        <div class="universal-header-brand-section">
           ${leftAction}
           <a href="#" class="universal-brand" aria-label="Recargar página" onclick="window.location.reload(); return false;">
             <img src="/static/img/logo.png" alt="Donde David">
@@ -138,7 +134,7 @@ function renderUniversalHeader() {
         </div>
 
         <!-- Centro: Rol, Tasa BCV y Conexión Realtime WebSocket -->
-        <div class="universal-header-status-section" style="display: flex; align-items: center; gap: 0.6rem;">
+        <div class="universal-header-status-section">
           ${roleBadges[role] || roleBadges.landing}
           
           <div class="bcv-rate-badge" title="Tasa Oficial en Bolívares">
@@ -147,13 +143,12 @@ function renderUniversalHeader() {
 
           <div class="ws-pulse-indicator" title="Estado de Conexión en Tiempo Real Servidor">
             <span class="ws-pulse-dot"></span>
-            <span style="font-size: 0.72rem;">EN VIVO</span>
+            <span class="universal-ws-label">EN VIVO</span>
           </div>
         </div>
 
-        <!-- Derecha: Acciones, tema y salir -->
-        <div class="universal-header-action-section" style="display: flex; align-items: center; gap: 0.5rem;">
-          ${themeBtnHtml}
+        <!-- Derecha: Acciones y salir -->
+        <div class="universal-header-action-section">
           ${rightActions}
           ${logoutBtn}
         </div>
@@ -162,7 +157,6 @@ function renderUniversalHeader() {
   `;
   // Eliminación absoluta e inmediata de subtítulos remanentes en todas las pantallas
   headerEl.querySelectorAll(".universal-brand-copy small, .universal-brand small").forEach(el => el.remove());
-  if (typeof syncThemeToggleButtons === "function") syncThemeToggleButtons();
 }
 
 function cleanHeaderSubtitles() {
@@ -178,7 +172,7 @@ if (typeof document !== "undefined") {
 if (typeof window !== "undefined" && "caches" in window) {
   caches.keys().then(names => {
     names.forEach(name => {
-      if (name.startsWith("donde-david-pwa-") && name !== "donde-david-pwa-v36") {
+      if (name.startsWith("donde-david-pwa-") && name !== "donde-david-pwa-v38") {
         caches.delete(name);
       }
     });
@@ -473,18 +467,6 @@ function closeAdminScreensModal() {
   const modal = document.getElementById("admin-screens-modal");
   if (modal) modal.classList.remove("open");
 }
-
-window.toggleAppTheme = function toggleAppTheme() {
-  if (typeof toggleThemeMode === "function") {
-    toggleThemeMode();
-    return;
-  }
-  const isLight = document.body.classList.toggle("light-theme");
-  try { localStorage.setItem("app_theme", isLight ? "light" : "dark"); } catch {}
-  document.querySelectorAll(".theme-toggle-btn").forEach(btn => {
-    btn.innerHTML = `<span aria-hidden="true">${isLight ? "🌙" : "☀️"}</span><span>${isLight ? "OSCURO" : "BLANCO"}</span>`;
-  });
-};
 
 window.showConfirmModal = function showConfirmModal({
   title = "Confirmar acción",

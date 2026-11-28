@@ -107,6 +107,26 @@ function setMeseroZoneFilter(zone) {
 
 function renderMesas() {
   const container = document.getElementById("mesero-mesas-grid");
+  const summaryEl = document.getElementById("mesero-salon-summary");
+  if (summaryEl) {
+    const libresCount = meseroMesas.filter(m => m.estado === "LIBRE").length;
+    const ocupadasCount = meseroMesas.filter(m => m.estado === "OCUPADA").length;
+    const limpiezaCount = meseroMesas.filter(m => m.estado === "PENDIENTE_LIMPIEZA" || m.estado === "EN_LIMPIEZA").length;
+    const reqCount = meseroMesas.reduce((acc, m) => acc + Number(m.solicitudes_pendientes || 0), 0);
+    summaryEl.innerHTML = `
+      <div class="mesero-summary-pill"><span>🟢 Libres</span><strong>${libresCount}</strong></div>
+      <div class="mesero-summary-pill"><span>🔴 Ocupadas</span><strong>${ocupadasCount}</strong></div>
+      <div class="mesero-summary-pill"><span>🧹 Por limpiar</span><strong>${limpiezaCount}</strong></div>
+      <div class="mesero-summary-pill"><span>🔔 Solicitudes</span><strong>${reqCount}</strong></div>
+    `;
+  }
+  const readyByTable = new Map();
+  (meseroPedidos || []).forEach(p => {
+    if (p.estado === "LISTO") {
+      const m = String(p.numero_mesa || "").match(/\d+/);
+      if (m) readyByTable.set(Number(m[0]), (readyByTable.get(Number(m[0])) || 0) + 1);
+    }
+  });
   const statusFilter = document.getElementById("mesero-status-filter")?.value || "todos";
   const filtered = meseroMesas.filter(m => {
     const zoneMatch = meseroZoneFilter === "todas" || (m.zona || "Salón") === meseroZoneFilter;
@@ -115,6 +135,7 @@ function renderMesas() {
   });
   let html = "";
   filtered.forEach(m => {
+    const readyCount = readyByTable.get(Number(m.numero_mesa)) || 0;
     html += `
       <div class="mesa-card-mesero ${escapeMeseroHtml(m.estado)}">
         <strong style="font-size: 1.2rem; color: #fff;">Mesa #${Number(m.numero_mesa)}</strong>
@@ -128,14 +149,15 @@ function renderMesas() {
             ${m.tiempo_ocupacion_min || 0} min · ${m.pedidos_activos || 0} pedido(s) activo(s)
           </div>
         ` : ''}
-        ${m.solicitudes_pendientes ? `<div style="margin-top:.55rem;color:var(--color-yellow);font-weight:800">${m.solicitudes_pendientes} solicitud(es) pendiente(s)</div>` : ''}
+        ${readyCount > 0 ? `<div class="mesa-ready-pill">✅ ${readyCount} plato(s) listo(s) en cocina</div>` : ""}
+        ${m.solicitudes_pendientes ? `<div style="margin-top:.55rem;color:var(--color-yellow);font-weight:800">🔔 ${m.solicitudes_pendientes} solicitud(es) pendiente(s)</div>` : ''}
         ${m.estado === "LIBRE" || m.estado === "OCUPADA" ? `<button type="button" class="btn btn-outline" style="width:100%;margin-top:.65rem;font-size:0.78rem;" onclick="openWaiterOrderModal(${Number(m.numero_mesa)})">📝 Tomar pedido</button>` : ""}
         ${m.estado === "PENDIENTE_LIMPIEZA" ? `<button class="btn btn-cta" style="width:100%;margin-top:.75rem" onclick="actualizarLimpiezaMesa(${m.id}, 'INICIAR')">🧹 Iniciar limpieza</button>` : ""}
         ${m.estado === "EN_LIMPIEZA" ? `<button class="btn btn-success" style="width:100%;margin-top:.75rem" onclick="actualizarLimpiezaMesa(${m.id}, 'FINALIZAR')">✅ Marcar limpia y liberar</button>` : ""}
       </div>
     `;
   });
-  container.innerHTML = html || `<div style="grid-column:1/-1;text-align:center;color:var(--text-muted);padding:1.5rem;">No hay mesas en esta zona/estado.</div>`;
+  container.innerHTML = html || `<div class="dd-empty-state"><span class="dd-empty-icon">🪑</span><h3 class="dd-empty-title">Sin mesas para este filtro</h3><p class="dd-empty-sub">Prueba otra zona o cambia el filtro de estado.</p></div>`;
 }
 
 async function openWaiterOrderModal(numMesa) {

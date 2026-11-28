@@ -304,3 +304,70 @@ body.pos-body {
   color: #000000;
   border-color: var(--color-yellow);
 }
+
+.pos-tabs-strip {
+  display: flex;
+  gap: 0.4rem;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  padding: 0.55rem 1rem 0.35rem;
+  scrollbar-width: thin;
+}
+.pos-tabs-strip .mc-mode-btn {
+  flex: 0 0 auto;
+  white-space: nowrap;
+  padding: 0.48rem 0.85rem;
+}
+.pos-tabs-strip .mc-mode-btn.active {
+  background: var(--gold-gradient, linear-gradient(135deg, #ffc400, #ff7a00));
+  color: #000000;
+  border-color: var(--color-yellow);
+  box-shadow: 0 4px 14px rgba(255, 196, 0, 0.28);
+}
+.pos-shift-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  margin: 0.25rem 1rem 0.65rem;
+  padding: 0.55rem 0.85rem;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--color-border);
+}
+.pos-shift-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-size: 0.84rem;
+}
+.pos-shift-divider {
+  opacity: 0.45;
+}
+.pos-shift-actions-row,
+.pos-iva-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+}
+.pos-summary-card {
+  padding: 0.6rem 0.75rem;
+  border-radius: 10px;
+  border: 1px solid var(--color-border);
+  background: rgba(255, 255, 255, 0.03);
+  font-size: 0.8rem;
+  color: var(--text-secondary, #cbd5e1);
+  margin-bottom: 0.5rem;
+}
+.pos-summary-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.14rem 0;
+}
+.pos-summary-row strong {
+  color: #ffffff;
+  font-weight: 800;
+}

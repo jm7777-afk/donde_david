@@ -129,8 +129,10 @@ function renderKDSOrders() {
       ordersList.forEach(order => {
         const elapsedMinutes = getElapsedMinutes(order.fecha_creacion);
         const isUrgent = elapsedMinutes >= 15;
-        const timerClass = isUrgent ? 'timer-badge timer-urgent' : 'timer-badge';
+        const slaClass = isUrgent ? "timer-badge timer-urgent" : elapsedMinutes >= 8 ? "timer-badge sla-warn" : "timer-badge sla-ok";
         const urgentBorder = isUrgent ? 'urgent' : '';
+        const modeRaw = String(order.tipo || "mesa").toLowerCase();
+        const modeTag = modeRaw === "delivery" ? "🛵 Delivery" : modeRaw === "llevar" ? "🛍️ Para llevar" : "🍽️ Mesa";
 
         let itemsHtml = "";
         order.detalles.forEach(d => {
@@ -178,12 +180,15 @@ function renderKDSOrders() {
         });
 
         orderCardsHtml += `
-          <div class="kds-card status-${escapeKdsHtml(order.estado)} ${urgentBorder}" style="margin-bottom: 1rem;">
+          <div class="kds-card status-${escapeKdsHtml(order.estado)} ${urgentBorder}" data-kds-mode="${escapeKdsHtml(modeRaw)}" style="margin-bottom: 1rem;">
             <div style="display: flex; justify-content: space-between; align-items: center; gap: 0.4rem;">
-              <h3 style="font-size: 1.15rem; font-weight: 800; color: #FFFFFF;">#${Number(order.id)} - ${escapeKdsHtml(order.numero_mesa)}</h3>
+              <div>
+                <h3 style="font-size: 1.15rem; font-weight: 800; color: #FFFFFF; margin: 0 0 0.25rem;">#${Number(order.id)} - ${escapeKdsHtml(order.numero_mesa)}</h3>
+                <span class="kds-mode-pill">${modeTag}</span>
+              </div>
               <div style="display:flex;align-items:center;gap:0.35rem;">
                 <button type="button" class="btn btn-outline" style="padding:0.2rem 0.45rem;font-size:0.74rem;" onclick="printKdsComanda(${Number(order.id)})" title="Imprimir comanda">🖨️</button>
-                <span class="${timerClass}" aria-label="${isUrgent ? "Comanda urgente" : "Tiempo transcurrido"}">⏱️ ${isUrgent ? "URGENTE · " : ""}${elapsedMinutes} min</span>
+                <span class="${slaClass}" aria-label="${isUrgent ? "Comanda urgente" : "Tiempo transcurrido"}">⏱️ ${isUrgent ? "URGENTE · " : ""}${elapsedMinutes} min</span>
               </div>
             </div>
 

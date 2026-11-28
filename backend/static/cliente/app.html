@@ -6,9 +6,9 @@
   <title>DONDE DAVID - Fresh & Tasty!</title>
   <link rel="manifest" href="/static/manifest.json">
   <meta name="theme-color" content="#FFBC0D">
-  <link rel="stylesheet" href="/static/css/global.css?v=5.6">
-  <link rel="stylesheet" href="/static/css/toon-theme.css?v=5.6">
-  <link rel="stylesheet" href="/static/css/index.css?v=5.6">
+  <link rel="stylesheet" href="/static/css/global.css?v=5.7">
+  <link rel="stylesheet" href="/static/css/toon-theme.css?v=5.7">
+  <link rel="stylesheet" href="/static/css/index.css?v=5.7">
   
   <!-- Leaflet Maps CSS & JS para Ubicación Exacta de Delivery -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
@@ -18,8 +18,8 @@
   <!-- HTML5 QR Code Scanner para Cámara Real -->
   <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 
-  <link rel="stylesheet" href="/static/css/pages/cliente-app.css?v=5.6">
-  <link rel="stylesheet" href="/static/css/utilities.css?v=5.6">
+  <link rel="stylesheet" href="/static/css/pages/cliente-app.css?v=5.7">
+  <link rel="stylesheet" href="/static/css/utilities.css?v=5.7">
 </head>
 <body class="toon-theme"><nav id="app-sidebar"></nav>
 
@@ -101,16 +101,7 @@
         <!-- Generado dinámicamente con fotos de productos -->
       </div>
 
-      <!-- Tarjeta de Tasa del Día BCV (Estilo Gusticos) -->
-      <div class="u-background-rgba-255-255-255-0-04 u-border-1px-solid-token-toon-border u-margin-bottom-1-25rem u-padding-0-75rem-1-1rem u-border-radius-14px u-display-flex u-justify-content-space-between u-align-items-center">
-        <div>
-          <span class="u-font-size-0-72rem u-color-token-text-muted u-font-weight-700 u-text-transform-uppercase">Tasa Oficial del Día BCV</span>
-          <div id="home-bcv-rate" class="u-font-size-1-1rem u-font-weight-900 u-color-token-gold-accent">Consultando tasa...</div>
-        </div>
-        <span class="u-font-size-1-8rem">📈</span>
-      </div>
-
-      <!-- 📌 CATEGORÍAS DESLIZABLES EN LA PARTE SUPERIOR (INTEGRADO TOTALMENTE AL TEMA OSCURO CASHEA) -->
+      <!-- 📌 CATEGORÍAS DESLIZABLES EN LA PARTE SUPERIOR -->
       <div class="u-position-sticky u-top-60px u-z-index-99 u-background-rgba-11-14-23-0-95 u-backdrop-filter-blur-14px u-margin-0-neg-1-25rem-1-25rem-neg-1-25rem u-padding-0-75rem-1-25rem-0-5rem-1-25rem u-border-bottom-1px-solid-token-toon-border">
         <div class="u-display-flex u-justify-content-space-between u-align-items-center u-margin-bottom-0-5rem">
           <span class="u-font-size-0-8rem u-font-weight-900 u-color-token-gold-accent u-letter-spacing-0-6px u-text-transform-uppercase">🍔 CATEGORÍAS DEL MENÚ</span>
@@ -820,13 +811,13 @@
   <!-- Driver.js Library script para Tour Interactivo de Clientes -->
   <script src="https://cdn.jsdelivr.net/npm/driver.js@1.3.1/dist/driver.js.iife.js"></script>
 
-  <script src="/static/js/auth.js?v=5.6"></script>
-  <script src="/static/js/websocket.js?v=5.6"></script>
-  <script src="/static/js/cliente-toon.js?v=5.6"></script>
-  <script src="/static/js/appShell.js?v=5.6"></script>
+  <script src="/static/js/auth.js?v=5.7"></script>
+  <script src="/static/js/websocket.js?v=5.7"></script>
+  <script src="/static/js/cliente-toon.js?v=5.7"></script>
+  <script src="/static/js/appShell.js?v=5.7"></script>
   <script>
     if ("serviceWorker" in navigator && (location.protocol === "https:" || location.hostname === "localhost" || location.hostname === "127.0.0.1")) {
-      navigator.serviceWorker.register("/static/sw.js?v=5.6", { scope: "/static/" })
+      navigator.serviceWorker.register("/static/sw.js?v=5.7", { scope: "/static/" })
         .then(reg => {
           reg.update();
         })

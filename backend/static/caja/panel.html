@@ -4,19 +4,19 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>DONDE DAVID - Touch POS Registradora</title>
-  <link rel="stylesheet" href="/static/css/global.css?v=5.6">
-  <link rel="stylesheet" href="/static/css/toon-theme.css?v=5.6">
-  <link rel="stylesheet" href="/static/css/index.css?v=5.6">
-  <link rel="stylesheet" href="/static/css/pages/caja-panel.css?v=5.6">
-  <link rel="stylesheet" href="/static/css/utilities.css?v=5.6">
+  <link rel="stylesheet" href="/static/css/global.css?v=5.7">
+  <link rel="stylesheet" href="/static/css/toon-theme.css?v=5.7">
+  <link rel="stylesheet" href="/static/css/index.css?v=5.7">
+  <link rel="stylesheet" href="/static/css/pages/caja-panel.css?v=5.7">
+  <link rel="stylesheet" href="/static/css/utilities.css?v=5.7">
 </head>
 <body class="pos-body">
 <nav id="app-sidebar"></nav>
   <!-- Header POS Registradora con Logo Oficial -->
   <header id="app-header"></header>
 
-    <!-- Switcher de Vistas Completo (Estilo Cashea) -->
-    <div class="u-display-flex u-gap-0-4rem u-flex-wrap-wrap u-margin-0-75rem-1rem">
+    <!-- Switcher de Vistas Completo -->
+    <div class="pos-tabs-strip">
       <button class="mc-mode-btn active" id="view-btn-pos" onclick="switchPosMainView('pos')">🖥️ POS TOUCH</button>
       <button class="mc-mode-btn" id="view-btn-queue" onclick="switchPosMainView('queue')">🧾 CUENTAS Y PAGOS POR COBRAR</button>
       <button class="mc-mode-btn" id="view-btn-app-payments" onclick="switchPosMainView('app-payments')">📱 PAGOS MÓVILES (0)</button>
@@ -37,13 +37,14 @@
       <div id="pickup-orders-list" class="u-display-grid u-grid-template-columns-repeat-auto-fit-minmax-min-100-320px-1fr u-gap-1rem"></div>
     </div>
 
-    <div class="u-display-flex u-align-items-center u-gap-0-75rem u-padding-0-1rem u-margin-bottom-0-5rem">
-      <div class="u-font-size-0-8rem">
-        <span id="shift-number-label" class="u-color-token-color-yellow u-font-weight-800">Caja: #1 Activa</span> | 
+    <div class="pos-shift-toolbar">
+      <div class="pos-shift-meta">
+        <span id="shift-number-label" class="u-color-token-color-yellow u-font-weight-800">Caja: #1 Activa</span>
+        <span class="pos-shift-divider" aria-hidden="true">•</span>
         <span id="shift-sales-label" class="u-color-token-color-success u-font-weight-900">$0.00</span>
       </div>
-      <div id="shift-actions"></div>
-      <div class="u-display-flex u-align-items-center u-gap-0-4rem">
+      <div id="shift-actions" class="pos-shift-actions-row"></div>
+      <div class="pos-iva-bar">
         <span id="pos-iva-status-badge" class="badge">🧾 IVA: 16% Activo</span>
         <button type="button" id="pos-iva-toggle-btn" class="btn btn-outline u-display-none" onclick="togglePosIva()">Deshabilitar IVA</button>
       </div>
@@ -112,11 +113,11 @@
 
       <!-- Resumen de Costos y Pago -->
       <div>
-      <div class="u-font-size-0-8rem u-color-token-color-text-secondary">
-          <div class="u-display-flex u-justify-content-space-between u-margin-bottom-0-2rem"><span>Subtotal:</span><span id="pos-subtotal">$0.00</span></div>
-          <div class="u-display-flex u-justify-content-space-between u-margin-bottom-0-2rem"><span id="pos-tax-label">IVA (16%):</span><span id="pos-tax">$0.00</span></div>
-          <div id="pos-extra-row" class="u-display-flex u-justify-content-space-between u-margin-bottom-0-2rem"><span>Recargo Empaque/Envío:</span><span id="pos-extra">$0.00</span></div>
-          <div class="u-display-flex u-justify-content-space-between u-margin-bottom-0-2rem"><span>Propina:</span><span id="pos-tip-display">$0.00</span></div>
+        <div class="pos-summary-card">
+          <div class="pos-summary-row"><span>Subtotal:</span><strong id="pos-subtotal">$0.00</strong></div>
+          <div class="pos-summary-row"><span id="pos-tax-label">IVA (16%):</span><strong id="pos-tax">$0.00</strong></div>
+          <div id="pos-extra-row" class="pos-summary-row"><span>Recargo Empaque/Envío:</span><strong id="pos-extra">$0.00</strong></div>
+          <div class="pos-summary-row"><span>Propina:</span><strong id="pos-tip-display">$0.00</strong></div>
         </div>
 
         <div class="pos-tip-row" aria-label="Propina rápida POS">
@@ -474,9 +475,9 @@
     </div>
   </div>
 
-  <script src="/static/js/auth.js?v=5.6"></script>
-  <script src="/static/js/appShell.js?v=5.6"></script>
-  <script src="/static/js/websocket.js?v=5.6"></script>
-  <script src="/static/js/caja.js?v=5.6"></script>
+  <script src="/static/js/auth.js?v=5.7"></script>
+  <script src="/static/js/appShell.js?v=5.7"></script>
+  <script src="/static/js/websocket.js?v=5.7"></script>
+  <script src="/static/js/caja.js?v=5.7"></script>
 </body>
 </html>

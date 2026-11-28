@@ -95,3 +95,34 @@
   border: 1px solid var(--color-border);
   background: rgba(255, 255, 255, 0.04);
 }
+.mesero-salon-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(145px, 1fr));
+  gap: 0.65rem;
+  margin-bottom: 1rem;
+}
+.mesero-summary-pill {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.65rem 0.9rem;
+  border-radius: 12px;
+  border: 1px solid var(--color-border);
+  background: rgba(255, 255, 255, 0.03);
+  font-size: 0.82rem;
+  font-weight: 800;
+}
+.mesero-summary-pill strong {
+  font-size: 1.15rem;
+  font-weight: 900;
+}
+.mesa-ready-pill {
+  margin-top: 0.45rem;
+  padding: 0.25rem 0.55rem;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 900;
+  background: rgba(34, 197, 94, 0.18);
+  border: 1px solid rgba(34, 197, 94, 0.45);
+  color: #4ade80;
+}

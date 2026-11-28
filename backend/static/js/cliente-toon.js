@@ -1544,7 +1544,14 @@ function updateCartNavBadge() {
 function renderToonCart() {
   const container = document.getElementById("toon-cart-items");
   if (toonCart.length === 0) {
-    container.innerHTML = `<div style="text-align: center; color: var(--text-muted); padding: 3rem 1rem;">🛒 Tu carrito de compras está vacío.<br><button class="btn-gold" style="margin-top: 1rem;" onclick="showScreen('screen-home')">IR AL MENÚ</button></div>`;
+    container.innerHTML = `
+      <div class="dd-empty-state">
+        <span class="dd-empty-icon">🛒</span>
+        <h3 class="dd-empty-title">Tu carrito está vacío</h3>
+        <p class="dd-empty-sub">Explora nuestras hamburguesas, combos y promociones para armar tu pedido.</p>
+        <button class="btn-gold" onclick="showScreen('screen-home')">🍔 IR AL MENÚ</button>
+      </div>
+    `;
     document.getElementById("cart-subtotal").innerText = "$0.00 (Bs. 0.00)";
     document.getElementById("cart-tax").innerText = "$0.00 (Bs. 0.00)";
     document.getElementById("cart-total").innerText = "$0.00 (Bs. 0.00)";

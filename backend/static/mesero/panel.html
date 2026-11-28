@@ -4,11 +4,11 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>DONDE DAVID - Panel de Meseros & Atención al Salón</title>
-  <link rel="stylesheet" href="/static/css/global.css?v=5.6">
-  <link rel="stylesheet" href="/static/css/toon-theme.css?v=5.6">
-  <link rel="stylesheet" href="/static/css/index.css?v=5.6">
-  <link rel="stylesheet" href="/static/css/pages/mesero-panel.css?v=5.6">
-  <link rel="stylesheet" href="/static/css/utilities.css?v=5.6">
+  <link rel="stylesheet" href="/static/css/global.css?v=5.7">
+  <link rel="stylesheet" href="/static/css/toon-theme.css?v=5.7">
+  <link rel="stylesheet" href="/static/css/index.css?v=5.7">
+  <link rel="stylesheet" href="/static/css/pages/mesero-panel.css?v=5.7">
+  <link rel="stylesheet" href="/static/css/utilities.css?v=5.7">
 </head>
 <body class="toon-theme"><nav id="app-sidebar"></nav>
 
@@ -22,6 +22,8 @@
       <h2 class="u-font-size-1-4rem u-font-weight-900 u-font-family-token-font-display u-color-hex-ffffff u-margin-0">🍽️ ESTADO Y REASIGNACIÓN DE MESAS</h2>
       <button class="btn btn-primary" onclick="loadMeseroData()">🔄 ACTUALIZAR MESAS</button>
     </div>
+
+    <div id="mesero-salon-summary" class="mesero-salon-summary" aria-live="polite"></div>
 
     <div class="mesero-filters-bar" aria-label="Filtros de mesas">
       <button type="button" class="mesero-filter-chip is-active" data-mesero-zone="todas" onclick="setMeseroZoneFilter('todas')">🌐 Todas las zonas</button>
@@ -98,9 +100,9 @@
     </div>
   </div>
 
-  <script src="/static/js/auth.js?v=5.6"></script>
-  <script src="/static/js/appShell.js?v=5.6"></script>
-  <script src="/static/js/websocket.js?v=5.6"></script>
-  <script src="/static/js/mesero.js?v=5.6"></script>
+  <script src="/static/js/auth.js?v=5.7"></script>
+  <script src="/static/js/appShell.js?v=5.7"></script>
+  <script src="/static/js/websocket.js?v=5.7"></script>
+  <script src="/static/js/mesero.js?v=5.7"></script>
 </body>
 </html>

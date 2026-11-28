@@ -4,10 +4,10 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>DONDE DAVID - Pantalla de Turnos Mostrador</title>
-  <link rel="stylesheet" href="/static/css/global.css?v=5.6">
-  <link rel="stylesheet" href="/static/css/utilities.css?v=5.6">
-  <link rel="stylesheet" href="/static/css/toon-theme.css?v=5.6">
-  <link rel="stylesheet" href="/static/css/pages/turnos.css?v=5.6">
+  <link rel="stylesheet" href="/static/css/global.css?v=5.7">
+  <link rel="stylesheet" href="/static/css/utilities.css?v=5.7">
+  <link rel="stylesheet" href="/static/css/toon-theme.css?v=5.7">
+  <link rel="stylesheet" href="/static/css/pages/turnos.css?v=5.7">
 </head>
 <body class="turnos-tv-body">
   <header class="turnos-tv-header">
@@ -19,8 +19,8 @@
       </div>
     </div>
     <div class="turnos-tv-status">
+      <button type="button" id="turnos-sound-btn" class="btn btn-outline" onclick="toggleTurnosSound()">🔇 Sonido OFF</button>
       <span id="turnos-clock" class="turnos-tv-clock">--:--</span>
-      <button type="button" class="btn btn-outline theme-toggle-btn" onclick="toggleThemeMode()">☀️ BLANCO</button>
     </div>
   </header>
 
@@ -42,7 +42,10 @@
     </section>
   </main>
 
-  <script src="/static/js/theme-toggle.js?v=5.6"></script>
-  <script src="/static/js/turnos.js?v=5.6"></script>
+  <footer class="turnos-tv-footer">
+    <span>🍔 Gracias por preferir Donde David · Retira tu pedido en mostrador presentando tu código o número de orden.</span>
+  </footer>
+
+  <script src="/static/js/turnos.js?v=5.7"></script>
 </body>
 </html>

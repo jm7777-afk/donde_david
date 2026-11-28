@@ -4,11 +4,11 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Donde David - Monitor KDS de Cocina</title>
-  <link rel="stylesheet" href="/static/css/global.css?v=5.6">
-  <link rel="stylesheet" href="/static/css/toon-theme.css?v=5.6">
-  <link rel="stylesheet" href="/static/css/index.css?v=5.6">
-  <link rel="stylesheet" href="/static/css/app-modules.css?v=5.6">
-  <link rel="stylesheet" href="/static/css/utilities.css?v=5.6">
+  <link rel="stylesheet" href="/static/css/global.css?v=5.7">
+  <link rel="stylesheet" href="/static/css/toon-theme.css?v=5.7">
+  <link rel="stylesheet" href="/static/css/index.css?v=5.7">
+  <link rel="stylesheet" href="/static/css/app-modules.css?v=5.7">
+  <link rel="stylesheet" href="/static/css/utilities.css?v=5.7">
 </head>
 <body class="toon-theme"><nav id="app-sidebar"></nav>
 
@@ -16,24 +16,26 @@
   <header id="app-header"></header>
 
   <div class="kds-container u-padding-1-5rem">
-    <div class="u-display-flex u-justify-content-space-between u-align-items-center u-margin-bottom-1-25rem u-background-rgba-18-24-41-0-75 u-border-1px-solid-token-border u-padding-0-85rem-1-25rem u-border-radius-token-radius-md u-flex-wrap-wrap u-gap-0-85rem">
-      <h1 class="u-font-size-1-3rem u-font-weight-900 u-color-hex-fff u-margin-0 u-display-flex u-align-items-center u-gap-0-5rem">
-        <span>👨‍🍳</span> MONITOR KDS DE COCINA
-      </h1>
-      <div class="u-display-flex u-align-items-center u-gap-0-75rem">
+    <div class="kds-toolbar">
+      <div class="kds-toolbar-filters">
+        <h1 class="kds-toolbar-title">
+          <span>👨‍🍳</span> MONITOR KDS DE COCINA
+        </h1>
         <input aria-label="Buscar comanda" class="form-control u-width-min-220px-35vw" placeholder="Buscar mesa, producto o #" oninput="setKDSSearch(this.value)">
         <select aria-label="Filtrar modalidad" class="form-control u-width-auto" onchange="setKDSModeFilter(this.value)">
           <option value="todos">Todas las modalidades</option>
-          <option value="mesa">Mesa</option>
-          <option value="llevar">Para llevar</option>
-          <option value="delivery">Delivery</option>
+          <option value="mesa">🍽️ Mesa</option>
+          <option value="llevar">🛍️ Para llevar</option>
+          <option value="delivery">🛵 Delivery</option>
         </select>
-        <!-- Selector de Tamaño Ajustable de Tarjetas KDS (Estilo Cashea) -->
-        <span class="u-font-size-0-8rem u-font-weight-800 u-color-token-gold-accent">ESCALA KDS:</span>
-        <div class="u-display-flex u-gap-0-35rem">
+      </div>
+      <div class="kds-toolbar-controls">
+        <div class="kds-toolbar-group" aria-label="Escala de tarjetas">
           <button class="btn btn-outline u-padding-0-25rem-0-55rem u-font-size-0-75rem" onclick="setKDSGridScale('scale-sm')">🔍 80%</button>
           <button class="btn btn-outline u-padding-0-25rem-0-55rem u-font-size-0-75rem u-border-color-token-gold-accent u-color-token-gold-accent" onclick="setKDSGridScale('scale-md')">📐 100%</button>
           <button class="btn btn-outline u-padding-0-25rem-0-55rem u-font-size-0-75rem" onclick="setKDSGridScale('scale-lg')">🐘 120%</button>
+        </div>
+        <div class="kds-toolbar-group" aria-label="Vista, alarma y pantalla">
           <button type="button" id="kds-layout-btn" class="btn btn-outline u-padding-0-25rem-0-55rem u-font-size-0-75rem" onclick="toggleKDSLayout()">🧱 Kanban</button>
           <button type="button" id="kds-sound-btn" class="btn btn-outline u-padding-0-25rem-0-55rem u-font-size-0-75rem" onclick="toggleKDSSound()">🔊 Alarma ON</button>
           <button type="button" id="kds-wakelock-btn" class="btn btn-outline u-padding-0-25rem-0-55rem u-font-size-0-75rem" onclick="toggleKDSFullscreenWake()">🖥️ Pantalla</button>
@@ -64,9 +66,9 @@
     </div>
   </div>
 
-  <script src="/static/js/auth.js?v=5.6"></script>
-  <script src="/static/js/appShell.js?v=5.6"></script>
-  <script src="/static/js/websocket.js?v=5.6"></script>
-  <script src="/static/js/cocina.js?v=5.6"></script>
+  <script src="/static/js/auth.js?v=5.7"></script>
+  <script src="/static/js/appShell.js?v=5.7"></script>
+  <script src="/static/js/websocket.js?v=5.7"></script>
+  <script src="/static/js/cocina.js?v=5.7"></script>
 </body>
 </html>
