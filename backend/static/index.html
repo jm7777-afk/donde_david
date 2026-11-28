@@ -302,6 +302,8 @@
       const safeDescription = escapeLandingHtml(promo.descripcion || "");
       const safeCoupon = escapeLandingHtml(promo.codigo_cupon || "DAVID");
       const discount = Number(promo.descuento_pct);
+      const globalPrice = Number(promo.precio_global);
+      const hasGlobalPrice = Number.isFinite(globalPrice) && globalPrice > 0;
       const isVideo = /\.(mp4|webm)(?:$|[?#])/i.test(mediaUrl);
       const dotsHtml = landingPromos.map((_, index) => `
         <button type="button" aria-label="Ver promoción ${index + 1}" onclick="event.stopPropagation(); setLandingSlide(${index})" style="width:${index === landingPromoIndex ? "22px" : "8px"};height:8px;padding:0;border:0;border-radius:10px;background:${index === landingPromoIndex ? "var(--gold-accent)" : "rgba(255,255,255,0.4)"};cursor:pointer;transition:all .3s ease"></button>
@@ -314,7 +316,7 @@
             : `<img src="${safeMediaUrl}" style="width:100%;height:100%;object-fit:cover;filter:brightness(.85)" alt="${safeTitle}">`}
           <div style="position:absolute;inset:0;padding:clamp(.8rem,3vw,1.25rem);display:flex;flex-direction:column;justify-content:space-between;background:linear-gradient(0deg,rgba(8,12,20,.92),rgba(8,12,20,.2) 50%,rgba(0,0,0,.4))">
             <div style="display:flex;justify-content:space-between;align-items:center;gap:.5rem">
-              <span style="font-size:.78rem;font-weight:900;background:var(--neon-red);color:#fff;padding:.3rem .85rem;border-radius:20px">🔥 PROMO BOOM ${Number.isFinite(discount) && discount > 0 ? `(-${discount}% OFF)` : ""}</span>
+              <span style="font-size:.78rem;font-weight:900;background:var(--neon-red);color:#fff;padding:.3rem .85rem;border-radius:20px">${hasGlobalPrice ? `🔥 COMBO $${globalPrice.toFixed(2)}` : `🔥 PROMO BOOM ${Number.isFinite(discount) && discount > 0 ? `(-${discount}% OFF)` : ""}`}</span>
               <span style="font-size:.78rem;background:rgba(0,0,0,.7);border:1px solid var(--cyan-accent);color:var(--cyan-accent);padding:.3rem .75rem;border-radius:20px;font-weight:900">CÓDIGO: ${safeCoupon}</span>
             </div>
             <div>
@@ -322,7 +324,7 @@
               <p style="font-size:.88rem;color:#e2e8f0;margin:0 0 .75rem;font-weight:600;text-shadow:0 2px 6px rgba(0,0,0,.9)">${safeDescription}</p>
               <div style="display:flex;justify-content:space-between;align-items:center;gap:.5rem;background:rgba(0,0,0,.65);padding:.6rem .9rem;border-radius:14px;border:1px solid rgba(255,255,255,.15)">
                 <div style="display:flex;gap:.4rem;align-items:center">${dotsHtml}</div>
-                <button type="button" class="btn-gold" onclick="event.stopPropagation(); window.location.href='/static/cliente/app.html?promo=${Number(promo.id) || 0}'" style="padding:.45rem 1rem;font-size:.85rem">🛒 VER GRUPO DE PROMO</button>
+                <button type="button" class="btn-gold" onclick="event.stopPropagation(); window.location.href='/static/cliente/app.html?promo=${Number(promo.id) || 0}'" style="padding:.45rem 1rem;font-size:.85rem">${hasGlobalPrice ? `🛒 PEDIR POR $${globalPrice.toFixed(2)}` : "🛒 VER GRUPO DE PROMO"}</button>
               </div>
             </div>
           </div>

@@ -30,7 +30,12 @@ from backend.app.schemas.schemas import CategoriaOut, ProductoOut, PedidoCreate,
 from backend.app.models.solicitud_mesa import SolicitudMesa
 from backend.app.websockets.manager import ws_manager
 from backend.app.services.tables import parse_table_number, refresh_table_state
-from backend.app.services.orders import get_pricing_config, prepare_order_items, deduct_order_stock
+from backend.app.services.orders import (
+    get_pricing_config,
+    prepare_order_items,
+    apply_promo_bundles_pricing,
+    deduct_order_stock,
+)
 
 router = APIRouter(prefix="/cliente", tags=["Cliente QR / App"])
 logger = logging.getLogger(__name__)
@@ -143,6 +148,7 @@ def get_promociones(db: Session = Depends(get_db)):
             "titulo": promo.titulo,
             "descripcion": promo.descripcion,
             "descuento_pct": float(promo.descuento_pct or 0.0),
+            "precio_global": float(promo.precio_global) if promo.precio_global is not None else None,
             "codigo_cupon": promo.codigo_cupon,
             "banner_url": promo.banner_url,
             "activo": bool(promo.activo),
@@ -268,6 +274,9 @@ async def crear_pedido(
     products, requested_quantities, stock_before, detalles_db, subtotal_final = prepare_order_items(
         db, pedido_in.detalles
     )
+    subtotal_final, descuento_promo = apply_promo_bundles_pricing(
+        db, detalles_db, pedido_in.promociones
+    )
     impuesto_monto = round(subtotal_final * (tax_rate / 100.0), 2)
     total_final = round(subtotal_final + impuesto_monto + delivery_fee + costo_empaque_val, 2)
 
@@ -290,7 +299,7 @@ async def crear_pedido(
         subtotal=subtotal_final,
         impuesto=impuesto_monto,
         costo_empaque=costo_empaque_val,
-        descuento=0.0,
+        descuento=descuento_promo,
         total=total_final,
         metodo_pago=metodo_pago,
         estado_pago="PENDIENTE_VALIDACION" if is_mobile_payment else "PENDIENTE",

@@ -22,11 +22,11 @@ from backend.app.models.usuario import Usuario
 from backend.app.models.movimiento_inventario import MovimientoInventario
 from backend.app.models.movimiento_caja import MovimientoCaja
 from backend.app.models.arqueo_turno import ArqueoTurno
-from backend.app.schemas.schemas import PedidoOut, TurnoApertura, TurnoCierre, TurnoOut, CobrarPedidoRequest, DetallePedidoItem, MovimientoCajaCreate, MovimientoCajaOut, ConfirmarRetiroRequest
+from backend.app.schemas.schemas import PedidoOut, TurnoApertura, TurnoCierre, TurnoOut, CobrarPedidoRequest, DetallePedidoItem, MovimientoCajaCreate, MovimientoCajaOut, ConfirmarRetiroRequest, PromocionPedidoItem
 from backend.app.schemas.schemas import ConfirmarPagoRequest
 from backend.app.services.audit_service import record_audit
 from backend.app.services.exchange_rate import get_bcv_rate
-from backend.app.services.orders import get_pricing_config, prepare_order_items, deduct_order_stock, restore_order_stock
+from backend.app.services.orders import get_pricing_config, prepare_order_items, deduct_order_stock, restore_order_stock, apply_promo_bundles_pricing
 from backend.app.services.tables import parse_table_number, refresh_table_state
 from backend.app.services.loyalty import award_order_loyalty_points
 from backend.app.websockets.manager import ws_manager
@@ -50,6 +50,7 @@ class PedidoRapidoPOSCreate(BaseModel):
     telefono_delivery: Optional[str] = Field(default=None, max_length=50)
     direccion_delivery: Optional[str] = Field(default=None, max_length=500)
     detalles: List[DetallePedidoItem] = Field(min_length=1, max_length=50)
+    promociones: List[PromocionPedidoItem] = Field(default_factory=list, max_length=20)
 
 
 PAYMENT_METHODS = ("Efectivo", "Pago Móvil", "Punto de Venta")
@@ -507,6 +508,9 @@ async def crear_y_cobrar_rapido(
     products, requested_quantities, stock_before, detalles_db, subtotal_final = prepare_order_items(
         db, data.detalles, always_serialize_personalizations=True
     )
+    subtotal_final, descuento_promo = apply_promo_bundles_pricing(
+        db, detalles_db, data.promociones
+    )
     impuesto_monto = round(subtotal_final * (tax_rate / 100.0), 2)
     costo_extra = delivery_fee if data.tipo == "delivery" else package_fee if data.tipo == "llevar" else 0.0
     total_final = round(subtotal_final + impuesto_monto + costo_extra, 2)
@@ -533,7 +537,7 @@ async def crear_y_cobrar_rapido(
         subtotal=subtotal_final,
         impuesto=impuesto_monto,
         costo_empaque=package_fee if data.tipo == "llevar" else 0.0,
-        descuento=0.0,
+        descuento=descuento_promo,
         total=total_final,
         metodo_pago=data.metodo_pago,
         monto_recibido=data.monto_recibido,

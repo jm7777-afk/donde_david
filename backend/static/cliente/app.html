@@ -763,6 +763,17 @@
           <small id="promo-modal-coupon" class="u-color-token-cyan-accent u-font-weight-800"></small>
         </div>
       </div>
+      <div id="promo-bundle-pricing-bar" class="promo-bundle-pricing-bar" hidden>
+        <div class="promo-bundle-price-info">
+          <span id="promo-modal-global-price" class="promo-bundle-global-tag"></span>
+          <small id="promo-modal-regular-sum" class="promo-bundle-regular-strike"></small>
+        </div>
+        <div class="promo-bundle-qty-stepper" aria-label="Cantidad de combos">
+          <button type="button" class="btn btn-outline promo-bundle-qty-btn" aria-label="Disminuir combos" onclick="adjustPromoBundleQty(-1)">-</button>
+          <strong id="promo-bundle-qty-val">1</strong>
+          <button type="button" class="btn btn-outline promo-bundle-qty-btn" aria-label="Aumentar combos" onclick="adjustPromoBundleQty(1)">+</button>
+        </div>
+      </div>
       <div id="promo-group-products-list" class="promo-group-products-list"></div>
       <button type="button" id="promo-add-all-btn" class="btn-gold u-width-100" onclick="addAllPromoGroupToCart()">🛒 AGREGAR GRUPO AL CARRITO</button>
     </div>

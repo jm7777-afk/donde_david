@@ -245,6 +245,11 @@ class DetallePedidoItem(BaseModel):
     observaciones: Optional[str] = None
 
 
+class PromocionPedidoItem(BaseModel):
+    promocion_id: int = Field(gt=0)
+    cantidad: int = Field(default=1, gt=0, le=50)
+
+
 class DetallePedidoOut(BaseModel):
     id: int
     producto_id: int
@@ -276,6 +281,7 @@ class PedidoCreate(BaseModel):
     moneda_pago: Optional[str] = Field(default="USD", pattern="^(USD|VES)$")
     referencia_pago: Optional[str] = Field(default=None, max_length=100)
     detalles: List[DetallePedidoItem] = Field(min_length=1, max_length=50)
+    promociones: List[PromocionPedidoItem] = Field(default_factory=list, max_length=20)
 
     @model_validator(mode="after")
     def validate_delivery_coordinates(self):

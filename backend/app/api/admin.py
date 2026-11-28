@@ -99,6 +99,7 @@ class PromocionCreateAdmin(BaseModel):
     titulo: str = Field(min_length=1, max_length=150)
     descripcion: Optional[str] = None
     descuento_pct: Optional[float] = Field(default=0.0, ge=0, le=100, allow_inf_nan=False)
+    precio_global: Optional[float] = Field(default=None, gt=0, allow_inf_nan=False)
     codigo_cupon: Optional[str] = None
     banner_url: Optional[str] = None
     activo: Optional[bool] = True
@@ -581,6 +582,7 @@ def _serialize_promocion(promo: Promocion) -> dict:
         "titulo": promo.titulo,
         "descripcion": promo.descripcion,
         "descuento_pct": float(promo.descuento_pct or 0.0),
+        "precio_global": float(promo.precio_global) if promo.precio_global is not None else None,
         "codigo_cupon": promo.codigo_cupon,
         "banner_url": promo.banner_url,
         "activo": bool(promo.activo),
@@ -604,6 +606,7 @@ async def create_promocion(data: PromocionCreateAdmin, db: Session = Depends(get
         titulo=data.titulo,
         descripcion=data.descripcion,
         descuento_pct=data.descuento_pct or 0.0,
+        precio_global=round(float(data.precio_global), 2) if data.precio_global is not None else None,
         codigo_cupon=data.codigo_cupon or None,
         banner_url=data.banner_url,
         activo=data.activo if data.activo is not None else True,
@@ -619,6 +622,7 @@ async def create_promocion(data: PromocionCreateAdmin, db: Session = Depends(get
         "titulo": nueva.titulo,
         "activo": bool(nueva.activo),
         "descuento_pct": float(nueva.descuento_pct or 0.0),
+        "precio_global": payload["precio_global"],
         "productos_count": len(payload["producto_ids"]),
     })
     return payload
@@ -634,6 +638,7 @@ async def update_promocion(promo_id: int, data: PromocionCreateAdmin, db: Sessio
     p.titulo = data.titulo
     p.descripcion = data.descripcion
     p.descuento_pct = data.descuento_pct or 0.0
+    p.precio_global = round(float(data.precio_global), 2) if data.precio_global is not None else None
     p.codigo_cupon = data.codigo_cupon or None
     p.banner_url = data.banner_url
     p.activo = data.activo if data.activo is not None else True
@@ -648,6 +653,7 @@ async def update_promocion(promo_id: int, data: PromocionCreateAdmin, db: Sessio
         "titulo": p.titulo,
         "activo": bool(p.activo),
         "descuento_pct": float(p.descuento_pct or 0.0),
+        "precio_global": payload["precio_global"],
         "productos_count": len(payload["producto_ids"]),
     })
     return payload

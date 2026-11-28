@@ -289,7 +289,7 @@
               <th class="u-padding-0-75rem">Título Promo</th>
               <th class="u-padding-0-75rem">Descripción</th>
               <th class="u-padding-0-75rem">Productos en Promo</th>
-              <th class="u-padding-0-75rem">Descuento</th>
+              <th class="u-padding-0-75rem">Precio Global / Desc.</th>
               <th class="u-padding-0-75rem">Código Cupon</th>
               <th class="u-padding-0-75rem">Acciones</th>
             </tr>
@@ -844,7 +844,12 @@
       <h3 id="promo-modal-title" class="u-color-token-gold-accent u-margin-top-0">🔥 NUEVA PROMOCIÓN</h3>
       <div class="form-group"><label>Título Promocional</label><input type="text" id="promo-titulo" class="form-control" maxlength="150" placeholder="Ej. COMBO EXPLOSIVO TOON" required></div>
       <div class="form-group"><label>Descripción</label><input type="text" id="promo-desc" class="form-control" maxlength="255" placeholder="2 Hamburguesas + Papas + 2 Refrescos"></div>
-      <div class="form-group"><label>Porcentaje Descuento (%)</label><input type="number" id="promo-pct" class="form-control" value="20"></div>
+      <div class="form-group">
+        <label for="promo-precio-global">Precio Global del Combo / Grupo (USD)</label>
+        <input type="number" id="promo-precio-global" class="form-control" step="0.01" min="0" placeholder="Ej. 15.00 (Opcional: cubre todos los productos seleccionados)">
+        <small id="promo-regular-sum-hint" class="u-color-token-cyan-accent u-font-weight-800"></small>
+      </div>
+      <div class="form-group"><label>Porcentaje Descuento (%) <small>(Opcional / Referencial)</small></label><input type="number" id="promo-pct" class="form-control" value="20"></div>
       <div class="form-group"><label>Código Cupon</label><input type="text" id="promo-codigo" class="form-control" value="COMBO20"></div>
       <div class="form-group">
         <label>Subir Imagen Banner</label>

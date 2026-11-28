@@ -584,3 +584,127 @@ def test_new_client_ui_qr_iva_promos_no_chatbot_and_high_priority_alerts():
     assert "function notifyHighPriority" in websocket_js
     for js_content in (caja_js, mesero_js, cocina_js):
         assert "notifyHighPriority(" in js_content
+
+    # 9. Global promo pricing UI controls & payload wiring
+    assert 'id="promo-precio-global"' in admin_html
+    assert 'id="promo-regular-sum-hint"' in admin_html
+    assert 'id="promo-bundle-pricing-bar"' in app_html
+    assert 'id="promo-modal-global-price"' in app_html
+    assert 'id="promo-bundle-qty-val"' in app_html
+    assert "_computePromoBundleAllocations" in cliente_js
+    assert "promociones: promocionesPayload" in cliente_js
+
+
+def test_promotion_global_price_bundle_pricing_and_validation(client):
+    admin_headers = _login(client, "admin", "admin123")
+    cats = client.get("/api/v1/admin/categorias", headers=admin_headers).json()
+    cat_id = cats[0]["id"]
+
+    # Create two dedicated products with known regular prices and sufficient stock
+    p1_res = client.post("/api/v1/admin/productos", headers=admin_headers, json={
+        "nombre": f"Combo Burger {uuid4().hex[:5]}",
+        "precio": 12.00,
+        "categoria_id": cat_id,
+        "stock": 10,
+        "disponible": True,
+    })
+    p2_res = client.post("/api/v1/admin/productos", headers=admin_headers, json={
+        "nombre": f"Combo Shake {uuid4().hex[:5]}",
+        "precio": 8.00,
+        "categoria_id": cat_id,
+        "stock": 10,
+        "disponible": True,
+    })
+    assert p1_res.status_code == 200, p1_res.text
+    assert p2_res.status_code == 200, p2_res.text
+    p1 = p1_res.json()
+    p2 = p2_res.json()
+
+    # Non-positive global price rejected with 422
+    bad_promo = client.post("/api/v1/admin/promociones", headers=admin_headers, json={
+        "titulo": "Combo Precio Cero",
+        "descuento_pct": 0,
+        "precio_global": 0,
+        "activo": True,
+        "producto_ids": [p1["id"], p2["id"]],
+    })
+    assert bad_promo.status_code == 422
+
+    # Create promo with global bundle price $14.00 (vs $20.00 individual sum)
+    created = client.post("/api/v1/admin/promociones", headers=admin_headers, json={
+        "titulo": f"Combo Global {uuid4().hex[:5]}",
+        "descripcion": "2 productos por un precio global único",
+        "descuento_pct": 30,
+        "precio_global": 14.00,
+        "codigo_cupon": f"GLOB{uuid4().hex[:4].upper()}",
+        "activo": True,
+        "producto_ids": [p1["id"], p2["id"]],
+    })
+    assert created.status_code == 200, created.text
+    promo = created.json()
+    assert promo["precio_global"] == pytest.approx(14.00)
+    assert set(promo["producto_ids"]) == {p1["id"], p2["id"]}
+
+    public_promos = client.get("/api/v1/cliente/promociones").json()
+    public_match = next(item for item in public_promos if item["id"] == promo["id"])
+    assert public_match["precio_global"] == pytest.approx(14.00)
+
+    # Order missing one required product in the bundle must be rejected cleanly
+    incomplete = client.post("/api/v1/cliente/pedidos", json={
+        "numero_mesa": "Para Llevar",
+        "tipo": "llevar",
+        "modo_pago": "PAGAR_ANTES",
+        "metodo_pago": "Efectivo",
+        "moneda_pago": "USD",
+        "detalles": [{"producto_id": p1["id"], "cantidad": 1}],
+        "promociones": [{"promocion_id": promo["id"], "cantidad": 1}],
+    })
+    assert incomplete.status_code == 422
+    assert "requiere todos los productos seleccionados" in incomplete.json()["detail"].lower()
+
+    # Valid order with 2 bundles pays 2 * $14.00 = $28.00 subtotal (saving $12.00 vs $40.00)
+    cfg = client.get("/api/v1/cliente/configuraciones-publicas").json()
+    iva_active = str(cfg.get("iva_activo", "true")).lower() not in ("false", "0", "no", "off")
+    tax_rate = float(cfg.get("porcentaje_iva", 16)) if iva_active else 0.0
+    pkg_fee = float(cfg.get("costo_empaque", 3))
+
+    order_res = client.post("/api/v1/cliente/pedidos", json={
+        "numero_mesa": "Para Llevar",
+        "tipo": "llevar",
+        "modo_pago": "PAGAR_ANTES",
+        "metodo_pago": "Efectivo",
+        "moneda_pago": "USD",
+        "detalles": [
+            {"producto_id": p1["id"], "cantidad": 2},
+            {"producto_id": p2["id"], "cantidad": 2},
+        ],
+        "promociones": [{"promocion_id": promo["id"], "cantidad": 2}],
+    })
+    assert order_res.status_code == 201, order_res.text
+    order = order_res.json()
+    assert order["subtotal"] == pytest.approx(28.00)
+    assert order["descuento"] == pytest.approx(12.00)
+    expected_tax = round(28.00 * tax_rate / 100.0, 2)
+    assert order["impuesto"] == pytest.approx(expected_tax)
+    assert order["total"] == pytest.approx(round(28.00 + expected_tax + pkg_fee, 2))
+
+    # Both bundled products had stock deducted by 2
+    prods_after = {p["id"]: p for p in client.get("/api/v1/admin/productos", headers=admin_headers).json()}
+    assert prods_after[p1["id"]]["stock"] == 8
+    assert prods_after[p2["id"]]["stock"] == 8
+
+    # Update global price and verify
+    updated = client.put(f"/api/v1/admin/promociones/{promo['id']}", headers=admin_headers, json={
+        "titulo": promo["titulo"],
+        "descripcion": promo["descripcion"],
+        "descuento_pct": 25,
+        "precio_global": 15.50,
+        "codigo_cupon": promo["codigo_cupon"],
+        "activo": True,
+        "producto_ids": [p1["id"], p2["id"]],
+    })
+    assert updated.status_code == 200, updated.text
+    assert updated.json()["precio_global"] == pytest.approx(15.50)
+
+    # Cleanup test promo
+    assert client.delete(f"/api/v1/admin/promociones/{promo['id']}", headers=admin_headers).status_code == 200

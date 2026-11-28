@@ -616,11 +616,17 @@ function renderPromoAndComboNotifications(announceToast = false) {
   }
 
   const chips = [
-    ...activePromos.map(p => `
+    ...activePromos.map(p => {
+      const gp = Number(p.precio_global);
+      const priceTag = Number.isFinite(gp) && gp > 0
+        ? ` · $${gp.toFixed(2)}`
+        : (Number(p.descuento_pct) > 0 ? ` (-${Number(p.descuento_pct)}%)` : "");
+      return `
       <button type="button" class="promo-notif-chip" onclick="openPromoGroupModal(${Number(p.id)})">
-        🔥 ${escapeClientHtml(p.titulo)}${Number(p.descuento_pct) > 0 ? ` (-${Number(p.descuento_pct)}%)` : ""}${Array.isArray(p.productos) && p.productos.length ? ` · ${p.productos.length} prod.` : ""}
+        🔥 ${escapeClientHtml(p.titulo)}${priceTag}${Array.isArray(p.productos) && p.productos.length ? ` · ${p.productos.length} prod.` : ""}
       </button>
-    `),
+    `;
+    }),
     ...comboItems.slice(0, 4).map(item => `
       <button type="button" class="promo-notif-chip" onclick="openProductModal(${Number(item.id)})">
         🎁 ${escapeClientHtml(item.nombre)} · $${Number(item.precio_promocion || item.precio || 0).toFixed(2)}
@@ -692,7 +698,7 @@ function renderPromoBanner() {
         <!-- Badge de Descuento / Cupón Editable Admin -->
         <div style="display: flex; justify-content: space-between; align-items: center;">
           <span style="font-size: 0.78rem; font-weight: 900; background: var(--neon-red); color: #fff; padding: 0.3rem 0.85rem; border-radius: 20px; box-shadow: 0 4px 15px rgba(255,71,87,0.4);">
-            🔥 PROMO DE LA CASA ${Number(p.descuento_pct) ? `(-${Number(p.descuento_pct)}% OFF)` : ''}
+            ${Number(p.precio_global) > 0 ? `🔥 COMBO $${Number(p.precio_global).toFixed(2)}` : `🔥 PROMO DE LA CASA ${Number(p.descuento_pct) ? `(-${Number(p.descuento_pct)}% OFF)` : ''}`}
           </span>
           <span style="font-size: 0.78rem; background: rgba(0,0,0,0.7); backdrop-filter: blur(8px); border: 1px solid var(--cyan-accent); color: var(--cyan-accent); padding: 0.3rem 0.75rem; border-radius: 20px; font-weight: 900;">
             CÓDIGO: ${safeCoupon}
@@ -756,6 +762,100 @@ function handleCarouselClick(promoId) {
   openPromoGroupModal(promoId);
 }
 
+let promoBundleQty = 1;
+let promoBundleCustomizations = {};
+let editingPromoProductId = null;
+
+function _promoHasGlobalPrice(promo) {
+  return Boolean(promo && Number(promo.precio_global) > 0 && Array.isArray(promo.productos) && promo.productos.length > 0);
+}
+
+function _getActivePromoProducts(promo) {
+  if (!promo) return [];
+  if (Array.isArray(promo.productos) && promo.productos.length) {
+    return promo.productos.map(lp => (toonProducts || []).find(tp => Number(tp.id) === Number(lp.id)) || lp);
+  }
+  return _promoHasGlobalPrice(promo) ? [] : getActiveComboProducts().slice(0, 4);
+}
+
+function _computePromoBundleAllocations(promo, products, qty, customizationsMap) {
+  const safeQty = Math.max(1, Number(qty) || 1);
+  const globalUnit = Number(promo.precio_global) || 0;
+  const targetBaseTotal = Math.round(globalUnit * safeQty * 100) / 100;
+  const baseRows = products.map(p => {
+    const pid = Number(p.id);
+    const baseUnit = Number(p.precio_promocion) > 0 ? Number(p.precio_promocion) : (Number(p.precio) || 0);
+    const custom = customizationsMap[pid] || { opciones: [], extras: [], extraPrice: 0 };
+    return {
+      product: p,
+      pid,
+      baseRegularSub: baseUnit * safeQty,
+      custom
+    };
+  });
+  const totalBaseRegular = baseRows.reduce((sum, r) => sum + r.baseRegularSub, 0);
+  let runningAlloc = 0;
+  return baseRows.map((row, idx) => {
+    let allocBase = 0;
+    if (idx === baseRows.length - 1) {
+      allocBase = Math.round((targetBaseTotal - runningAlloc) * 100) / 100;
+    } else if (totalBaseRegular > 0) {
+      allocBase = Math.round((targetBaseTotal * (row.baseRegularSub / totalBaseRegular)) * 100) / 100;
+    } else {
+      allocBase = Math.round((targetBaseTotal / baseRows.length) * 100) / 100;
+    }
+    runningAlloc += allocBase;
+    const extraTotal = Math.round((Number(row.custom.extraPrice) || 0) * safeQty * 100) / 100;
+    const lineSubtotal = Math.round((allocBase + extraTotal) * 100) / 100;
+    return {
+      ...row,
+      allocBase,
+      extraTotal,
+      lineSubtotal,
+      unitPrice: Math.round((lineSubtotal / safeQty) * 100) / 100
+    };
+  });
+}
+
+function updatePromoModalPricingSummary() {
+  const pricingBar = document.getElementById("promo-bundle-pricing-bar");
+  const globalPriceEl = document.getElementById("promo-modal-global-price");
+  const regularSumEl = document.getElementById("promo-modal-regular-sum");
+  const bundleQtyEl = document.getElementById("promo-bundle-qty-val");
+  const addAllBtn = document.getElementById("promo-add-all-btn");
+
+  const hasGlobal = _promoHasGlobalPrice(activePromoGroup);
+  if (pricingBar) pricingBar.hidden = !hasGlobal;
+  if (!activePromoGroup || !hasGlobal) {
+    if (addAllBtn) addAllBtn.textContent = "🛒 AGREGAR GRUPO AL CARRITO";
+    return;
+  }
+
+  const products = _getActivePromoProducts(activePromoGroup);
+  const globalUnit = Number(activePromoGroup.precio_global) || 0;
+  const regularUnitSum = products.reduce((sum, p) => sum + (Number(p.precio_promocion) > 0 ? Number(p.precio_promocion) : (Number(p.precio) || 0)), 0);
+  const extrasTotal = products.reduce((sum, p) => sum + ((Number(promoBundleCustomizations[Number(p.id)]?.extraPrice) || 0) * promoBundleQty), 0);
+  const bundleTotal = Math.round((globalUnit * promoBundleQty + extrasTotal) * 100) / 100;
+  const regularTotal = Math.round((regularUnitSum * promoBundleQty + extrasTotal) * 100) / 100;
+
+  if (globalPriceEl) {
+    globalPriceEl.textContent = `Precio Global: $${bundleTotal.toFixed(2)} USD${extrasTotal > 0 ? ` (incluye $${extrasTotal.toFixed(2)} extras)` : ""}`;
+  }
+  if (regularSumEl) {
+    regularSumEl.textContent = regularTotal > bundleTotal ? `Individual: $${regularTotal.toFixed(2)} USD` : "";
+  }
+  if (bundleQtyEl) bundleQtyEl.textContent = String(promoBundleQty);
+  if (addAllBtn) addAllBtn.textContent = `🛒 AGREGAR PROMO ($${bundleTotal.toFixed(2)})`;
+}
+
+function adjustPromoBundleQty(delta) {
+  promoBundleQty = Math.max(1, Math.min(20, promoBundleQty + delta));
+  updatePromoModalPricingSummary();
+  if (activePromoGroup) {
+    renderPromoGroupProductsList(_getActivePromoProducts(activePromoGroup));
+  }
+}
+
 function openPromoGroupModal(promoId) {
   const promo = (toonPromos || []).find(item => Number(item.id) === Number(promoId))
     || (toonPromos || [])[0];
@@ -765,6 +865,9 @@ function openPromoGroupModal(promoId) {
   }
   activePromoGroup = promo;
   promoGroupQuantities = {};
+  promoBundleQty = 1;
+  promoBundleCustomizations = {};
+  editingPromoProductId = null;
 
   const banner = document.getElementById("promo-modal-banner");
   const discount = document.getElementById("promo-modal-discount");
@@ -774,28 +877,25 @@ function openPromoGroupModal(promoId) {
   const listEl = document.getElementById("promo-group-products-list");
   const addAllBtn = document.getElementById("promo-add-all-btn");
 
+  const hasGlobal = _promoHasGlobalPrice(promo);
   if (banner) banner.src = getSafePromoMediaUrl(promo.banner_url);
   if (discount) {
-    discount.textContent = Number(promo.descuento_pct) > 0
-      ? `🔥 -${Number(promo.descuento_pct)}% OFF`
-      : "🔥 PROMO ACTIVA";
+    discount.textContent = hasGlobal
+      ? `🔥 COMBO $${Number(promo.precio_global).toFixed(2)}`
+      : (Number(promo.descuento_pct) > 0 ? `🔥 -${Number(promo.descuento_pct)}% OFF` : "🔥 PROMO ACTIVA");
   }
   if (title) title.textContent = promo.titulo || "Promoción Donde David";
   if (desc) desc.textContent = promo.descripcion || "Personaliza y agrega los productos de esta promoción.";
   if (coupon) coupon.textContent = promo.codigo_cupon ? `Código: ${promo.codigo_cupon}` : "";
 
-  let groupProducts = Array.isArray(promo.productos) && promo.productos.length
-    ? promo.productos.map(lp => (toonProducts || []).find(tp => Number(tp.id) === Number(lp.id)) || lp)
-    : [];
-  if (!groupProducts.length) {
-    groupProducts = getActiveComboProducts().slice(0, 4);
-  }
+  const groupProducts = _getActivePromoProducts(promo);
 
   if (!groupProducts.length) {
     if (listEl) {
       listEl.innerHTML = `<div style="text-align:center;color:var(--text-muted);padding:1rem;">Esta promoción aún no tiene productos asignados.</div>`;
     }
     if (addAllBtn) addAllBtn.style.display = "none";
+    updatePromoModalPricingSummary();
     openModal("promo-products-modal");
     return;
   }
@@ -805,34 +905,45 @@ function openPromoGroupModal(promoId) {
   });
   if (addAllBtn) addAllBtn.style.display = "block";
   renderPromoGroupProductsList(groupProducts);
+  updatePromoModalPricingSummary();
   openModal("promo-products-modal");
 }
 
 function renderPromoGroupProductsList(groupProducts) {
   const listEl = document.getElementById("promo-group-products-list");
   if (!listEl) return;
+  const hasGlobal = _promoHasGlobalPrice(activePromoGroup);
   listEl.innerHTML = groupProducts.map(p => {
     const pid = Number(p.id);
     const qty = promoGroupQuantities[pid] || 1;
     const price = Number(p.precio_promocion || p.precio || 0);
     const imgUrl = getSafePromoMediaUrl(p.imagen_url);
-    const available = p.disponible !== false && Number(p.stock || 0) > 0;
+    const available = p.disponible !== false && Number(p.stock || 0) >= (hasGlobal ? promoBundleQty : 1);
+    const custom = promoBundleCustomizations[pid];
+    const customLabel = custom && custom.opciones?.length
+      ? custom.opciones.join(" · ")
+      : "";
     return `
       <div class="promo-group-item-card">
         <div class="promo-group-item-left">
           <img class="promo-group-item-img" src="${escapeClientHtml(imgUrl)}" alt="${escapeClientHtml(p.nombre)}">
           <div>
             <strong>${escapeClientHtml(p.nombre)}</strong>
-            <div style="font-size:0.82rem;color:var(--gold-accent);font-weight:800;">$${price.toFixed(2)}</div>
-            ${available ? "" : `<small style="color:var(--neon-red);font-weight:700;">Agotado</small>`}
+            <div style="font-size:0.82rem;color:var(--gold-accent);font-weight:800;">
+              ${hasGlobal ? `Incluido en combo (×${promoBundleQty}) · Ref. $${price.toFixed(2)}` : `$${price.toFixed(2)}`}
+            </div>
+            ${customLabel ? `<small class="promo-group-item-custom">${escapeClientHtml(customLabel)}</small>` : ""}
+            ${available ? "" : `<small style="color:var(--neon-red);font-weight:700;">Sin stock suficiente</small>`}
           </div>
         </div>
         <div class="promo-group-item-actions">
-          <button type="button" class="btn btn-outline" style="padding:0.25rem 0.55rem;" onclick="adjustPromoGroupItemQty(${pid}, -1)">-</button>
-          <strong id="promo-item-qty-${pid}">${qty}</strong>
-          <button type="button" class="btn btn-outline" style="padding:0.25rem 0.55rem;" onclick="adjustPromoGroupItemQty(${pid}, 1)">+</button>
+          ${hasGlobal ? "" : `
+            <button type="button" class="btn btn-outline" style="padding:0.25rem 0.55rem;" onclick="adjustPromoGroupItemQty(${pid}, -1)">-</button>
+            <strong id="promo-item-qty-${pid}">${qty}</strong>
+            <button type="button" class="btn btn-outline" style="padding:0.25rem 0.55rem;" onclick="adjustPromoGroupItemQty(${pid}, 1)">+</button>
+          `}
           <button type="button" class="btn btn-outline" style="padding:0.35rem 0.65rem;font-size:0.78rem;" onclick="editPromoGroupProduct(${pid})" ${available ? "" : "disabled"}>✏️ Editar</button>
-          <button type="button" class="btn-gold" style="padding:0.35rem 0.7rem;font-size:0.78rem;" onclick="addSinglePromoGroupItem(${pid})" ${available ? "" : "disabled"}>+ Agregar</button>
+          ${hasGlobal ? "" : `<button type="button" class="btn-gold" style="padding:0.35rem 0.7rem;font-size:0.78rem;" onclick="addSinglePromoGroupItem(${pid})" ${available ? "" : "disabled"}>+ Agregar</button>`}
         </div>
       </div>
     `;
@@ -849,14 +960,17 @@ function adjustPromoGroupItemQty(productId, delta) {
 }
 
 function editPromoGroupProduct(productId) {
+  editingPromoProductId = Number(productId);
   closeModal("promo-products-modal");
   openProductModal(Number(productId));
 }
 
-function _pushPromoProductToCart(product, quantity) {
+function _pushPromoProductToCart(product, quantity, overrideCustom = null) {
   if (!product || quantity <= 0) return false;
   if (product.disponible === false || Number(product.stock || 0) < quantity) return false;
-  const unitPrice = Number(product.precio_promocion || product.precio || 0);
+  const basePrice = Number(product.precio_promocion || product.precio || 0);
+  const extraPrice = Number(overrideCustom?.extraPrice || 0);
+  const unitPrice = Math.round((basePrice + extraPrice) * 100) / 100;
   toonCart.push({
     producto_id: Number(product.id),
     nombre: product.nombre,
@@ -866,8 +980,8 @@ function _pushPromoProductToCart(product, quantity) {
     imagen_url: product.imagen_url,
     puntos_fidelidad: Math.max(0, Number(product.puntos_fidelidad) || 0),
     tiempo_preparacion: Math.max(0, Number(product.tiempo_preparacion) || 15),
-    opciones: [],
-    extras: [],
+    opciones: overrideCustom?.opciones ? [...overrideCustom.opciones] : [],
+    extras: overrideCustom?.extras ? [...overrideCustom.extras] : [],
     observaciones: activePromoGroup?.codigo_cupon ? `Promo ${activePromoGroup.codigo_cupon}` : ""
   });
   return true;
@@ -878,7 +992,7 @@ function addSinglePromoGroupItem(productId) {
   const qty = Math.max(1, promoGroupQuantities[pid] || 1);
   const promoList = (activePromoGroup?.productos || []).map(lp => (toonProducts || []).find(tp => Number(tp.id) === Number(lp.id)) || lp);
   const product = (toonProducts || []).find(p => Number(p.id) === pid) || promoList.find(p => Number(p.id) === pid);
-  if (!product || !_pushPromoProductToCart(product, qty)) {
+  if (!product || !_pushPromoProductToCart(product, qty, promoBundleCustomizations[pid] || null)) {
     showToast("Este producto no tiene existencias disponibles.", "warning");
     return;
   }
@@ -889,13 +1003,52 @@ function addSinglePromoGroupItem(productId) {
 
 function addAllPromoGroupToCart() {
   if (!activePromoGroup) return;
-  let products = Array.isArray(activePromoGroup.productos) && activePromoGroup.productos.length
-    ? activePromoGroup.productos.map(lp => (toonProducts || []).find(tp => Number(tp.id) === Number(lp.id)) || lp)
-    : getActiveComboProducts().slice(0, 4);
+  const products = _getActivePromoProducts(activePromoGroup);
+  if (_promoHasGlobalPrice(activePromoGroup)) {
+    const unavailable = products.find(p => p.disponible === false || Number(p.stock || 0) < promoBundleQty);
+    if (!products.length || unavailable) {
+      showToast(
+        unavailable
+          ? `"${unavailable.nombre}" no tiene existencias suficientes para el combo.`
+          : "Esta promoción no tiene productos asignados.",
+        "warning"
+      );
+      return;
+    }
+    const seq = Date.now() + Math.floor(Math.random() * 1000);
+    const allocations = _computePromoBundleAllocations(activePromoGroup, products, promoBundleQty, promoBundleCustomizations);
+    allocations.forEach(alloc => {
+      const p = alloc.product;
+      toonCart.push({
+        producto_id: alloc.pid,
+        nombre: p.nombre,
+        precio_unitario: alloc.unitPrice,
+        cantidad: promoBundleQty,
+        subtotal: alloc.lineSubtotal,
+        imagen_url: p.imagen_url || "",
+        puntos_fidelidad: Math.max(0, Number(p.puntos_fidelidad) || 0),
+        tiempo_preparacion: Math.max(0, Number(p.tiempo_preparacion) || 15),
+        opciones: alloc.custom.opciones ? [...alloc.custom.opciones] : [],
+        extras: alloc.custom.extras ? [...alloc.custom.extras] : [],
+        promo_id: Number(activePromoGroup.id),
+        promo_titulo: activePromoGroup.titulo || "Combo Promocional",
+        promo_bundle_seq: seq,
+        promo_extra_unit: Number(alloc.custom.extraPrice) || 0,
+        promo_base_share_subtotal: alloc.allocBase,
+        observaciones: `Promo ${activePromoGroup.titulo || activePromoGroup.codigo_cupon || ""}`.trim()
+      });
+    });
+    updateCartNavBadge();
+    renderToonCart();
+    closeModal("promo-products-modal");
+    showToast(`🔥 Combo "${activePromoGroup.titulo}" agregado al carrito (×${promoBundleQty}).`, "success");
+    return;
+  }
+
   let addedCount = 0;
   products.forEach(p => {
     const qty = Number(promoGroupQuantities[Number(p.id)] ?? 1);
-    if (qty > 0 && _pushPromoProductToCart(p, qty)) {
+    if (qty > 0 && _pushPromoProductToCart(p, qty, promoBundleCustomizations[Number(p.id)] || null)) {
       addedCount += qty;
     }
   });
@@ -1125,22 +1278,32 @@ function openProductModal(prodId) {
   }
 
   const editingItem = Number.isInteger(editingCartIndex) ? toonCart[editingCartIndex] : null;
-  if (editingItem && editingItem.producto_id === currentSelectedModalProduct.id) {
-    currentModalQty = editingItem.cantidad;
-    document.getElementById("modal-qty-val").innerText = String(currentModalQty);
-    const removedIngredients = editingItem.opciones
+  const promoCustomItem = editingPromoProductId === currentSelectedModalProduct.id
+    ? (promoBundleCustomizations[Number(currentSelectedModalProduct.id)] || null)
+    : null;
+  const activePrefill = (editingItem && editingItem.producto_id === currentSelectedModalProduct.id)
+    ? editingItem
+    : promoCustomItem;
+  if (activePrefill) {
+    if (editingItem && editingItem.producto_id === currentSelectedModalProduct.id) {
+      currentModalQty = editingItem.cantidad;
+      document.getElementById("modal-qty-val").innerText = String(currentModalQty);
+    }
+    const removedIngredients = (activePrefill.opciones || [])
       .filter(option => option.startsWith("Sin "))
       .map(option => option.slice(4));
     document.querySelectorAll(".dyn-ing-check").forEach(checkbox => {
       checkbox.checked = !removedIngredients.includes(checkbox.dataset.name);
     });
     document.querySelectorAll(".dyn-extra-check").forEach(checkbox => {
-      checkbox.checked = editingItem.extras.includes(checkbox.dataset.name);
+      checkbox.checked = (activePrefill.extras || []).includes(checkbox.dataset.name);
     });
-    const note = editingItem.opciones.find(option => option.startsWith("Nota: "));
+    const note = (activePrefill.opciones || []).find(option => option.startsWith("Nota: "));
     const notesInput = document.getElementById("modal-product-notes");
     if (notesInput) notesInput.value = note ? note.slice(6) : "";
-    if (addButton) addButton.textContent = "💾 GUARDAR CAMBIOS";
+    if (addButton) {
+      addButton.textContent = promoCustomItem ? "💾 GUARDAR EN PROMO" : "💾 GUARDAR CAMBIOS";
+    }
   }
 
   if (mediaContainer) mediaContainer.hidden = !mediaContainer.innerHTML.trim();
@@ -1150,8 +1313,13 @@ function openProductModal(prodId) {
 function closeProductModal() {
   document.getElementById("product-detail-modal").classList.remove("open");
   editingCartIndex = null;
+  const reopenPromo = editingPromoProductId !== null && Boolean(activePromoGroup);
+  editingPromoProductId = null;
   const addButton = document.getElementById("modal-add-to-cart-btn");
   if (addButton) addButton.textContent = "🛒 AGREGAR AL CARRITO";
+  if (reopenPromo) {
+    openModal("promo-products-modal");
+  }
 }
 
 function toggleConTodoIngredients(isConTodo) {
@@ -1206,35 +1374,68 @@ function addModalProductToCart() {
     opts.push(`Nota: ${notesInput.value.trim()}`);
   }
 
+  if (editingPromoProductId === Number(currentSelectedModalProduct.id) && activePromoGroup) {
+    promoBundleCustomizations[Number(currentSelectedModalProduct.id)] = {
+      opciones: opts,
+      extras: selectedExtras,
+      extraPrice: Math.round(extraPrice * 100) / 100
+    };
+    editingPromoProductId = null;
+    document.getElementById("product-detail-modal").classList.remove("open");
+    const addButton = document.getElementById("modal-add-to-cart-btn");
+    if (addButton) addButton.textContent = "🛒 AGREGAR AL CARRITO";
+    renderPromoGroupProductsList(_getActivePromoProducts(activePromoGroup));
+    updatePromoModalPricingSummary();
+    openModal("promo-products-modal");
+    showToast(`Personalización aplicada en combo: ${currentSelectedModalProduct.nombre}.`, "success");
+    return;
+  }
+
   const basePrice = Number(currentSelectedModalProduct.precio_promocion) > 0
     ? Number(currentSelectedModalProduct.precio_promocion)
     : Number(currentSelectedModalProduct.precio) || 0;
   const unitPrice = basePrice + extraPrice;
 
-  const cartItem = {
-    producto_id: currentSelectedModalProduct.id,
-    nombre: currentSelectedModalProduct.nombre,
-    imagen_url: currentSelectedModalProduct.imagen_url || "",
-    precio_unitario: unitPrice,
-    cantidad: currentModalQty,
-    subtotal: unitPrice * currentModalQty,
-    puntos_fidelidad: Math.max(0, Number(currentSelectedModalProduct.puntos_fidelidad) || 0),
-    opciones: opts,
-    extras: selectedExtras,
-    tiempo_preparacion: Number(currentSelectedModalProduct.tiempo_preparacion) || 15
-  };
-  if (Number.isInteger(editingCartIndex) && toonCart[editingCartIndex]) {
-    toonCart[editingCartIndex] = cartItem;
+  const existingCartItem = (Number.isInteger(editingCartIndex) && toonCart[editingCartIndex]) ? toonCart[editingCartIndex] : null;
+  if (existingCartItem && existingCartItem.promo_bundle_seq) {
+    const keptQty = existingCartItem.cantidad;
+    const baseShare = Number(existingCartItem.promo_base_share_subtotal || 0);
+    const updatedSub = Math.round((baseShare + extraPrice * keptQty) * 100) / 100;
+    toonCart[editingCartIndex] = {
+      ...existingCartItem,
+      precio_unitario: Math.round((updatedSub / keptQty) * 100) / 100,
+      subtotal: updatedSub,
+      opciones: opts,
+      extras: selectedExtras,
+      promo_extra_unit: Math.round(extraPrice * 100) / 100
+    };
     editingCartIndex = null;
   } else {
-    toonCart.push(cartItem);
+    const cartItem = {
+      producto_id: currentSelectedModalProduct.id,
+      nombre: currentSelectedModalProduct.nombre,
+      imagen_url: currentSelectedModalProduct.imagen_url || "",
+      precio_unitario: unitPrice,
+      cantidad: currentModalQty,
+      subtotal: unitPrice * currentModalQty,
+      puntos_fidelidad: Math.max(0, Number(currentSelectedModalProduct.puntos_fidelidad) || 0),
+      opciones: opts,
+      extras: selectedExtras,
+      tiempo_preparacion: Number(currentSelectedModalProduct.tiempo_preparacion) || 15
+    };
+    if (existingCartItem) {
+      toonCart[editingCartIndex] = cartItem;
+      editingCartIndex = null;
+    } else {
+      toonCart.push(cartItem);
+    }
   }
 
   updateCartNavBadge();
   closeProductModal();
   showToast(wasEditing
-    ? `Pedido actualizado: ${cartItem.nombre}.`
-    : `¡Agregado al carrito: ${cartItem.nombre}!`, "success");
+    ? `Pedido actualizado: ${currentSelectedModalProduct.nombre}.`
+    : `¡Agregado al carrito: ${currentSelectedModalProduct.nombre}!`, "success");
   renderToonCart();
 }
 
@@ -1294,6 +1495,7 @@ function renderToonCart() {
             <strong>${escapeClientHtml(item.nombre)}</strong>
             <span class="client-cart-item-price">${formatPriceDual(item.subtotal)}</span>
           </div>
+          ${item.promo_bundle_seq ? `<span class="client-cart-promo-badge">🎁 ${escapeClientHtml(item.promo_titulo || "Combo")}</span>` : ""}
           ${customizations.length ? `<ul class="client-cart-item-options">${customizations.map(option => `<li>${escapeClientHtml(option)}</li>`).join("")}</ul>` : '<small class="client-cart-item-options">Preparación estándar</small>'}
           <div class="client-cart-item-actions">
             <div class="client-cart-quantity" aria-label="Cantidad">
@@ -1302,7 +1504,7 @@ function renderToonCart() {
               <button type="button" aria-label="Aumentar cantidad" onclick="adjustToonCartQuantity(${idx}, 1)">+</button>
             </div>
             <button type="button" class="client-cart-action" onclick="editToonCartItem(${idx})">Editar</button>
-            <button type="button" class="client-cart-action remove" onclick="removeToonCartItem(${idx})">Quitar</button>
+            <button type="button" class="client-cart-action remove" onclick="removeToonCartItem(${idx})">${item.promo_bundle_seq ? "Quitar combo" : "Quitar"}</button>
           </div>
         </div>
       </article>
@@ -1326,16 +1528,68 @@ function renderToonCart() {
 }
 
 function removeToonCartItem(idx) {
-  toonCart.splice(idx, 1);
+  const target = toonCart[idx];
+  if (!target) return;
+  if (target.promo_bundle_seq) {
+    toonCart = toonCart.filter(item => item.promo_bundle_seq !== target.promo_bundle_seq);
+    showToast("Combo promocional eliminado del carrito.", "info");
+  } else {
+    toonCart.splice(idx, 1);
+  }
   updateCartNavBadge();
   renderToonCart();
+}
+
+function _recalculatePromoBundleInCart(seq, nextQty) {
+  const bundleItems = toonCart.filter(item => item.promo_bundle_seq === seq);
+  if (!bundleItems.length) return;
+  const promoId = Number(bundleItems[0].promo_id);
+  const promo = (toonPromos || []).find(p => Number(p.id) === promoId);
+  if (promo && Number(promo.precio_global) > 0) {
+    const customsMap = {};
+    const resolvedProducts = [];
+    bundleItems.forEach(item => {
+      const prod = (toonProducts || []).find(p => Number(p.id) === Number(item.producto_id))
+        || { id: item.producto_id, nombre: item.nombre, precio: item.precio_unitario };
+      resolvedProducts.push(prod);
+      customsMap[Number(item.producto_id)] = {
+        opciones: item.opciones || [],
+        extras: item.extras || [],
+        extraPrice: Number(item.promo_extra_unit || 0)
+      };
+    });
+    const allocs = _computePromoBundleAllocations(promo, resolvedProducts, nextQty, customsMap);
+    bundleItems.forEach((item, i) => {
+      const alloc = allocs[i];
+      item.cantidad = nextQty;
+      item.promo_base_share_subtotal = alloc.allocBase;
+      item.subtotal = alloc.lineSubtotal;
+      item.precio_unitario = alloc.unitPrice;
+    });
+  } else {
+    bundleItems.forEach(item => {
+      const prevQty = Math.max(1, Number(item.cantidad) || 1);
+      const baseUnit = Number(item.promo_base_share_subtotal || 0) / prevQty;
+      const newBase = Math.round(baseUnit * nextQty * 100) / 100;
+      const extraUnit = Number(item.promo_extra_unit || 0);
+      item.cantidad = nextQty;
+      item.promo_base_share_subtotal = newBase;
+      item.subtotal = Math.round((newBase + extraUnit * nextQty) * 100) / 100;
+      item.precio_unitario = Math.round((item.subtotal / nextQty) * 100) / 100;
+    });
+  }
 }
 
 function adjustToonCartQuantity(index, amount) {
   const item = toonCart[index];
   if (!item) return;
-  item.cantidad = Math.max(1, Math.min(99, item.cantidad + amount));
-  item.subtotal = item.precio_unitario * item.cantidad;
+  if (item.promo_bundle_seq) {
+    const nextQty = Math.max(1, Math.min(20, item.cantidad + amount));
+    _recalculatePromoBundleInCart(item.promo_bundle_seq, nextQty);
+  } else {
+    item.cantidad = Math.max(1, Math.min(99, item.cantidad + amount));
+    item.subtotal = item.precio_unitario * item.cantidad;
+  }
   updateCartNavBadge();
   renderToonCart();
 }
@@ -1664,6 +1918,22 @@ async function submitFinalOrder() {
     mesaName = "Delivery";
   }
 
+  const promoCounts = new Map();
+  const seenBundleSeqs = new Set();
+  toonCart.forEach(item => {
+    if (item.promo_id && item.promo_bundle_seq && !seenBundleSeqs.has(item.promo_bundle_seq)) {
+      seenBundleSeqs.add(item.promo_bundle_seq);
+      promoCounts.set(
+        Number(item.promo_id),
+        (promoCounts.get(Number(item.promo_id)) || 0) + Math.max(1, Number(item.cantidad) || 1)
+      );
+    }
+  });
+  const promocionesPayload = Array.from(promoCounts.entries()).map(([promocion_id, cantidad]) => ({
+    promocion_id,
+    cantidad
+  }));
+
   const payload = {
     numero_mesa: mesaName,
     tipo: orderType,
@@ -1680,7 +1950,8 @@ async function submitFinalOrder() {
       producto_id: item.producto_id,
       cantidad: item.cantidad,
       personalizaciones: { opciones: item.opciones, extras: item.extras || [] }
-    }))
+    })),
+    promociones: promocionesPayload
   };
 
   if (!navigator.onLine) {

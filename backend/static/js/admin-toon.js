@@ -597,12 +597,27 @@ async function loadPromosAdmin() {
 
 let promoSelectedProductIds = new Set();
 
-function renderPromoProductsPicker() {
-  const picker = document.getElementById("promo-products-picker");
+function updatePromoPriceSummary() {
   const counter = document.getElementById("promo-products-selected-count");
   if (counter) {
     counter.textContent = `${promoSelectedProductIds.size} seleccionado(s)`;
   }
+  const hint = document.getElementById("promo-regular-sum-hint");
+  if (!hint) return;
+  if (promoSelectedProductIds.size === 0) {
+    hint.textContent = "Selecciona los productos incluidos en esta promoción o combo.";
+    return;
+  }
+  const regularSum = (adminProducts || []).reduce((sum, p) => {
+    if (!promoSelectedProductIds.has(Number(p.id))) return sum;
+    return sum + Number(p.precio_promocion || p.precio || 0);
+  }, 0);
+  hint.textContent = `Suma individual de ${promoSelectedProductIds.size} producto(s): $${regularSum.toFixed(2)} USD`;
+}
+
+function renderPromoProductsPicker() {
+  const picker = document.getElementById("promo-products-picker");
+  updatePromoPriceSummary();
   if (!picker) return;
   const query = (document.getElementById("promo-products-search")?.value || "").trim().toLowerCase();
   const list = (adminProducts || []).filter(p => !query || String(p.nombre || "").toLowerCase().includes(query));
@@ -629,10 +644,7 @@ function togglePromoProductSelection(productId, checked) {
   const id = Number(productId);
   if (checked) promoSelectedProductIds.add(id);
   else promoSelectedProductIds.delete(id);
-  const counter = document.getElementById("promo-products-selected-count");
-  if (counter) {
-    counter.textContent = `${promoSelectedProductIds.size} seleccionado(s)`;
-  }
+  updatePromoPriceSummary();
 }
 
 function renderPromosAdmin() {
@@ -647,6 +659,10 @@ function renderPromosAdmin() {
     const linkedLabel = linkedProducts.length
       ? `${linkedProducts.length} prod.: ${linkedProducts.slice(0, 2).map(prod => escapeAdminHtml(prod.nombre)).join(", ")}${linkedProducts.length > 2 ? "…" : ""}`
       : "Sin productos asignados";
+    const globalPriceVal = Number(p.precio_global);
+    const priceColHtml = Number.isFinite(globalPriceVal) && globalPriceVal > 0
+      ? `<span class="badge" style="background: var(--gold-accent); color: #000; font-weight: 900;">$${globalPriceVal.toFixed(2)} GLOBAL</span>${Number(p.descuento_pct) > 0 ? `<small style="display:block;color:var(--text-muted);margin-top:0.2rem;">${Number(p.descuento_pct)}% OFF ref.</small>` : ""}`
+      : `${Number(p.descuento_pct) || 0}% OFF`;
     html += `
       <tr style="border-bottom: 1px solid var(--toon-border);">
         <td style="padding: 0.75rem;"><img src="${escapeAdminHtml(img)}" alt="${escapeAdminHtml(p.titulo)}" style="width: 60px; height: 40px; border-radius: 6px; object-fit: cover;"></td>
@@ -655,7 +671,7 @@ function renderPromosAdmin() {
         <td style="padding: 0.75rem;">
           <button type="button" class="btn btn-outline" style="padding: 0.3rem 0.6rem; font-size: 0.75rem;" onclick="openEditPromo(${Number(p.id)})">📦 ${linkedLabel}</button>
         </td>
-        <td style="padding: 0.75rem; font-weight: 900; color: var(--gold-accent);">${Number(p.descuento_pct) || 0}% OFF</td>
+        <td style="padding: 0.75rem; font-weight: 900; color: var(--gold-accent);">${priceColHtml}</td>
         <td style="padding: 0.75rem;"><span class="badge" style="background: var(--cyan-accent); color: #000; font-weight: 800;">${escapeAdminHtml(p.codigo_cupon || "Sin código")}</span></td>
         <td style="padding: 0.75rem; white-space:nowrap;">
           <span class="badge" style="background:${p.activo ? "var(--neon-green)" : "var(--text-muted)"};color:#000">${p.activo ? "Activa" : "Oculta"}</span>
@@ -675,6 +691,7 @@ function openNewPromoModal() {
   document.getElementById("promo-submit-btn").textContent = "GUARDAR PROMOCIÓN";
   document.getElementById("promo-titulo").value = "";
   document.getElementById("promo-desc").value = "";
+  if (document.getElementById("promo-precio-global")) document.getElementById("promo-precio-global").value = "";
   document.getElementById("promo-pct").value = "0";
   document.getElementById("promo-codigo").value = "";
   document.getElementById("promo-img").value = "";
@@ -696,6 +713,11 @@ function openEditPromo(id) {
   document.getElementById("promo-submit-btn").textContent = "GUARDAR CAMBIOS";
   document.getElementById("promo-titulo").value = promo.titulo || "";
   document.getElementById("promo-desc").value = promo.descripcion || "";
+  const globalInput = document.getElementById("promo-precio-global");
+  if (globalInput) {
+    const gVal = Number(promo.precio_global);
+    globalInput.value = Number.isFinite(gVal) && gVal > 0 ? gVal.toFixed(2) : "";
+  }
   document.getElementById("promo-pct").value = String(Number(promo.descuento_pct) || 0);
   document.getElementById("promo-codigo").value = promo.codigo_cupon || "";
   document.getElementById("promo-img").value = promo.banner_url || "";
@@ -712,10 +734,24 @@ async function submitCreatePromo() {
     showToast("Indica un título y un descuento válido entre 0 y 100%.", "warning");
     return;
   }
+  const rawGlobalPrice = document.getElementById("promo-precio-global")?.value.trim() ?? "";
+  let globalPrice = null;
+  if (rawGlobalPrice !== "") {
+    globalPrice = Number(rawGlobalPrice);
+    if (!Number.isFinite(globalPrice) || globalPrice <= 0) {
+      showToast("El precio global debe ser un monto válido mayor a 0.", "warning");
+      return;
+    }
+    if (promoSelectedProductIds.size === 0) {
+      showToast("Selecciona al menos 1 producto del grupo para aplicar el precio global.", "warning");
+      return;
+    }
+  }
   const payload = {
     titulo: title,
     descripcion: document.getElementById("promo-desc").value.trim(),
     descuento_pct: discount,
+    precio_global: globalPrice !== null ? Math.round(globalPrice * 100) / 100 : null,
     codigo_cupon: document.getElementById("promo-codigo").value.trim(),
     banner_url: document.getElementById("promo-img").value.trim(),
     activo: document.getElementById("promo-activo").checked,

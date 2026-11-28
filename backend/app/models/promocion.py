@@ -1,5 +1,5 @@
 from datetime import datetime, timezone
-from sqlalchemy import Boolean, Column, DateTime, Float, ForeignKey, Integer, String, Table
+from sqlalchemy import Boolean, Column, DateTime, Float, ForeignKey, Integer, Numeric, String, Table
 from sqlalchemy.orm import relationship
 from backend.app.core.database import Base
 
@@ -19,6 +19,7 @@ class Promocion(Base):
     titulo = Column(String(150), nullable=False)
     descripcion = Column(String(255), nullable=True)
     descuento_pct = Column(Float, default=0.0) # e.g. 20% off
+    precio_global = Column(Numeric(12, 2), nullable=True)
     codigo_cupon = Column(String(50), nullable=True, unique=True)
     banner_url = Column(String(500), nullable=True)
     activo = Column(Boolean, default=True)

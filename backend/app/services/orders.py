@@ -16,7 +16,8 @@ from backend.app.models.detalle_pedido import DetallePedido
 from backend.app.models.movimiento_inventario import MovimientoInventario
 from backend.app.models.pedido import Pedido
 from backend.app.models.producto import Producto
-from backend.app.schemas.schemas import DetallePedidoItem
+from backend.app.models.promocion import Promocion
+from backend.app.schemas.schemas import DetallePedidoItem, PromocionPedidoItem
 
 logger = logging.getLogger(__name__)
 
@@ -153,7 +154,7 @@ def prepare_order_items(
             else None
         )
 
-        detalles_db.append(DetallePedido(
+        detalle_row = DetallePedido(
             producto_id=producto.id,
             cantidad=item.cantidad,
             precio_unitario=unit_price,
@@ -162,9 +163,122 @@ def prepare_order_items(
             personalizaciones=personalizaciones_str,
             observaciones=item.observaciones,
             estado="PENDIENTE",
-        ))
+        )
+        detalle_row._base_unit_price = precio_base
+        detalle_row._extra_unit_price = extra_total
+        detalles_db.append(detalle_row)
 
     return products, requested_quantities, stock_before, detalles_db, round(subtotal_acumulado, 2)
+
+
+def apply_promo_bundles_pricing(
+    db: Session,
+    detalles_db: list[DetallePedido],
+    promo_bundles: Optional[Sequence[PromocionPedidoItem]],
+) -> tuple[float, float]:
+    """
+    Aplica el precio global oficial de promociones/combos sobre los renglones
+    correspondientes (manteniendo extras pagados y asignando prorrateo exacto).
+    Retorna `(nuevo_subtotal, descuento_total)`.
+    """
+    if not promo_bundles:
+        current_sub = round(sum(float(d.subtotal or 0) for d in detalles_db), 2)
+        return current_sub, 0.0
+
+    bundled_flags = [False] * len(detalles_db)
+    total_discount = 0.0
+
+    for bundle in promo_bundles:
+        promo = db.query(Promocion).filter(
+            Promocion.id == bundle.promocion_id,
+            Promocion.activo == True,
+        ).first()
+        if not promo or promo.precio_global is None or float(promo.precio_global) <= 0:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=f"La promoción #{bundle.promocion_id} no está activa o no tiene precio global configurado.",
+            )
+        promo_products = [prod for prod in (promo.productos or []) if prod.activo and prod.disponible]
+        if not promo_products or len(promo_products) != len(promo.productos or []):
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=f"La promoción '{promo.titulo}' no tiene todos sus productos disponibles.",
+            )
+
+        matched_indices: list[int] = []
+        for prod in promo_products:
+            remaining_needed = int(bundle.cantidad)
+            for idx in range(len(detalles_db)):
+                if remaining_needed <= 0:
+                    break
+                row = detalles_db[idx]
+                if bundled_flags[idx] or row.producto_id != prod.id:
+                    continue
+                row_qty = int(row.cantidad or 0)
+                if row_qty <= 0:
+                    continue
+                take = min(row_qty, remaining_needed)
+                if take < row_qty:
+                    base_unit = float(getattr(row, "_base_unit_price", float(row.precio_unitario or 0)))
+                    extra_unit = float(getattr(row, "_extra_unit_price", 0.0))
+                    remainder_qty = row_qty - take
+                    remainder_row = DetallePedido(
+                        producto_id=row.producto_id,
+                        cantidad=remainder_qty,
+                        precio_unitario=row.precio_unitario,
+                        subtotal=round(float(row.precio_unitario or 0) * remainder_qty, 2),
+                        puntos_fidelidad_unitarios=row.puntos_fidelidad_unitarios,
+                        personalizaciones=row.personalizaciones,
+                        observaciones=row.observaciones,
+                        estado=row.estado,
+                    )
+                    remainder_row._base_unit_price = base_unit
+                    remainder_row._extra_unit_price = extra_unit
+                    row.cantidad = take
+                    row.subtotal = round(float(row.precio_unitario or 0) * take, 2)
+                    detalles_db.append(remainder_row)
+                    bundled_flags.append(False)
+                bundled_flags[idx] = True
+                matched_indices.append(idx)
+                remaining_needed -= take
+
+            if remaining_needed > 0:
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    detail=f"La promoción '{promo.titulo}' requiere todos los productos seleccionados en la cantidad solicitada.",
+                )
+
+        target_global = round(float(promo.precio_global) * int(bundle.cantidad), 2)
+        base_amounts = [
+            round(
+                float(getattr(detalles_db[idx], "_base_unit_price", float(detalles_db[idx].precio_unitario or 0)))
+                * int(detalles_db[idx].cantidad),
+                2,
+            )
+            for idx in matched_indices
+        ]
+        base_sum = round(sum(base_amounts), 2)
+        allocated_sum = 0.0
+        for pos, idx in enumerate(matched_indices):
+            row = detalles_db[idx]
+            qty = int(row.cantidad)
+            extra_unit = float(getattr(row, "_extra_unit_price", 0.0))
+            if pos == len(matched_indices) - 1:
+                allocated_base = round(target_global - allocated_sum, 2)
+            elif base_sum > 0:
+                allocated_base = round(target_global * (base_amounts[pos] / base_sum), 2)
+                allocated_sum = round(allocated_sum + allocated_base, 2)
+            else:
+                allocated_base = round(target_global / len(matched_indices), 2)
+                allocated_sum = round(allocated_sum + allocated_base, 2)
+            new_subtotal = round(max(0.0, allocated_base) + (extra_unit * qty), 2)
+            row.subtotal = new_subtotal
+            row.precio_unitario = round(new_subtotal / qty, 2)
+
+        total_discount = round(total_discount + max(0.0, base_sum - target_global), 2)
+
+    final_subtotal = round(sum(float(d.subtotal or 0) for d in detalles_db), 2)
+    return final_subtotal, total_discount
 
 
 def deduct_order_stock(
